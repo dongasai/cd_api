@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: laravel_module_all
+    restart: unless-stopped
+    working_dir: /www/var/html
+    # command: composer run devd
+    volumes:
+      - .:/www/var/html
+      - ./docker/000-default.local.conf:/etc/apache2/sites-available/000-default.conf
+    ports:
+      - "34007:80"
