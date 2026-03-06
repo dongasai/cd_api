@@ -1,45 +1,74 @@
-# 渠道 CodingPlan 支持
+# 渠道 CodingPlan Status 支持
 
 ## 一、功能概述
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      渠道费用管理模式扩展                             │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                           渠道费用管理模式扩展 (V2)                                   │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
 核心定位:
-┌─────────────────────────────────────────────────────────────────────┐
-│ 为上游渠道的费用管理增加 'Coding Plan 模式' 支持                     │
-│                                                                     │
-│ 本质: 渠道订阅 Coding Plan 后，系统自动管理配额消耗和渠道状态        │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ 为上游渠道的费用管理增加 'Coding Plan 模式' 支持                                      │
+│                                                                                     │
+│ 本质: 渠道绑定Coding账户，Coding账户绑定CodingStatus驱动，驱动管理配额并调控渠道状态   │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+新架构关系:
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                     │
+│   ┌─────────┐      ┌─────────────┐      ┌─────────────────┐      ┌─────────────┐   │
+│   │  渠道   │◀────▶│ Coding账户  │◀────▶│ CodingStatus驱动 │◀────▶│  配额管理    │   │
+│   │ Channel │      │   Account   │      │    Driver       │      │             │   │
+│   └────┬────┘      └─────────────┘      └─────────────────┘      └─────────────┘   │
+│        │                                                                            │
+│        │ 状态调控                                                                   │
+│        ▼                                                                            │
+│   ┌─────────┐                                                                       │
+│   │ 开启/关闭 │                                                                      │
+│   └─────────┘                                                                       │
+│                                                                                     │
+│ 说明:                                                                               │
+│ ├── 渠道 (Channel): 上游API代理通道                                                 │
+│ ├── Coding账户 (CodingAccount): 存储Coding平台账户凭证、配置和驱动绑定               │
+│ ├── CodingStatus驱动: 不同平台/计费模式采用不同驱动实现配额管理                       │
+│ │   ├── TokenCodingStatus: 按Token计费模式                                          │
+│ │   ├── RequestCodingStatus: 按请求次数计费模式                                     │
+│ │   ├── PromptCodingStatus: 按Prompt次数计费模式                                    │
+│ │   └── GLMCodingStatus: 智谱GLM官方API获取状态                                     │
+│ └── 驱动负责: 配额追踪、状态判断、渠道调控                                            │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
 使用场景:
-├─── 场景1: 渠道使用阿里云百炼 Coding Plan
-│    └── 系统自动追踪 API 请求次数，配额耗尽自动禁用渠道
+├─── 场景1: 渠道使用通用Token计费
+│    └── Coding账户绑定 TokenCodingStatus 驱动，按Token消耗管理配额
 │
-├─── 场景2: 渠道使用火山方舟 Coding Plan
-│    └── 系统按 5 小时周期重置配额，自动启用/禁用渠道
+├─── 场景2: 渠道使用按请求次数计费 (如阿里云百炼)
+│    └── Coding账户绑定 RequestCodingStatus 驱动，按API请求次数管理配额
 │
-├─── 场景3: 渠道使用智谱 GLM Coding Plan
-│    └── 系统追踪 Token 消耗，按周/5小时周期管理配额
+├─── 场景3: 渠道使用按Prompt次数计费 (如智谱GLM)
+│    └── Coding账户绑定 PromptCodingStatus 驱动，按Prompt次数管理配额
 │
-└──   场景4: 渠道使用 GitHub Copilot / Cursor 等
-     └── 系统追踪 Premium Requests / Fast Requests 消耗
+└─── 场景4: 渠道使用智谱GLM官方API
+     └── Coding账户绑定 GLMCodingStatus 驱动，通过官方API获取实时状态
 
 核心功能:
-├─── Coding Plan 配置: 为渠道绑定 Coding Plan 订阅信息
-├─── 配额追踪: 实时追踪请求次数/Token/积分消耗
-├──   自动禁用: 配额耗尽自动禁用渠道，防止超额使用
-├──   自动启用: 配额重置后自动启用渠道
-├──   多周期支持: 支持月度/周度/5小时等多种重置周期
-└──   模型倍数: 支持不同模型消耗不同配额倍数
+├─── Coding账户管理: 统一管理各平台Coding账户，绑定对应驱动
+├─── 驱动绑定: 账户绑定对应计费模式的CodingStatus驱动
+├─── 配额追踪: 各驱动独立实现配额追踪逻辑
+├─── 状态管理: 驱动判断配额状态并触发渠道调控
+├─── 自动禁用: 配额耗尽自动禁用渠道
+├─── 自动启用: 配额重置后自动启用渠道
+├─── 多周期支持: 各驱动支持不同重置周期
+└─── 模型倍数: 支持不同模型消耗不同配额倍数
 
 核心价值:
-├─── 降低成本: 自动控制上游 AI 服务费用
-├──   防止超支: 配额耗尽自动停止服务
-├──   灵活计费: 支持多种 Coding Plan 计费模式
-└──   无缝管理: 自动化配额管理，无需人工干预
+├─── 降低成本: 自动控制上游AI服务费用
+├─── 防止超支: 配额耗尽自动停止服务
+├─── 灵活扩展: 新增平台只需实现驱动接口
+├─── 统一管控: 多渠道多平台统一管理
+└─── 无缝管理: 自动化配额管理，无需人工干预
 ```
 
 ---
@@ -95,36 +124,20 @@
 │                   Coding Plan 计费单位换算                           │
 └─────────────────────────────────────────────────────────────────────┘
 
-六种计费单位对比:
+三种计费单位对比:
 
-1. Premium Requests (GitHub Copilot)
-   ├─── 1次 Premium Request = 1次用户提问 (Prompt)
-   ├─── 不同模型消耗不同倍数 (1x-10x)
-   └─── 例: 使用 o1-preview 发送1个prompt = 消耗10个 premium requests
-
-2. Fast/Slow Requests (Cursor)
-   ├─── 1次 Request = 1次用户提问 (Prompt)
-   ├─── Fast: 使用高级模型, 优先响应
-   ├─── Slow: 使用基础模型, 排队等待
-   └──   Pro用户: 无限requests (有速率限制) 或 500 fast requests/月
-
-3. Prompt Credits (Windsurf/Codeium)
-   ├─── 1次 Prompt = 1次用户提问
-   ├─── 不同模型消耗不同积分
-   └──   例: Free 25 credits/月, Pro 500 credits/月
-
-4. API请求次数 (阿里云百炼、火山方舟、无问芯穹)
+1. API请求次数 (阿里云百炼、火山方舟、无问芯穹)
    ├─── 1次用户提问 = 后台触发 5-30次模型调用
    ├─── 1次调用 = 1次API请求
    └──   例: 1200次/5小时 ≈ 40-240次用户提问
 
-5. Prompt次数 (MiniMax、智谱GLM)
+2. Prompt次数 (MiniMax、智谱GLM)
    ├─── 1次Prompt = 1次用户提问
    ├─── 智谱GLM: 每次Prompt预计调用模型 15-20 次
    ├──   智谱GLM: 本质Token计费, 官网显示为估算值
    └──   MiniMax: 1次Prompt ≈ 1200-1600次API请求
 
-6. Token计量 (Kimi)
+3. Token计量 (Kimi)
    ├─── 按输入输出Token计费
    ├─── 仅统计未命中缓存的Token
    ├──   缓存命中率直接影响实际额度
@@ -132,10 +145,7 @@
 
 换算参考:
 ┌─────────────────────────────────────────────────────────────────────┐
-│ 国外:                                                               │
-│ ├─── 1 Premium Request (Copilot) ≈ 1 Prompt (Cursor) ≈ 1 Credit   │
-│                                                                     │
-│ 国内:                                                               │
+│ 国内平台:                                                           │
 │ ├─── 智谱GLM: 80次Prompt/5h ≈ 官网估算值 (实际Token计费)           │
 │ ├──   MiniMax: 1次Prompt ≈ 1200-1600次API请求                      │
 │ └──   百炼/火山: 1200次API请求/5h ≈ 40-240次用户提问               │
@@ -150,9 +160,9 @@
 └─────────────────────────────────────────────────────────────────────┘
 
 核心计费模式:
-├─── 积分制 (Credits): Windsurf 的 prompt credits
-├──   请求次数制: GitHub 的 premium requests, Cursor 的 fast requests
 ├──   Token计量: Kimi, 智谱GLM (本质)
+├──   请求次数制: 阿里云百炼、火山方舟
+├──   Prompt次数制: 智谱GLM、MiniMax
 └──   分层定价: Free → Pro → Teams → Enterprise
 
 共同特点:
@@ -176,512 +186,575 @@
 
 ---
 
-## 三、Coding Plan 模式设计
+## 三、架构设计
 
-### 3.1 核心概念
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                   Coding Plan 模式 = 渠道费用管理新模式               │
-└─────────────────────────────────────────────────────────────────────┘
-
-传统模式 vs Coding Plan 模式:
-
-┌─────────────────┬────────────────────────────────────────────────────┐
-│ 传统模式        │ Coding Plan 模式                                   │
-├─────────────────┼────────────────────────────────────────────────────┤
-│ 按量付费        │ 固定月费订阅                                       │
-│ 无配额限制      │ 有明确配额限制                                     │
-│ 费用不可控      │ 费用可预测                                         │
-│ 无自动控制      │ 配额耗尽自动禁用                                   │
-│ 需人工监控      │ 系统自动管理                                       │
-└─────────────────┴────────────────────────────────────────────────────┘
-
-Coding Plan 模式工作流程:
-┌─────────────────────────────────────────────────────────────────────┐
-│                                                                     │
-│  ┌──────────┐    ┌──────────────┐    ┌──────────────┐              │
-│  │ 渠道配置 │───>│ 绑定 Coding │───>│ 系统追踪配额 │              │
-│  │          │    │ Plan 信息    │    │ 消耗         │              │
-│  └──────────┘    └──────────────┘    └──────┬───────┘              │
-│                                              │                      │
-│                    ┌─────────────────────────┴────────────────┐     │
-│                    │                                          │     │
-│                    ▼                                          ▼     │
-│           ┌──────────────┐                          ┌──────────────┐│
-│           │ 配额充足     │                          │ 配额耗尽     ││
-│           │ 渠道正常使用 │                          │ 自动禁用渠道 ││
-│           └──────────────┘                          └──────────────┘│
-│                    │                                          │     │
-│                    │              ┌───────────────────────────┘     │
-│                    │              │                                 │
-│                    ▼              ▼                                 │
-│           ┌──────────────────────────────┐                         │
-│           │ 配额周期重置 → 自动启用渠道  │                         │
-│           └──────────────────────────────┘                         │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### 3.2 支持的 Coding Plan 类型
+### 3.1 核心架构关系
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      支持的 Coding Plan 类型                         │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              核心架构关系图                                          │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
-┌─────────────────┬──────────────────────────────────────────────────┐
-│ 类型            │ 说明                                             │
-├─────────────────┼──────────────────────────────────────────────────┤
-│ free            │ 免费计划，有严格限制                             │
-│ pro             │ 专业计划，适合个人用户                           │
-│ pro_plus        │ 专业增强版，高级模型访问                         │
-│ teams           │ 团队计划，多人协作                               │
-│ enterprise      │ 企业计划，自定义配额                             │
-│ pay_as_you_go   │ 按量付费，无固定限制                             │
-│ trial           │ 试用计划，时间限制                               │
-└─────────────────┴──────────────────────────────────────────────────┘
-
-配额维度:
-┌─────────────────┬──────────────────────────────────────────────────┐
-│ 维度            │ 说明                                             │
-├─────────────────┼──────────────────────────────────────────────────┤
-│ credits         │ 积分配额 (核心计费单位)                          │
-│ requests        │ 请求次数限制                                     │
-│ tokens          │ Token 数量限制                                   │
-│ cost            │ 金额限制 (美元)                                  │
-│ models          │ 可用模型限制                                     │
-│ features        │ 功能限制 (streaming, vision, agent, etc.)        │
-│ time            │ 时间限制 (试用期)                                │
-└─────────────────┴──────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                     │
+│                              ┌─────────────────┐                                    │
+│                              │   Channel 渠道   │                                    │
+│                              │  (上游API代理)   │                                    │
+│                              └────────┬────────┘                                    │
+│                                       │                                             │
+│                                       │ belongsTo                                     │
+│                                       ▼                                             │
+│                              ┌─────────────────┐                                    │
+│                              │  CodingAccount  │                                    │
+│                              │   Coding账户     │                                    │
+│                              │                 │                                    │
+│                              │ - name          │  账户名称                           │
+│                              │ - platform      │  平台类型                           │
+│                              │ - driver_class  │  驱动类名                           │
+│                              │ - credentials   │  账户凭证 (加密存储)                │
+│                              │ - quota_config  │  配额配置                           │
+│                              │ - status        │  账户状态                           │
+│                              └────────┬────────┘                                    │
+│                                       │                                             │
+│                                       │ uses                                        │
+│                                       ▼                                             │
+│                    ┌──────────────────────────────────┐                             │
+│                    │      CodingStatusDriver          │                             │
+│                    │         (驱动接口)                │                             │
+│                    │                                  │                             │
+│                    │  + getStatus(): Status           │                             │
+│                    │  + checkQuota(): QuotaResult     │                             │
+│                    │  + consume(): void               │                             │
+│                    │  + shouldDisable(): bool         │                             │
+│                    │  + shouldEnable(): bool          │                             │
+│                    │  + sync(): void                  │                             │
+│                    │  + getQuotaInfo(): array         │                             │
+│                    └────────────┬─────────────────────┘                             │
+│                                 │ implements                                        │
+│                    ┌────────────┼────────────┬─────────────────┐                    │
+│                    ▼            ▼            ▼                 ▼                    │
+│         ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐            │
+│         │   Token     │ │  Request    │ │   Prompt    │ │    GLM      │            │
+│         │   Coding    │ │   Coding    │ │   Coding    │ │   Coding    │            │
+│         │   Status    │ │   Status    │ │   Status    │ │   Status    │            │
+│         └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘            │
+│                                                                                     │
+│ 状态调控流程:                                                                        │
+│ ┌─────────────────────────────────────────────────────────────────────────────┐    │
+│ │                                                                             │    │
+│ │  1. 请求到达渠道                                                              │    │
+│ │       │                                                                     │    │
+│ │       ▼                                                                     │    │
+│ │  2. 获取渠道绑定的CodingAccount                                              │    │
+│ │       │                                                                     │    │
+│ │       ▼                                                                     │    │
+│ │  3. 根据 account.driver_class 实例化对应驱动                                  │    │
+│ │       │                                                                     │    │
+│ │       ▼                                                                     │    │
+│ │  4. 调用 driver.checkQuota() 检查配额                                        │    │
+│ │       │                                                                     │    │
+│ │       ├─── 配额充足 → 允许请求 → 执行请求 → driver.consume() 更新配额         │    │
+│ │       │                                                                     │    │
+│ │       └─── 配额不足 → driver.shouldDisable() → 触发渠道禁用                   │    │
+│ │                                                                             │    │
+│ │  5. 定时任务调用 driver.sync() 同步配额状态                                   │    │
+│ │       │                                                                     │    │
+│ │       └─── 配额重置 → driver.shouldEnable() → 触发渠道启用                    │    │
+│ │                                                                             │    │
+│ └─────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.3 数据库设计
+### 3.2 CodingStatus驱动接口
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      计费计划表设计                                  │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         CodingStatusDriver 接口定义                                  │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
-计费计划表 (coding_plans):
-CREATE TABLE coding_plans (
+接口方法:
+┌─────────────────────────┬──────────────────────────────────────────────────────────┐
+│ 方法                    │ 说明                                                     │
+├─────────────────────────┼──────────────────────────────────────────────────────────┤
+│ getName()               │ 获取驱动名称                                             │
+│ getSupportedMetrics()   │ 获取支持的计费维度                                       │
+│ getStatus()             │ 获取当前配额状态                                         │
+│ checkQuota(context)     │ 检查配额是否充足                                         │
+│ consume(usage)          │ 消耗配额                                                 │
+│ shouldDisable()         │ 判断是否应该禁用渠道                                     │
+│ shouldEnable()          │ 判断是否应该启用渠道                                     │
+│ sync()                  │ 同步配额信息                                             │
+│ getQuotaInfo()          │ 获取配额详细信息                                         │
+│ getPeriodInfo()         │ 获取周期信息                                             │
+│ validateCredentials()   │ 验证账户凭证                                             │
+└─────────────────────────┴──────────────────────────────────────────────────────────┘
+
+状态枚举:
+┌─────────────────┬──────────────────────────────────────────────────────────────────┐
+│ 状态            │ 说明                                                             │
+├─────────────────┼──────────────────────────────────────────────────────────────────┤
+│ active          │ 正常 - 配额充足，正常使用                                        │
+│ warning         │ 警告 - 配额使用超过警告阈值                                      │
+│ critical        │ 临界 - 配额使用超过临界阈值                                      │
+│ exhausted       │ 耗尽 - 配额已耗尽                                                │
+│ expired         │ 过期 - 账户已过期                                                │
+│ suspended       │ 暂停 - 账户已暂停                                                │
+│ error           │ 错误 - 账户状态异常                                              │
+└─────────────────┴──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 四、数据库设计
+
+### 4.1 Coding账户表
+
+```sql
+-- Coding 账户表 (coding_accounts)
+CREATE TABLE coding_accounts (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    coding_plan_id VARCHAR(100) NOT NULL UNIQUE COMMENT 'Coding 平台计划 ID',
-    tenant_id BIGINT UNSIGNED NULL COMMENT '关联租户 ID',
-    name VARCHAR(255) NOT NULL COMMENT '计划名称',
-    type ENUM('free', 'pro', 'pro_plus', 'teams', 'enterprise', 'pay_as_you_go', 'trial') NOT NULL,
-    status ENUM('active', 'suspended', 'expired', 'cancelled') DEFAULT 'active',
     
-    -- 积分配额 (核心计费单位)
-    credits_limit INT UNSIGNED DEFAULT 0 COMMENT '积分上限',
-    credits_used INT UNSIGNED DEFAULT 0 COMMENT '已用积分',
-    credits_remaining INT UNSIGNED DEFAULT 0 COMMENT '剩余积分',
+    -- 基本信息
+    name VARCHAR(255) NOT NULL COMMENT '账户名称',
+    platform VARCHAR(50) NOT NULL COMMENT '平台类型: aliyun/volcano/zhipu/github/cursor/custom',
     
-    -- 配额定义
-    quota_definition JSON NOT NULL COMMENT '配额定义',
+    -- 驱动配置
+    driver_class VARCHAR(255) NOT NULL COMMENT '驱动类名',
     
-    -- 使用情况
-    quota_used JSON DEFAULT NULL COMMENT '已用配额',
-    quota_remaining JSON DEFAULT NULL COMMENT '剩余配额',
+    -- 凭证信息 (加密存储)
+    credentials JSON NOT NULL COMMENT '平台凭证: {api_key, api_secret, access_token}',
     
-    -- 时间相关
-    billing_cycle ENUM('daily', 'weekly', 'monthly', 'yearly', 'none') DEFAULT 'monthly',
-    period_start TIMESTAMP NULL COMMENT '当前周期开始时间',
-    period_end TIMESTAMP NULL COMMENT '当前周期结束时间',
-    expires_at TIMESTAMP NULL COMMENT '计划过期时间',
+    -- 状态
+    status ENUM('active', 'warning', 'critical', 'exhausted', 'expired', 'suspended', 'error') 
+        DEFAULT 'active' COMMENT '账户状态',
+    
+    -- 配额配置 (各驱动通用)
+    quota_config JSON NULL COMMENT '配额配置: {limits, thresholds, periods}',
+    
+    -- 配额缓存 (上次同步结果)
+    quota_cached JSON NULL COMMENT '缓存的配额信息',
+    
+    -- 扩展配置
+    config JSON NULL COMMENT '驱动特定配置',
     
     -- 同步相关
     last_sync_at TIMESTAMP NULL COMMENT '最后同步时间',
-    sync_token VARCHAR(255) NULL COMMENT '同步令牌',
+    sync_error TEXT NULL COMMENT '同步错误信息',
+    sync_error_count INT UNSIGNED DEFAULT 0 COMMENT '连续同步错误次数',
     
-    -- 扩展配置
-    config JSON DEFAULT NULL COMMENT '扩展配置',
-    
+    -- 时间
+    expires_at TIMESTAMP NULL COMMENT '账户过期时间',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     
-    INDEX idx_coding_plan_id (coding_plan_id),
-    INDEX idx_tenant (tenant_id),
+    -- 索引
+    INDEX idx_platform (platform),
     INDEX idx_status (status),
-    INDEX idx_period (period_start, period_end),
-    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Coding 计费计划表';
+    INDEX idx_driver (driver_class),
+    INDEX idx_sync (last_sync_at),
+    INDEX idx_expires (expires_at)
+    
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Coding 账户表';
+```
 
-模型消耗倍数表 (model_multipliers):
-CREATE TABLE model_multipliers (
+### 4.2 渠道关联Coding账户
+
+```sql
+-- 渠道表增加Coding账户关联字段
+ALTER TABLE channels 
+ADD COLUMN coding_account_id BIGINT UNSIGNED NULL COMMENT '关联Coding账户ID',
+ADD COLUMN coding_status_override JSON NULL COMMENT '渠道级别的Coding状态覆盖配置',
+ADD INDEX idx_coding_account (coding_account_id);
+
+-- 添加外键约束
+ALTER TABLE channels
+ADD FOREIGN KEY (coding_account_id) REFERENCES coding_accounts(id) ON DELETE SET NULL;
+
+-- 渠道Coding状态覆盖配置示例:
+{
+    "auto_disable": true,           -- 是否自动禁用
+    "auto_enable": true,            -- 是否自动启用
+    "disable_threshold": 0.95,      -- 禁用阈值
+    "warning_threshold": 0.80,      -- 警告阈值
+    "priority": 1,                  -- 优先级
+    "fallback_channel_id": 2        -- 备用渠道ID
+}
+```
+
+### 4.3 配额使用记录表
+
+```sql
+-- 配额使用记录表 (coding_usage_logs)
+CREATE TABLE coding_usage_logs (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    model_pattern VARCHAR(100) NOT NULL COMMENT '模型匹配模式 (支持通配符)',
-    multiplier DECIMAL(5,2) NOT NULL DEFAULT 1.00 COMMENT '消耗倍数',
-    category VARCHAR(50) DEFAULT 'standard' COMMENT '模型分类: basic/standard/advanced/reasoning',
-    description VARCHAR(255) NULL COMMENT '描述',
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    
-    INDEX idx_model_pattern (model_pattern),
-    INDEX idx_category (category)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模型消耗倍数表';
-
--- 预置模型消耗倍数
-INSERT INTO model_multipliers (model_pattern, multiplier, category, description) VALUES
-('gpt-3.5-*', 1.00, 'basic', 'GPT-3.5 系列基础模型'),
-('gpt-4o-mini*', 1.00, 'basic', 'GPT-4o-mini 基础模型'),
-('gpt-4o*', 2.00, 'standard', 'GPT-4o 标准模型'),
-('gpt-4-turbo*', 2.00, 'standard', 'GPT-4 Turbo 标准模型'),
-('gpt-4-*', 2.00, 'standard', 'GPT-4 标准模型'),
-('claude-3-5-sonnet*', 2.00, 'standard', 'Claude 3.5 Sonnet 标准模型'),
-('claude-3-5-haiku*', 1.00, 'basic', 'Claude 3.5 Haiku 基础模型'),
-('claude-3-opus*', 3.00, 'advanced', 'Claude 3 Opus 高级模型'),
-('o1-preview*', 10.00, 'reasoning', 'o1 推理模型'),
-('o1-mini*', 5.00, 'reasoning', 'o1-mini 推理模型'),
-('gemini-1.5-flash*', 1.00, 'basic', 'Gemini Flash 基础模型'),
-('gemini-1.5-pro*', 2.00, 'standard', 'Gemini Pro 标准模型');
-
-渠道-计划关联表 (channel_plan_pivot):
-CREATE TABLE channel_plan_pivot (
-    channel_id BIGINT UNSIGNED NOT NULL,
-    plan_id BIGINT UNSIGNED NOT NULL,
-    priority INT UNSIGNED DEFAULT 1 COMMENT '优先级',
-    enabled BOOLEAN DEFAULT TRUE COMMENT '是否启用',
-    
-    -- 渠道级别的配额覆盖
-    quota_override JSON DEFAULT NULL COMMENT '配额覆盖配置',
-    
-    -- 自动控制配置
-    auto_disable BOOLEAN DEFAULT TRUE COMMENT '配额耗尽是否自动禁用',
-    auto_enable BOOLEAN DEFAULT TRUE COMMENT '配额重置是否自动启用',
-    disable_threshold DECIMAL(5,2) DEFAULT 0.95 COMMENT '禁用阈值 (95%)',
-    warning_threshold DECIMAL(5,2) DEFAULT 0.80 COMMENT '警告阈值 (80%)',
-    
-    PRIMARY KEY (channel_id, plan_id),
-    FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE,
-    FOREIGN KEY (plan_id) REFERENCES coding_plans(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='渠道计划关联表';
-
-配额使用记录表 (quota_usage_logs):
-CREATE TABLE quota_usage_logs (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    plan_id BIGINT UNSIGNED NOT NULL,
-    channel_id BIGINT UNSIGNED NULL,
-    request_id VARCHAR(36) NULL,
+    account_id BIGINT UNSIGNED NOT NULL COMMENT 'Coding账户ID',
+    channel_id BIGINT UNSIGNED NULL COMMENT '渠道ID',
+    request_id VARCHAR(64) NULL COMMENT '请求ID',
     
     -- 使用量
-    credits_used INT UNSIGNED DEFAULT 1 COMMENT '消耗积分',
-    requests INT UNSIGNED DEFAULT 1,
-    tokens_input INT UNSIGNED DEFAULT 0,
-    tokens_output INT UNSIGNED DEFAULT 0,
-    cost DECIMAL(10, 6) DEFAULT 0,
+    requests INT UNSIGNED DEFAULT 1 COMMENT '请求次数',
+    tokens_input INT UNSIGNED DEFAULT 0 COMMENT '输入Token数',
+    tokens_output INT UNSIGNED DEFAULT 0 COMMENT '输出Token数',
+    prompts INT UNSIGNED DEFAULT 0 COMMENT 'Prompt次数',
+    credits DECIMAL(10, 4) DEFAULT 0 COMMENT '消耗积分',
+    cost DECIMAL(10, 6) DEFAULT 0 COMMENT '金额成本',
     
     -- 模型信息
-    model VARCHAR(100) NULL,
-    model_multiplier DECIMAL(5,2) DEFAULT 1.00 COMMENT '使用的模型倍数',
+    model VARCHAR(100) NULL COMMENT '使用的模型',
+    model_multiplier DECIMAL(5,2) DEFAULT 1.00 COMMENT '模型消耗倍数',
+    
+    -- 状态
+    status ENUM('success', 'failed', 'throttled', 'rejected') DEFAULT 'success',
+    
+    -- 元数据
+    metadata JSON NULL COMMENT '额外元数据',
     
     -- 时间
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
-    INDEX idx_plan_created (plan_id, created_at),
+    -- 索引和外键
+    INDEX idx_account_created (account_id, created_at),
     INDEX idx_channel_created (channel_id, created_at),
+    INDEX idx_request (request_id),
     INDEX idx_model_created (model, created_at),
-    FOREIGN KEY (plan_id) REFERENCES coding_plans(id) ON DELETE CASCADE,
+    
+    FOREIGN KEY (account_id) REFERENCES coding_accounts(id) ON DELETE CASCADE,
     FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='配额使用记录表';
+    
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Coding配额使用记录表';
+
+-- 配额状态变更日志表 (coding_status_logs)
+CREATE TABLE coding_status_logs (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    account_id BIGINT UNSIGNED NOT NULL COMMENT 'Coding账户ID',
+    channel_id BIGINT UNSIGNED NULL COMMENT '关联渠道ID',
+    
+    -- 状态变更
+    from_status VARCHAR(20) NOT NULL COMMENT '原状态',
+    to_status VARCHAR(20) NOT NULL COMMENT '新状态',
+    reason VARCHAR(255) NULL COMMENT '变更原因',
+    
+    -- 配额信息 (变更时快照)
+    quota_snapshot JSON NULL COMMENT '配额快照',
+    
+    -- 触发方式
+    triggered_by ENUM('system', 'manual', 'api', 'sync') DEFAULT 'system' COMMENT '触发方式',
+    user_id BIGINT UNSIGNED NULL COMMENT '操作用户 (手动触发时)',
+    
+    -- 时间
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- 索引和外键
+    INDEX idx_account_created (account_id, created_at),
+    INDEX idx_channel_created (channel_id, created_at),
+    INDEX idx_status_change (from_status, to_status),
+    
+    FOREIGN KEY (account_id) REFERENCES coding_accounts(id) ON DELETE CASCADE,
+    FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE SET NULL
+    
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Coding状态变更日志表';
 ```
 
-### 3.3 配额定义结构
+### 4.4 模型消耗倍数表
+
+```sql
+-- 模型消耗倍数表 (model_multipliers)
+CREATE TABLE model_multipliers (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    
+    -- 匹配规则
+    platform VARCHAR(50) NULL COMMENT '适用平台 (null表示通用)',
+    model_pattern VARCHAR(100) NOT NULL COMMENT '模型匹配模式 (支持通配符)',
+    
+    -- 倍数
+    multiplier DECIMAL(5,2) NOT NULL DEFAULT 1.00 COMMENT '消耗倍数',
+    
+    -- 分类
+    category VARCHAR(50) DEFAULT 'standard' COMMENT '模型分类: basic/standard/advanced/reasoning',
+    description VARCHAR(255) NULL COMMENT '描述',
+    
+    -- 状态
+    is_active BOOLEAN DEFAULT TRUE,
+    priority INT UNSIGNED DEFAULT 0 COMMENT '优先级 (高优先匹配)',
+    
+    -- 时间
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- 索引
+    INDEX idx_platform_pattern (platform, model_pattern),
+    INDEX idx_category (category),
+    INDEX idx_active (is_active)
+    
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模型消耗倍数表';
+```
+
+---
+
+## 五、CodingStatus驱动设计
+
+### 5.1 TokenCodingStatus驱动
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      配额定义 JSON 结构                              │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         TokenCodingStatus 驱动                                       │
+│                        (按Token计费模式)                                             │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
-quota_definition 示例:
+适用场景:
+├── 按输入/输出Token计费的平台
+├── 需要精确追踪Token消耗的场景
+└── 支持多种周期: 日/周/月/无限制
+
+配额维度:
+┌─────────────────┬──────────────────────────────────────────────────────────────────┐
+│ 维度            │ 说明                                                             │
+├─────────────────┼──────────────────────────────────────────────────────────────────┤
+│ tokens_input    │ 输入Token限制                                                    │
+│ tokens_output   │ 输出Token限制                                                    │
+│ tokens_total    │ 总Token限制                                                      │
+│ credits         │ 积分限制 (按Token换算)                                           │
+└─────────────────┴──────────────────────────────────────────────────────────────────┘
+
+配置示例:
 {
-    "credits": {
-        "limit": 500,
-        "period": "monthly",
-        "reset_day": 1,
-        "rollover": false
+    "limits": {
+        "tokens_input": 10000000,
+        "tokens_output": 5000000,
+        "tokens_total": 15000000,
+        "credits": 15000
     },
-    "requests": {
-        "limit": 10000,
-        "period": "monthly",
-        "reset_day": 1
+    "thresholds": {
+        "warning": 0.80,
+        "critical": 0.90,
+        "disable": 0.95
     },
-    "tokens": {
-        "input_limit": 5000000,
-        "output_limit": 2500000,
-        "total_limit": 7500000,
-        "period": "monthly"
+    "cycle": "monthly",
+    "reset_day": 1
+}
+
+状态判断逻辑:
+1. 计算各维度使用率 (used / limit)
+2. 取最大使用率作为整体使用率
+3. 根据阈值判断状态: warning / critical / exhausted
+
+配额消耗:
+├── 根据模型获取消耗倍数
+├── 计算实际消耗: tokens * multiplier
+└── 累加到各维度计数器
+```
+
+### 5.2 RequestCodingStatus驱动
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                        RequestCodingStatus 驱动                                      │
+│                       (按请求次数计费模式)                                           │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+适用场景:
+├── 按API请求次数计费的平台 (如阿里云百炼、火山方舟)
+├── 5小时周期重置配额的场景
+└── 需要追踪请求次数而非Token的场景
+
+配额维度:
+┌─────────────────┬──────────────────────────────────────────────────────────────────┐
+│ 维度            │ 说明                                                             │
+├─────────────────┼──────────────────────────────────────────────────────────────────┤
+│ requests        │ 请求次数限制                                                     │
+│ requests_per_5h │ 5小时周期请求限制 (百炼/火山特有)                                │
+└─────────────────┴──────────────────────────────────────────────────────────────────┘
+
+配置示例 (阿里云百炼):
+{
+    "limits": {
+        "requests_per_5h": 1200
     },
-    "cost": {
-        "limit": 100.00,
-        "currency": "USD",
-        "period": "monthly"
+    "thresholds": {
+        "warning": 0.80,
+        "critical": 0.90,
+        "disable": 0.95
     },
-    "models": {
-        "allowed": ["gpt-4o", "gpt-3.5-turbo", "claude-3-5-sonnet"],
-        "restricted": ["o1-preview", "claude-3-opus"],
-        "multiplier_override": {
-            "gpt-4o": 1.5
-        }
+    "cycle": "5h",
+    "period_offset": 0
+}
+
+配置示例 (通用月付):
+{
+    "limits": {
+        "requests": 10000
     },
-    "features": {
-        "streaming": true,
-        "function_calling": true,
-        "vision": false,
-        "agent_mode": true,
-        "code_review": false
+    "thresholds": {
+        "warning": 0.80,
+        "disable": 0.95
     },
-    "rate_limits": {
-        "requests_per_minute": 60,
-        "tokens_per_minute": 10000
+    "cycle": "monthly",
+    "reset_day": 1
+}
+
+周期计算 (5小时周期):
+1. 从配置获取周期起始偏移 (默认0点)
+2. 计算当前时间在当天经过的秒数
+3. 计算当前周期开始时间: floor(经过秒数 / 5小时) * 5小时
+4. 下一周期开始时间: 当前周期 + 5小时
+
+状态判断逻辑:
+1. 获取当前周期已使用请求数
+2. 计算使用率: used / limit
+3. 根据阈值判断状态
+```
+
+### 5.3 PromptCodingStatus驱动
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                        PromptCodingStatus 驱动                                       │
+│                       (按Prompt次数计费模式)                                         │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+适用场景:
+├── 按用户提问次数(Prompt)计费的平台
+├── 每次Prompt触发多次模型调用的场景
+└── 需要以用户视角计费的场景
+
+配额维度:
+┌─────────────────┬──────────────────────────────────────────────────────────────────┐
+│ 维度            │ 说明                                                             │
+├─────────────────┼──────────────────────────────────────────────────────────────────┤
+│ prompts         │ Prompt次数限制                                                   │
+│ prompts_per_5h  │ 5小时周期Prompt限制                                              │
+│ prompts_per_day │ 日周期Prompt限制                                                 │
+└─────────────────┴──────────────────────────────────────────────────────────────────┘
+
+配置示例:
+{
+    "limits": {
+        "prompts_per_5h": 80
     },
-    "time": {
-        "trial_days": 14,
-        "expires_at": "2024-12-31T23:59:59Z"
+    "thresholds": {
+        "warning": 0.75,
+        "disable": 0.90
+    },
+    "cycle": "5h"
+}
+
+与Request的区别:
+┌─────────────────┬──────────────────────────────────────────────────────────────────┐
+│ Request计费     │ Prompt计费                                                       │
+├─────────────────┼──────────────────────────────────────────────────────────────────┤
+│ 1次API调用=1次  │ 1次用户提问=1次Prompt                                            │
+│ 后台可能多次调用│ 后台可能触发5-30次模型调用                                       │
+│ 适合技术监控    │ 适合用户视角计费                                                 │
+└─────────────────┴──────────────────────────────────────────────────────────────────┘
+
+状态判断逻辑:
+1. 统计周期内Prompt使用次数
+2. 计算使用率
+3. 根据阈值判断状态
+```
+
+### 5.4 GLMCodingStatus驱动
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                          GLMCodingStatus 驱动                                        │
+│                    (智谱GLM官方API获取状态)                                          │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+设计特点:
+├── 通过智谱官方API获取实时配额状态
+├── 支持GLM-4/GLM-3等不同模型的配额管理
+├── 支持5小时周期重置
+└── 支持Prompt次数和Token双重计量
+
+API接口:
+┌─────────────────┬──────────────────────────────────────────────────────────────────┐
+│ 接口            │ 说明                                                             │
+├─────────────────┼──────────────────────────────────────────────────────────────────┤
+│ 配额查询接口    │ GET /api/coding/quota - 获取当前配额使用情况                     │
+│ 使用记录接口    │ GET /api/coding/usage - 获取使用记录                             │
+│ 状态同步接口    │ POST /api/coding/sync - 同步配额状态                             │
+└─────────────────┴──────────────────────────────────────────────────────────────────┘
+
+配额维度:
+┌─────────────────┬──────────────────────────────────────────────────────────────────┐
+│ 维度            │ 说明                                                             │
+├─────────────────┼──────────────────────────────────────────────────────────────────┤
+│ prompts         │ Prompt次数 (官网显示值)                                          │
+│ tokens          │ 实际Token消耗 (底层计费)                                         │
+│ balance         │ 账户余额 (如适用)                                                │
+└─────────────────┴──────────────────────────────────────────────────────────────────┘
+
+同步策略:
+1. 定时同步: 每5分钟调用官方API获取最新配额
+2. 实时同步: 每次请求后异步推送使用量
+3. 异常处理: 同步失败时使用本地缓存，超过阈值告警
+
+状态判断:
+1. 优先使用官方API返回的状态
+2. API不可用时使用本地计算
+3. 双重校验确保准确性
+
+配置示例:
+{
+    "limits": {
+        "prompts_per_5h": 80
+    },
+    "thresholds": {
+        "warning": 0.75,
+        "disable": 0.90
+    },
+    "cycle": "5h",
+    "api_config": {
+        "sync_interval": 300,
+        "timeout": 10000,
+        "retry_attempts": 3
     }
-}
-
-quota_used 示例:
-{
-    "credits": 350,
-    "requests": 8500,
-    "tokens": {
-        "input": 4000000,
-        "output": 2000000,
-        "total": 6000000
-    },
-    "cost": 85.50,
-    "models": {
-        "gpt-4o": {"credits": 200, "requests": 3000},
-        "claude-3-5-sonnet": {"credits": 150, "requests": 5500}
-    },
-    "last_updated": "2024-01-15T10:30:00Z"
-}
-
-quota_remaining 示例:
-{
-    "credits": 150,
-    "requests": 1500,
-    "tokens": {
-        "input": 1000000,
-        "output": 500000,
-        "total": 1500000
-    },
-    "cost": 14.50,
-    "percentage": 0.30
 }
 ```
 
 ---
 
-## 四、积分计算核心逻辑
+## 六、渠道状态调控
 
-### 4.1 积分消耗计算
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      积分消耗计算逻辑                                │
-└─────────────────────────────────────────────────────────────────────┘
-
-计算公式:
-credits_used = base_credits × model_multiplier × feature_multiplier
-
-基础积分 (base_credits):
-├─── Chat 请求: 1 credit
-├─── Completion 请求: 1 credit  
-├─── Agent 模式: 2 credits
-├─── Code Review: 2 credits
-└─── Embedding: 0.1 credits
-
-模型消耗倍数 (model_multiplier):
-┌─────────────────────────┬────────────────────────────────────────────┐
-│ 模型分类                │ 倍数范围                                   │
-├─────────────────────────┼────────────────────────────────────────────┤
-│ basic (基础)            │ 1x                                         │
-│ standard (标准)         │ 2x                                         │
-│ advanced (高级)         │ 3x                                         │
-│ reasoning (推理)        │ 5-10x                                      │
-└─────────────────────────┴────────────────────────────────────────────┘
-
-功能消耗倍数 (feature_multiplier):
-├─── 普通请求: 1.0x
-├─── 流式输出: 1.0x
-├─── Vision: 1.5x
-├─── Function Calling: 1.2x
-└─── 长上下文 (>32k): 2.0x
-```
-
-### 4.2 积分计算服务
-
-```php
-<?php
-
-namespace App\Services;
-
-use App\Models\CodingPlan;
-use App\Models\ModelMultiplier;
-
-class CreditCalculator
-{
-    protected array $baseCredits = [
-        'chat' => 1,
-        'completion' => 1,
-        'agent' => 2,
-        'code_review' => 2,
-        'embedding' => 0.1,
-    ];
-
-    protected array $featureMultipliers = [
-        'vision' => 1.5,
-        'function_calling' => 1.2,
-        'long_context' => 2.0,
-        'streaming' => 1.0,
-    ];
-
-    public function calculateCredits(
-        string $requestType,
-        string $model,
-        array $features = []
-    ): int {
-        $baseCredits = $this->baseCredits[$requestType] ?? 1;
-        $modelMultiplier = $this->getModelMultiplier($model);
-        $featureMultiplier = $this->getFeatureMultiplier($features);
-
-        return (int) ceil($baseCredits * $modelMultiplier * $featureMultiplier);
-    }
-
-    protected function getModelMultiplier(string $model): float
-    {
-        $multiplier = ModelMultiplier::where('is_active', true)
-            ->where(function ($query) use ($model) {
-                $query->where('model_pattern', $model)
-                    ->orWhereRaw('? LIKE REPLACE(model_pattern, "*", "%")', [$model]);
-            })
-            ->orderByRaw('LENGTH(model_pattern) DESC')
-            ->first();
-
-        return $multiplier?->multiplier ?? 1.0;
-    }
-
-    protected function getFeatureMultiplier(array $features): float
-    {
-        $multiplier = 1.0;
-
-        foreach ($features as $feature => $enabled) {
-            if ($enabled && isset($this->featureMultipliers[$feature])) {
-                $multiplier *= $this->featureMultipliers[$feature];
-            }
-        }
-
-        return $multiplier;
-    }
-}
-```
-
-### 4.3 配额检查服务
-
-```php
-<?php
-
-namespace App\Services;
-
-use App\Models\CodingPlan;
-use App\Models\Channel;
-use Illuminate\Support\Facades\Redis;
-
-class QuotaChecker
-{
-    public function checkQuota(CodingPlan $plan, int $creditsNeeded): array
-    {
-        $cacheKey = "cdapi:quota:{$plan->id}:credits";
-        $cachedCredits = Redis::get($cacheKey);
-        
-        $remainingCredits = $cachedCredits !== null 
-            ? (int) $cachedCredits 
-            : $plan->credits_remaining;
-
-        if ($remainingCredits < $creditsNeeded) {
-            return [
-                'allowed' => false,
-                'reason' => 'insufficient_credits',
-                'remaining' => $remainingCredits,
-                'needed' => $creditsNeeded,
-            ];
-        }
-
-        $usagePercentage = 1 - ($remainingCredits - $creditsNeeded) / $plan->credits_limit;
-
-        return [
-            'allowed' => true,
-            'remaining' => $remainingCredits,
-            'needed' => $creditsNeeded,
-            'usage_percentage' => $usagePercentage,
-            'warning' => $usagePercentage >= 0.8,
-        ];
-    }
-
-    public function consumeCredits(CodingPlan $plan, int $credits, string $model): void
-    {
-        $plan->increment('credits_used', $credits);
-        $plan->decrement('credits_remaining', $credits);
-
-        Redis::decrby("cdapi:quota:{$plan->id}:credits", $credits);
-
-        $this->recordUsage($plan, $credits, $model);
-    }
-
-    protected function recordUsage(CodingPlan $plan, int $credits, string $model): void
-    {
-        $usageKey = "cdapi:usage:{$plan->id}:" . date('Y-m-d');
-        Redis::hincrby($usageKey, "credits", $credits);
-        Redis::hincrby($usageKey, "model:{$model}:credits", $credits);
-        Redis::expire($usageKey, 86400 * 90);
-    }
-}
-```
-
----
-
-## 五、自动禁用/启用机制
-
-### 5.1 状态流转
+### 6.1 状态流转
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      渠道自动状态流转                                │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              渠道状态流转图                                          │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
 状态机:
-                                    配额重置
-    ┌─────────────┐ ◀─────────────────────────────────────┐
-    │   active    │                                        │
-    │   (正常)    │                                        │
-    └──────┬──────┘                                        │
-           │                                               │
-           │ 配额使用 >= warning_threshold (80%)           │
-           ▼                                               │
-    ┌─────────────┐                                        │
-    │   warning   │ ───── 发送警告通知 ────▶               │
-    │   (警告)    │                                        │
-    └──────┬──────┘                                        │
-           │                                               │
-           │ 配额使用 >= disable_threshold (95%)           │
-           ▼                                               │
-    ┌─────────────┐                                        │
-    │  throttled  │ ───── 开始限流 ────▶                   │
-    │  (限流)     │                                        │
-    └──────┬──────┘                                        │
-           │                                               │
-           │ 配额耗尽                                       │
-           ▼                                               │
-    ┌─────────────┐                                        │
-    │  disabled   │ ───── 自动禁用渠道 ────▶               │
-    │  (禁用)     │                                        │
-    └─────────────┘                                        │
-           │                                               │
-           │ 配额重置 (新周期)                              │
-           └───────────────────────────────────────────────┘
+                                    配额重置/账户恢复
+    ┌─────────────┐ ◀─────────────────────────────────────────────────────┐
+    │   active    │                                                      │
+    │   (正常)    │                                                      │
+    └──────┬──────┘                                                      │
+           │                                                            │
+           │ 驱动返回 WARNING 状态                                       │
+           ▼                                                            │
+    ┌─────────────┐                                                      │
+    │   warning   │ ───── 发送警告通知 ────▶                             │
+    │   (警告)    │                                                      │
+    └──────┬──────┘                                                      │
+           │                                                            │
+           │ 驱动返回 CRITICAL 状态                                      │
+           ▼                                                            │
+    ┌─────────────┐                                                      │
+    │  critical   │ ───── 发送临界通知 ────▶                             │
+    │  (临界)     │                                                      │
+    └──────┬──────┘                                                      │
+           │                                                            │
+           │ 驱动返回 EXHAUSTED 状态 / shouldDisable() = true            │
+           ▼                                                            │
+    ┌─────────────┐                                                      │
+    │  disabled   │ ───── 自动禁用渠道 ────▶                             │
+    │  (禁用)     │                                                      │
+    └─────────────┘                                                      │
+           │                                                            │
+           │ 驱动 shouldEnable() = true                                  │
+           └────────────────────────────────────────────────────────────┘
 
 状态说明:
 ┌─────────────────┬──────────────────────────────────────────────────┐
@@ -689,800 +762,573 @@ class QuotaChecker
 ├─────────────────┼──────────────────────────────────────────────────┤
 │ active          │ 正常服务，无限制                                 │
 │ warning         │ 正常服务，发送警告通知                           │
-│ throttled       │ 限流服务，降低请求速率                           │
+│ critical        │ 正常服务，发送临界通知                           │
 │ disabled        │ 停止服务，返回配额超限错误                       │
 └─────────────────┴──────────────────────────────────────────────────┘
-```
 
-### 5.2 自动控制配置
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      自动控制配置详解                                │
-└─────────────────────────────────────────────────────────────────────┘
-
-配置项:
-┌─────────────────────┬──────────────────────────────────────────────┐
-│ 配置项              │ 说明                                         │
-├─────────────────────┼──────────────────────────────────────────────┤
-│ auto_disable        │ 配额耗尽时是否自动禁用渠道                   │
-│ auto_enable         │ 配额重置时是否自动启用渠道                   │
-│ disable_threshold   │ 自动禁用阈值 (0.0-1.0)                       │
-│ warning_threshold   │ 警告通知阈值 (0.0-1.0)                       │
-│ throttle_threshold  │ 限流阈值 (0.0-1.0)                           │
-│ throttle_rate       │ 限流比例 (0.0-1.0)                           │
-│ grace_period        │ 宽限期 (秒)，超过阈值后的缓冲时间            │
-│ cooldown_period     │ 冷却期 (秒)，禁用后需等待的时间              │
-└─────────────────────┴──────────────────────────────────────────────┘
-
-配置示例:
-{
-    "auto_disable": true,
-    "auto_enable": true,
-    "disable_threshold": 0.95,
-    "warning_threshold": 0.80,
-    "throttle_threshold": 0.90,
-    "throttle_rate": 0.5,
-    "grace_period": 300,
-    "cooldown_period": 3600,
-    "notifications": {
-        "warning": {
-            "channels": ["email", "webhook"],
-            "recipients": ["admin@example.com"]
-        },
-        "disabled": {
-            "channels": ["email", "sms", "webhook"],
-            "recipients": ["admin@example.com", "ops@example.com"]
-        }
-    }
-}
-```
-
-### 5.3 状态检测流程
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      配额状态检测流程                                │
-└─────────────────────────────────────────────────────────────────────┘
-
-每次请求前执行:
+渠道状态与Coding账户状态关系:
 ┌─────────────────────────────────────────────────────────────────────┐
 │                                                                     │
-│ 1. 获取渠道关联的计费计划                                           │
-│    │                                                                │
-│    ▼                                                                │
-│ 2. 检查计划状态                                                     │
-│    ├─── expired → 返回错误: 计划已过期                              │
-│    ├─── suspended → 返回错误: 计划已暂停                            │
-│    └─── active → 继续                                               │
-│    │                                                                │
-│    ▼                                                                │
-│ 3. 检查配额使用率                                                   │
-│    │                                                                │
-│    ├─── 使用率 >= disable_threshold                                 │
-│    │    ├─── 检查宽限期                                             │
-│    │    │    ├─── 在宽限期内 → 允许请求                             │
-│    │    │    └─── 超过宽限期 → 触发禁用                             │
-│    │    │                                                           │
-│    │    └─── 触发禁用流程                                           │
-│    │         ├─── 更新渠道状态为 disabled                           │
-│    │         ├─── 记录禁用日志                                      │
-│    │         ├─── 发送通知                                          │
-│    │         └─── 返回错误: 配额已耗尽                              │
-│    │                                                                │
-│    ├─── 使用率 >= throttle_threshold                                │
-│    │    ├─── 检查是否需要限流                                       │
-│    │    ├─── 应用限流策略                                           │
-│    │    └─── 允许请求 (可能延迟)                                    │
-│    │                                                                │
-│    ├─── 使用率 >= warning_threshold                                 │
-│    │    ├─── 检查是否已发送警告                                     │
-│    │    ├─── 发送警告通知 (首次)                                    │
-│    │    └─── 允许请求                                               │
-│    │                                                                │
-│    └─── 使用率 < warning_threshold                                  │
-│         └─── 允许请求                                               │
-│    │                                                                │
-│    ▼                                                                │
-│ 4. 执行请求                                                         │
-│    │                                                                │
-│    ▼                                                                │
-│ 5. 更新配额使用量                                                   │
-│    ├─── 累加 requests                                               │
-│    ├─── 累加 tokens                                                 │
-│    ├─── 累加 cost                                                   │
-│    └─── 更新 quota_used 和 quota_remaining                         │
-│    │                                                                │
-│    ▼                                                                │
-│ 6. 检查是否需要状态变更                                             │
-│    └─── 如需变更，触发相应流程                                      │
+│  CodingAccount 状态      Channel 状态      说明                    │
+│  ─────────────────────────────────────────────────────────────     │
+│  active                  active           正常服务                 │
+│  warning                 active           正常服务+通知            │
+│  critical                active           正常服务+通知            │
+│  exhausted               disabled         配额耗尽，渠道禁用       │
+│  expired                 disabled         账户过期，渠道禁用       │
+│  suspended               disabled         账户暂停，渠道禁用       │
+│  error                   disabled         账户异常，渠道禁用       │
+│                                                                     │
+│  渠道可覆盖配置:                                                     │
+│  - 当 channel.coding_status_override.auto_disable = false 时       │
+│    即使账户 exhausted，渠道也不会自动禁用                           │
+│  - 当 channel.coding_status_override.auto_enable = false 时        │
+│    即使账户恢复，渠道也不会自动启用                                 │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
-## 六、Coding API 集成
-
-### 6.1 API 接口设计
+### 6.2 渠道调控服务
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Coding API 集成                                │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         渠道Coding状态调控服务                                       │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
-获取计费计划:
-GET /api/coding/plans/{plan_id}
-响应:
-{
-    "id": "plan_xxx",
-    "name": "Pro Plan",
-    "type": "pro",
-    "status": "active",
-    "quota": {
-        "requests": {"limit": 10000, "used": 8500},
-        "tokens": {"limit": 7500000, "used": 6000000},
-        "cost": {"limit": 100.00, "used": 85.50}
-    },
-    "period": {
-        "start": "2024-01-01T00:00:00Z",
-        "end": "2024-01-31T23:59:59Z"
-    }
-}
+核心职责:
+├── 检查渠道Coding状态并触发调控
+├── 根据驱动返回结果启用/禁用渠道
+├── 记录状态变更日志
+└── 发送状态变更通知
 
-同步配额使用:
-POST /api/coding/plans/{plan_id}/sync
-请求:
-{
-    "usage": {
-        "requests": 100,
-        "tokens_input": 5000,
-        "tokens_output": 2500,
-        "cost": 0.5
-    },
-    "request_id": "uuid-xxx",
-    "timestamp": "2024-01-15T10:30:00Z"
-}
+主要功能:
+┌─────────────────────────┬──────────────────────────────────────────────────────────┐
+│ 功能                    │ 说明                                                     │
+├─────────────────────────┼──────────────────────────────────────────────────────────┤
+│ checkAndUpdateChannel   │ 检查并更新渠道状态                                       │
+│ disableChannel          │ 禁用渠道并记录日志                                       │
+│ enableChannel           │ 启用渠道并记录日志                                       │
+│ checkRequestAllowed     │ 检查请求是否允许 (配额检查)                              │
+│ recordUsage             │ 记录配额使用                                             │
+└─────────────────────────┴──────────────────────────────────────────────────────────┘
 
-配额预警回调:
-POST /api/coding/webhooks/quota-warning
-请求:
-{
-    "event": "quota_warning",
-    "plan_id": "plan_xxx",
-    "usage_percentage": 0.85,
-    "timestamp": "2024-01-15T10:30:00Z"
-}
-
-配额耗尽回调:
-POST /api/coding/webhooks/quota-exhausted
-请求:
-{
-    "event": "quota_exhausted",
-    "plan_id": "plan_xxx",
-    "exhausted_at": "2024-01-15T10:30:00Z"
-}
-
-配额重置回调:
-POST /api/coding/webhooks/quota-reset
-请求:
-{
-    "event": "quota_reset",
-    "plan_id": "plan_xxx",
-    "new_period": {
-        "start": "2024-02-01T00:00:00Z",
-        "end": "2024-02-29T23:59:59Z"
-    }
-}
+调控流程:
+1. 获取渠道绑定的Coding账户
+2. 根据driver_class实例化对应驱动
+3. 调用driver.shouldDisable()检查是否需要禁用
+4. 如需禁用且允许自动禁用，则禁用渠道
+5. 调用driver.shouldEnable()检查是否需要启用
+6. 如需启用且允许自动启用，则启用渠道
+7. 记录状态变更日志
+8. 发送通知
 ```
 
-### 6.2 同步策略
+### 6.3 请求拦截中间件
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      同步策略设计                                    │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         Coding配额检查中间件                                         │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
-实时同步:
-├─── 每次请求后推送使用量到 Coding
-├─── 使用消息队列异步推送
-└─── 失败时重试 3 次
+职责:
+├── 在请求处理前检查Coding配额
+├── 配额不足时返回429错误
+├── 请求成功后记录配额使用
+└── 异步更新配额消耗
 
-定时同步:
-├─── 每 5 分钟批量同步使用量
-├─── 对比本地和远程数据
-└─── 差异超过阈值时告警
-
-全量同步:
-├─── 每日凌晨 2:00 执行
-├─── 同步计划状态、配额定义
-└─── 修正使用量偏差
-
-同步配置:
-{
-    "sync": {
-        "realtime": true,
-        "batch_interval": 300,
-        "full_sync_time": "02:00",
-        "retry_attempts": 3,
-        "retry_delay": 1000,
-        "timeout": 10000
-    },
-    "cache": {
-        "enabled": true,
-        "ttl": 60
-    }
-}
-```
-
-### 6.3 认证与安全
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      认证与安全设计                                  │
-└─────────────────────────────────────────────────────────────────────┘
-
-认证方式:
-├─── API Key: 用于服务端调用
-├─── JWT Token: 用于用户身份验证
-└─── Webhook Signature: 用于回调验证
-
-API Key 配置:
-{
-    "coding_api": {
-        "base_url": "https://api.coding.net",
-        "api_key": "xxx",
-        "api_secret": "xxx",
-        "timeout": 10000
-    }
-}
-
-Webhook 验证:
-├─── 验证请求来源 IP
-├─── 验证签名 (HMAC-SHA256)
-├─── 验证时间戳 (防重放)
-└─── 验证事件类型
-
-签名验证示例:
-function verifyWebhook(payload, signature, secret) {
-    const expected = crypto
-        .createHmac('sha256', secret)
-        .update(JSON.stringify(payload))
-        .digest('hex');
-    return crypto.timingSafeEqual(
-        Buffer.from(signature),
-        Buffer.from(expected)
-    );
-}
+处理流程:
+1. 获取请求中的渠道信息
+2. 检查渠道是否绑定Coding账户
+3. 未绑定则直接放行
+4. 构建检查上下文 (model, messages, 预估tokens)
+5. 调用ChannelCodingStatusService.checkRequestAllowed()
+6. 配额不足返回429错误
+7. 配额充足继续处理请求
+8. 请求成功后异步记录使用
 ```
 
 ---
 
-## 七、限流策略
+## 七、定时任务
 
-### 7.1 限流模式
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      限流模式设计                                    │
-└─────────────────────────────────────────────────────────────────────┘
-
-模式一: 拒绝请求
-├─── 超过限流阈值直接拒绝
-├─── 返回 429 错误
-└─── 适用场景: 严格限制
-
-模式二: 排队等待
-├─── 超过限流阈值进入队列
-├─── 等待可用配额
-├─── 超时返回错误
-└─── 适用场景: 允许延迟
-
-模式三: 降级服务
-├─── 超过限流阈值降级
-├─── 切换到低成本模型
-├─── 或返回缓存结果
-└─── 适用场景: 保证可用性
-
-模式四: 智能调度
-├─── 根据配额剩余动态调整
-├─── 高优先级请求优先处理
-├─── 低优先级请求延迟处理
-└─── 适用场景: 复杂业务
-
-配置示例:
-{
-    "throttle_strategy": "queue",
-    "throttle_config": {
-        "mode": "queue",
-        "queue_size": 100,
-        "queue_timeout": 30,
-        "priority_levels": 3
-    }
-}
-```
-
-### 7.2 限流实现
+### 7.1 任务设计
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      限流实现设计                                    │
-└─────────────────────────────────────────────────────────────────────┘
-
-Redis 限流 Key:
-┌─────────────────────────────────────────────────────────────────────┐
-│ Key                                   │ 说明                        │
-├───────────────────────────────────────┼────────────────────────────┤
-│ cdapi:quota:{plan_id}:requests        │ 计划请求计数               │
-│ cdapi:quota:{plan_id}:tokens          │ 计划 Token 计数            │
-│ cdapi:quota:{plan_id}:cost            │ 计划成本计数               │
-│ cdapi:throttle:{plan_id}:queue        │ 限流队列                   │
-│ cdapi:throttle:{plan_id}:rate         │ 当前限流速率               │
-└─────────────────────────────────────────────────────────────────────┘
-
-限流算法:
-基于配额剩余动态调整限流阈值:
-
-function calculateThrottleRate(quotaRemaining, quotaLimit) {
-    const percentage = quotaRemaining / quotaLimit;
-    
-    if (percentage > 0.9) {
-        return 1.0;  // 正常速率
-    } else if (percentage > 0.5) {
-        return 0.8;  // 降低 20%
-    } else if (percentage > 0.2) {
-        return 0.5;  // 降低 50%
-    } else {
-        return 0.2;  // 降低 80%
-    }
-}
-```
-
----
-
-## 八、通知系统
-
-### 8.1 通知类型
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      通知类型设计                                    │
-└─────────────────────────────────────────────────────────────────────┘
-
-通知事件:
-┌─────────────────────┬──────────────────────────────────────────────┐
-│ 事件                │ 触发条件                                     │
-├─────────────────────┼──────────────────────────────────────────────┤
-│ quota_warning       │ 配额使用达到警告阈值 (80%)                   │
-│ quota_critical      │ 配额使用达到临界阈值 (90%)                   │
-│ quota_exhausted     │ 配额耗尽                                     │
-│ quota_reset         │ 配额重置                                     │
-│ channel_disabled    │ 渠道自动禁用                                 │
-│ channel_enabled     │ 渠道自动启用                                 │
-│ plan_expired        │ 计划过期                                     │
-│ plan_upgraded       │ 计划升级                                     │
-└─────────────────────┴──────────────────────────────────────────────┘
-
-通知渠道:
-├─── Email: 邮件通知
-├─── SMS: 短信通知
-├─── Webhook: HTTP 回调
-├─── WebSocket: 实时推送
-├─── 站内信: 系统通知
-└─── Slack/钉钉: 即时通讯
-```
-
-### 8.2 通知模板
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      通知模板设计                                    │
-└─────────────────────────────────────────────────────────────────────┘
-
-配额警告模板:
-{
-    "event": "quota_warning",
-    "title": "AI 服务配额即将耗尽",
-    "content": "您的 {{plan_name}} 计划配额已使用 {{usage_percentage}}%，\n剩余配额: {{remaining}}。\n请及时充值或升级计划。",
-    "channels": ["email", "webhook"],
-    "priority": "high"
-}
-
-配额耗尽模板:
-{
-    "event": "quota_exhausted",
-    "title": "AI 服务配额已耗尽",
-    "content": "您的 {{plan_name}} 计划配额已耗尽，\n渠道 {{channel_name}} 已自动禁用。\n请充值或等待下个计费周期。",
-    "channels": ["email", "sms", "webhook"],
-    "priority": "critical"
-}
-
-配额重置模板:
-{
-    "event": "quota_reset",
-    "title": "AI 服务配额已重置",
-    "content": "您的 {{plan_name}} 计划配额已重置，\n渠道 {{channel_name}} 已自动启用。\n新周期: {{period_start}} 至 {{period_end}}。",
-    "channels": ["email", "webhook"],
-    "priority": "normal"
-}
-```
-
----
-
-## 九、定时任务
-
-### 9.1 任务设计
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      定时任务设计                                    │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              定时任务设计                                            │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
 任务列表:
-┌─────────────────────┬──────────────────────────────────────────────┐
-│ 任务                │ 执行频率                                     │
-├─────────────────────┼──────────────────────────────────────────────┤
-│ SyncQuotaUsage      │ 每 5 分钟                                    │
-│ CheckQuotaThreshold │ 每 1 分钟                                    │
-│ ResetPeriodQuota    │ 每日 00:00                                   │
-│ SyncPlanStatus      │ 每小时                                       │
-│ CleanupUsageLogs    │ 每日 03:00                                   │
-│ SendQuotaReport     │ 每周一 09:00                                 │
-└─────────────────────┴──────────────────────────────────────────────┘
+┌─────────────────────┬──────────────────────────────────────────────────────────────┐
+│ 任务                │ 执行频率         │ 说明                                      │
+├─────────────────────┼──────────────────┼───────────────────────────────────────────┤
+│ SyncCodingQuota     │ 每 5 分钟        │ 同步所有Coding账户配额                     │
+│ CheckChannelStatus  │ 每 1 分钟        │ 检查渠道状态并触发调控                     │
+│ ResetPeriodQuota    │ 每分钟检查       │ 检查并执行周期配额重置                     │
+│ CleanupUsageLogs    │ 每日 03:00       │ 清理过期使用日志                           │
+│ SendQuotaReport     │ 每周一 09:00     │ 发送配额使用报告                           │
+└─────────────────────┴──────────────────┴───────────────────────────────────────────┘
 
 任务详情:
 
-SyncQuotaUsage (同步配额使用):
-├─── 批量推送本地使用量到 Coding
-├─── 处理失败的重试队列
-└─── 更新同步状态
+SyncCodingQuota (同步Coding配额):
+├─── 遍历所有 active 状态的 CodingAccount
+├─── 调用 account.driver_class 对应驱动的 sync() 方法
+├─── 更新账户 quota_cached 和 last_sync_at
+├─── 处理同步失败 (记录错误，超过阈值告警)
+└─── 更新渠道状态缓存
 
-CheckQuotaThreshold (检查配额阈值):
-├─── 检查所有活跃计划的配额使用率
-├─── 触发状态变更
-├─── 发送通知
-└─── 记录检查日志
+CheckChannelStatus (检查渠道状态):
+├─── 查询所有绑定 coding_account_id 的渠道
+├─── 调用 ChannelCodingStatusService::checkAndUpdateChannel()
+├─── 根据驱动返回结果触发渠道启用/禁用
+└─── 记录状态变更日志
 
 ResetPeriodQuota (重置周期配额):
-├─── 查找需要重置的计划
-├─── 重置 quota_used
-├─── 更新 period_start/period_end
-├─── 自动启用被禁用的渠道
-└─── 发送重置通知
-
-SyncPlanStatus (同步计划状态):
-├─── 从 Coding 拉取计划状态
-├─── 更新本地计划信息
-├─── 处理过期计划
-└─── 处理升级/降级
+├─── 遍历所有 CodingAccount
+├─── 调用 driver.getPeriodInfo() 获取周期信息
+├─── 检查是否进入新周期
+├─── 调用 driver.shouldEnable() 判断是否需要重置
+├─── 重置Redis中的配额使用缓存
+├─── 触发渠道自动启用
+└─── 发送配额重置通知
 
 CleanupUsageLogs (清理使用日志):
-├─── 删除 90 天前的日志
-├─── 归档到冷存储
+├─── 删除 90 天前的 coding_usage_logs
+├─── 归档到冷存储 (可选)
 └─── 更新统计表
 
 SendQuotaReport (发送配额报告):
-├─── 生成周报
-├─── 发送给管理员
-└─── 记录发送状态
-```
-
-### 9.2 Laravel 任务配置
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Laravel 任务配置                                │
-└─────────────────────────────────────────────────────────────────────┘
-
-// app/Console/Kernel.php
-
-protected function schedule(Schedule $schedule)
-{
-    // 每 5 分钟同步配额
-    $schedule->job(new SyncQuotaUsage)
-        ->everyFiveMinutes()
-        ->withoutOverlapping()
-        ->onOneServer();
-    
-    // 每分钟检查阈值
-    $schedule->job(new CheckQuotaThreshold)
-        ->everyMinute()
-        ->withoutOverlapping()
-        ->onOneServer();
-    
-    // 每日重置配额
-    $schedule->job(new ResetPeriodQuota)
-        ->dailyAt('00:00')
-        ->withoutOverlapping()
-        ->onOneServer();
-    
-    // 每小时同步计划状态
-    $schedule->job(new SyncPlanStatus)
-        ->hourly()
-        ->withoutOverlapping()
-        ->onOneServer();
-    
-    // 每日清理日志
-    $schedule->job(new CleanupUsageLogs)
-        ->dailyAt('03:00')
-        ->withoutOverlapping()
-        ->onOneServer();
-    
-    // 每周发送报告
-    $schedule->job(new SendQuotaReport)
-        ->weekly()
-        ->mondays()
-        ->at('09:00')
-        ->withoutOverlapping()
-        ->onOneServer();
-}
+├─── 生成上周配额使用报告
+├─── 包含各账户使用量、渠道状态变更次数
+└─── 发送给管理员
 ```
 
 ---
 
-## 十、API 接口
+## 八、Filament 后台管理
 
-### 10.1 管理接口
+### 8.1 Coding账户管理
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      管理 API 接口                                   │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         Coding账户管理界面                                           │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
-获取计费计划列表:
-GET /api/v1/coding-plans
-参数: tenant_id, status, type
-响应:
+列表页功能:
+├── 显示账户名称、平台、状态、配额使用、最后同步时间
+├── 支持按平台、状态筛选
+├── 支持手动同步配额
+└── 支持编辑、删除账户
+
+表单字段:
+┌─────────────────┬──────────────────────────────────────────────────────────────────┐
+│ 字段            │ 说明                                                             │
+├─────────────────┼──────────────────────────────────────────────────────────────────┤
+│ name            │ 账户名称                                                         │
+│ platform        │ 平台选择 (aliyun/volcano/zhipu/github/cursor/custom)             │
+│ driver_class    │ 驱动类名 (根据平台自动填充)                                      │
+│ credentials     │ 凭证信息 (KeyValue)                                              │
+│ quota_config    │ 配额配置 (limits, thresholds)                                    │
+│ config          │ 驱动特定配置                                                     │
+└─────────────────┴──────────────────────────────────────────────────────────────────┘
+
+平台与驱动映射:
+┌─────────────────┬──────────────────────────────────────────────────────────────────┐
+│ 平台            │ 驱动类                                                           │
+├─────────────────┼──────────────────────────────────────────────────────────────────┤
+│ aliyun          │ TokenCodingStatus / RequestCodingStatus                          │
+│ volcano         │ RequestCodingStatus                                              │
+│ zhipu           │ PromptCodingStatus / GLMCodingStatus                             │
+│ github          │ RequestCodingStatus                                              │
+│ cursor          │ RequestCodingStatus                                              │
+│ custom          │ TokenCodingStatus                                                │
+└─────────────────┴──────────────────────────────────────────────────────────────────┘
+```
+
+### 8.2 渠道绑定Coding账户
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                         渠道绑定Coding账户                                           │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+配置项:
+┌─────────────────────────┬──────────────────────────────────────────────────────────┐
+│ 配置项                  │ 说明                                                     │
+├─────────────────────────┼──────────────────────────────────────────────────────────┤
+│ coding_account_id       │ 绑定的Coding账户                                         │
+│ auto_disable            │ 是否自动禁用 (默认true)                                  │
+│ auto_enable             │ 是否自动启用 (默认true)                                  │
+│ disable_threshold       │ 禁用阈值 (默认0.95)                                      │
+│ warning_threshold       │ 警告阈值 (默认0.80)                                      │
+│ fallback_channel_id     │ 备用渠道ID                                               │
+└─────────────────────────┴──────────────────────────────────────────────────────────┘
+
+界面功能:
+├── 选择Coding账户下拉框
+├── 自动禁用/启用开关
+├── 阈值配置输入框
+└── 备用渠道选择
+```
+
+---
+
+## 九、API 接口
+
+### 9.1 管理接口
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              管理 API 接口                                           │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+Coding账户管理:
+
+GET    /api/v1/coding-accounts              获取账户列表
+POST   /api/v1/coding-accounts              创建账户
+GET    /api/v1/coding-accounts/{id}         获取账户详情
+PUT    /api/v1/coding-accounts/{id}         更新账户
+DELETE /api/v1/coding-accounts/{id}         删除账户
+POST   /api/v1/coding-accounts/{id}/sync    手动同步配额
+POST   /api/v1/coding-accounts/{id}/validate 验证凭证
+
+渠道Coding状态:
+
+GET    /api/v1/channels/{id}/coding-status  获取渠道Coding状态
+POST   /api/v1/channels/{id}/coding-status  更新渠道Coding配置
+POST   /api/v1/channels/{id}/disable        手动禁用渠道
+POST   /api/v1/channels/{id}/enable         手动启用渠道
+
+配额查询:
+
+GET    /api/v1/coding-accounts/{id}/quota   获取账户配额信息
+GET    /api/v1/coding-accounts/{id}/usage   获取账户使用记录
+GET    /api/v1/coding-accounts/{id}/logs    获取状态变更日志
+```
+
+### 9.2 接口响应示例
+
+```
+获取账户配额信息响应:
 {
-    "data": [
-        {
-            "id": 1,
-            "coding_plan_id": "plan_xxx",
-            "name": "Pro Plan",
-            "type": "pro",
-            "status": "active",
-            "quota_usage": {
-                "requests": {"used": 8500, "limit": 10000, "percentage": 0.85},
-                "tokens": {"used": 6000000, "limit": 7500000, "percentage": 0.80},
-                "cost": {"used": 85.50, "limit": 100.00, "percentage": 0.855}
-            },
-            "period": {...}
-        }
-    ],
-    "meta": {...}
+    "account_id": 1,
+    "name": "阿里云百炼-主账户",
+    "platform": "aliyun",
+    "driver": "RequestCodingStatus",
+    "status": "active",
+    "quota": {
+        "limit": {"requests": 1200},
+        "used": {"requests": 450},
+        "remaining": {"requests": 750},
+        "usage_percentage": 0.375
+    },
+    "period": {
+        "type": "5h",
+        "start": "2024-01-15T10:00:00Z",
+        "end": "2024-01-15T15:00:00Z",
+        "next_reset": "2024-01-15T15:00:00Z"
+    },
+    "last_sync_at": "2024-01-15T12:30:00Z"
 }
 
-获取计费计划详情:
-GET /api/v1/coding-plans/{id}
-响应包含: 基本信息、配额定义、使用情况、关联渠道
-
-创建计费计划:
-POST /api/v1/coding-plans
-{
-    "coding_plan_id": "plan_xxx",
-    "tenant_id": 1,
-    "name": "Pro Plan",
-    "type": "pro",
-    "quota_definition": {...},
-    "billing_cycle": "monthly"
-}
-
-更新计费计划:
-PUT /api/v1/coding-plans/{id}
-
-关联渠道:
-POST /api/v1/coding-plans/{plan_id}/channels
+获取渠道Coding状态响应:
 {
     "channel_id": 1,
-    "priority": 1,
-    "quota_override": null,
-    "auto_disable": true,
-    "auto_enable": true,
-    "disable_threshold": 0.95
-}
-
-手动重置配额:
-POST /api/v1/coding-plans/{id}/reset
-{
-    "reason": "用户请求重置"
-}
-
-手动同步:
-POST /api/v1/coding-plans/{id}/sync
-```
-
-### 10.2 查询接口
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      查询 API 接口                                   │
-└─────────────────────────────────────────────────────────────────────┘
-
-获取配额使用情况:
-GET /api/v1/coding-plans/{id}/usage
-响应:
-{
-    "plan_id": 1,
-    "period": {
-        "start": "2024-01-01",
-        "end": "2024-01-31"
+    "channel_status": "active",
+    "account": {
+        "id": 1,
+        "name": "阿里云百炼-主账户",
+        "platform": "aliyun",
+        "status": "active"
     },
-    "usage": {
-        "requests": {"used": 8500, "remaining": 1500, "percentage": 0.85},
-        "tokens": {"used": 6000000, "remaining": 1500000, "percentage": 0.80},
-        "cost": {"used": 85.50, "remaining": 14.50, "percentage": 0.855}
+    "quota": {
+        "usage_percentage": 0.375,
+        "remaining": {"requests": 750}
     },
-    "daily_usage": [
-        {"date": "2024-01-01", "requests": 500, "tokens": 200000, "cost": 5.00},
-        ...
-    ],
-    "model_breakdown": {
-        "gpt-4": {"requests": 3000, "tokens": 3000000, "cost": 60.00},
-        "gpt-3.5-turbo": {"requests": 5500, "tokens": 3000000, "cost": 25.50}
+    "override": {
+        "auto_disable": true,
+        "auto_enable": true,
+        "disable_threshold": 0.95
     }
 }
-
-获取渠道配额状态:
-GET /api/v1/channels/{id}/quota-status
-响应:
-{
-    "channel_id": 1,
-    "plans": [
-        {
-            "plan_id": 1,
-            "plan_name": "Pro Plan",
-            "usage_percentage": 0.85,
-            "status": "warning",
-            "auto_disable": true,
-            "threshold": 0.95
-        }
-    ],
-    "channel_status": "active",
-    "will_disable_at": null
-}
-
-获取配额使用历史:
-GET /api/v1/coding-plans/{id}/history
-参数: start_date, end_date, granularity (daily/hourly)
 ```
 
 ---
 
-## 十一、监控与告警
+## 十、监控与告警
 
-### 11.1 监控指标
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      监控指标设计                                    │
-└─────────────────────────────────────────────────────────────────────┘
-
-配额指标:
-cdapi_quota_usage_percentage{plan, type}
-cdapi_quota_remaining{plan, type}
-cdapi_quota_exhausted_total{plan}
-
-渠道状态指标:
-cdapi_channel_quota_status{channel, plan}
-cdapi_channel_auto_disabled_total{channel, plan}
-cdapi_channel_auto_enabled_total{channel, plan}
-
-同步指标:
-cdapi_quota_sync_success_total{plan}
-cdapi_quota_sync_failure_total{plan}
-cdapi_quota_sync_latency_seconds{plan}
-
-通知指标:
-cdapi_quota_notification_sent_total{plan, event, channel}
-cdapi_quota_notification_failed_total{plan, event, channel}
-```
-
-### 11.2 告警规则
+### 10.1 监控指标
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      告警规则设计                                    │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              监控指标设计                                            │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
-配额即将耗尽:
-ALERT QuotaNearExhaustion
-  IF cdapi_quota_usage_percentage > 0.9
-  FOR 1m
-  LABELS { severity: "warning" }
-  ANNOTATIONS {
-    summary: "计划 {{ $labels.plan }} 配额即将耗尽"
-  }
+账户指标:
+cdapi_coding_account_status{account_id, platform, status}
+cdapi_coding_quota_usage_percentage{account_id, metric}
+cdapi_coding_quota_remaining{account_id, metric}
+cdapi_coding_sync_success_total{platform}
+cdapi_coding_sync_failure_total{platform}
+cdapi_coding_sync_latency_seconds{platform}
 
-配额已耗尽:
-ALERT QuotaExhausted
-  IF cdapi_quota_remaining == 0
-  FOR 1m
-  LABELS { severity: "critical" }
-  ANNOTATIONS {
-    summary: "计划 {{ $labels.plan }} 配额已耗尽"
-  }
+渠道指标:
+cdapi_channel_coding_status{channel_id, account_id}
+cdapi_channel_auto_disabled_total{account_id}
+cdapi_channel_auto_enabled_total{account_id}
 
-同步失败:
-ALERT QuotaSyncFailure
-  IF rate(cdapi_quota_sync_failure_total[5m]) > 0
-  FOR 5m
-  LABELS { severity: "warning" }
-  ANNOTATIONS {
-    summary: "计划 {{ $labels.plan }} 配额同步失败"
-  }
+使用指标:
+cdapi_coding_requests_total{account_id, model, status}
+cdapi_coding_tokens_total{account_id, model, type}
+cdapi_coding_credits_total{account_id}
+```
 
-渠道自动禁用:
-ALERT ChannelAutoDisabled
-  IF cdapi_channel_quota_status == 0
-  FOR 1m
-  LABELS { severity: "warning" }
-  ANNOTATIONS {
-    summary: "渠道 {{ $labels.channel }} 因配额耗尽已自动禁用"
-  }
+### 10.2 告警规则
+
+```yaml
+# 配额告警
+groups:
+  - name: coding_quota
+    rules:
+      - alert: CodingQuotaWarning
+        expr: cdapi_coding_quota_usage_percentage > 0.8
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Coding账户 {{ $labels.account_id }} 配额使用率超过80%"
+          
+      - alert: CodingQuotaCritical
+        expr: cdapi_coding_quota_usage_percentage > 0.9
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Coding账户 {{ $labels.account_id }} 配额使用率超过90%"
+          
+      - alert: CodingQuotaExhausted
+        expr: cdapi_coding_quota_remaining == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Coding账户 {{ $labels.account_id }} 配额已耗尽"
+          
+      - alert: CodingSyncFailure
+        expr: rate(cdapi_coding_sync_failure_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Coding账户同步失败"
+          
+      - alert: CodingAccountError
+        expr: cdapi_coding_account_status{status="error"} == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Coding账户 {{ $labels.account_id }} 状态异常"
 ```
 
 ---
 
-## 十二、最佳实践
+## 十一、最佳实践
 
-### 12.1 配置建议
+### 11.1 配置建议
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      配置最佳实践                                    │
-└─────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              配置最佳实践                                            │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
 阈值设置建议:
-┌─────────────────────┬──────────────────────────────────────────────┐
-│ 场景                │ 建议配置                                     │
-├─────────────────────┼──────────────────────────────────────────────┤
-│ 生产环境            │ warning: 0.80, throttle: 0.90, disable: 0.95│
-│ 开发环境            │ warning: 0.90, throttle: 0.95, disable: 1.00│
-│ 严格限制            │ warning: 0.70, throttle: 0.85, disable: 0.90│
-│ 宽松限制            │ warning: 0.90, disable: 1.00, auto_disable: false │
-└─────────────────────┴──────────────────────────────────────────────┘
+┌─────────────────────┬──────────────────────────────────────────────────────────────┐
+│ 场景                │ 建议配置                                                     │
+├─────────────────────┼──────────────────────────────────────────────────────────────┤
+│ 生产环境            │ warning: 0.80, critical: 0.90, disable: 0.95                │
+│ 开发环境            │ warning: 0.90, critical: 0.95, disable: 1.00                │
+│ 严格限制            │ warning: 0.70, critical: 0.85, disable: 0.90                │
+│ 宽松限制            │ warning: 0.90, disable: 1.00, auto_disable: false           │
+└─────────────────────┴──────────────────────────────────────────────────────────────┘
 
-多渠道配置:
-├─── 主渠道: 高配额计划，正常使用
-├─── 备用渠道: 中等配额，主渠道禁用时启用
-├─── 降级渠道: 低成本模型，配额紧张时切换
-└─── 兜底渠道: 免费计划，仅限紧急情况
+多渠道配置策略:
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                     │
+│  主渠道 ──▶ 高配额账户 (TokenCodingStatus)                                          │
+│     │                                                                               │
+│     ├── 配额耗尽 ──▶ 自动禁用                                                       │
+│     │                    │                                                          │
+│     │                    ▼                                                          │
+│     │              备用渠道 ──▶ 中等配额账户 (RequestCodingStatus)                  │
+│     │                 │                                                             │
+│     │                 ├── 配额耗尽 ──▶ 自动禁用                                     │
+│     │                 │                    │                                        │
+│     │                 │                    ▼                                        │
+│     │                 │              兜底渠道 ──▶ PromptCodingStatus                │
+│     │                 │                                                           │
+│     │                 └── 新周期 ──▶ 自动启用主渠道                                 │
+│     │                                                                             │
+│     └── 新周期 ──▶ 自动启用                                                        │
+│                                                                                     │
+│  配置要点:                                                                          │
+│  1. 主渠道: auto_disable=true, auto_enable=true                                     │
+│  2. 备用渠道: auto_disable=true, auto_enable=false (手动切回主渠道)                 │
+│  3. 兜底渠道: auto_disable=false (始终可用，但配额有限)                             │
+│                                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────┘
 
-通知配置:
-├─── 警告通知: 仅 Email + Webhook
-├─── 临界通知: Email + Webhook + 站内信
-├─── 耗尽通知: Email + SMS + Webhook + 站内信
-└─── 重置通知: Email + Webhook
+驱动选择建议:
+┌─────────────────────┬──────────────────────────────────────────────────────────────┐
+│ 场景                │ 推荐驱动                                                     │
+├─────────────────────┼──────────────────────────────────────────────────────────────┤
+│ 按Token计费         │ TokenCodingStatus                                            │
+│ 按请求次数计费      │ RequestCodingStatus                                          │
+│ 按Prompt次数计费    │ PromptCodingStatus                                           │
+│ 智谱GLM官方API      │ GLMCodingStatus                                              │
+│ 阿里云百炼          │ RequestCodingStatus                                          │
+│ 火山方舟            │ RequestCodingStatus                                          │
+└─────────────────────┴──────────────────────────────────────────────────────────────┘
 ```
 
-### 12.2 运维建议
+### 11.2 运维建议
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      运维最佳实践                                    │
-└─────────────────────────────────────────────────────────────────────┘
-
 日常运维:
-├─── 每日检查配额使用报告
-├─── 监控自动禁用/启用事件
-├─── 检查同步状态
-└─── 处理用户反馈
-
-容量规划:
-├─── 根据历史数据预测用量
-├─── 提前升级计划或增加配额
-├─── 配置备用渠道
-└─── 设置合理的阈值
+├─── 每日检查Coding账户同步状态
+├─── 监控渠道自动禁用/启用事件
+├─── 检查配额使用趋势，提前规划
+└─── 处理同步失败告警
 
 故障处理:
-├─── 同步失败: 检查网络和认证
-├─── 误禁用: 手动启用并调整阈值
-├─── 配额不准: 触发全量同步
-└─── 通知失败: 检查通知渠道配置
+├─── 同步失败: 检查凭证是否过期，网络是否正常
+├─── 误禁用: 手动启用渠道，调整阈值配置
+├─── 配额不准: 手动触发同步，检查API响应
+└─── 驱动异常: 检查驱动配置，查看错误日志
 
-安全建议:
-├─── 定期轮换 API Key
-├─── 限制 Webhook 来源 IP
-├─── 加密存储敏感信息
-└─── 审计所有操作日志
+扩展新驱动:
+├─── 1. 创建新驱动类实现 CodingStatusDriver 接口
+├─── 2. 实现平台特定的配额获取逻辑
+├─── 3. 配置模型消耗倍数
+├─── 4. 添加Filament管理界面
+└─── 5. 测试驱动功能
+```
+
+---
+
+## 十二、总结
+
+### 12.1 架构优势
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              新架构优势                                              │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+1. 职责分离
+   ├── 渠道: 专注API代理，不关心配额管理细节
+   ├── Coding账户: 统一管理各平台凭证和驱动绑定
+   └── CodingStatus驱动: 各计费模式独立实现配额管理逻辑
+
+2. 易于扩展
+   ├── 新增计费模式只需实现CodingStatusDriver接口
+   ├── 新增平台只需配置对应驱动
+   └── 驱动可复用于多个渠道
+
+3. 灵活配置
+   ├── 渠道可覆盖账户级别的自动调控配置
+   ├── 支持备用渠道切换
+   └── 各驱动支持平台特定的配置
+
+4. 统一管理
+   ├── 多渠道多平台统一监控
+   ├── 统一的状态流转和日志记录
+   └── 统一的API接口
+```
+
+### 12.2 核心流程回顾
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              核心流程回顾                                            │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+渠道请求处理流程:
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                 │
+│  1. 请求到达渠道                                                                 │
+│       │                                                                         │
+│       ▼                                                                         │
+│  2. CheckCodingQuota中间件拦截                                                  │
+│       │                                                                         │
+│       ├── 未绑定Coding账户 ──▶ 直接放行                                         │
+│       │                                                                         │
+│       └── 已绑定Coding账户                                                      │
+│             │                                                                   │
+│             ▼                                                                   │
+│       3. 获取CodingAccount                                                      │
+│             │                                                                   │
+│             ▼                                                                   │
+│       4. 实例化driver_class对应驱动                                             │
+│             │                                                                   │
+│             ▼                                                                   │
+│       5. driver.checkQuota(context)                                             │
+│             │                                                                   │
+│             ├── 配额不足 ──▶ 返回429错误                                        │
+│             │                                                                         │
+│             └── 配额充足                                                          │
+│                   │                                                               │
+│                   ▼                                                               │
+│             6. 执行请求                                                           │
+│                   │                                                               │
+│                   ▼                                                               │
+│             7. driver.consume(usage) 更新配额                                     │
+│                   │                                                               │
+│                   ▼                                                               │
+│             8. ChannelCodingStatusService检查并更新渠道状态                       │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+定时任务流程:
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                 │
+│  SyncCodingQuota (每5分钟)                                                      │
+│       │                                                                         │
+│       ├── 遍历所有CodingAccount                                                 │
+│       ├── 调用driver.sync()同步配额                                             │
+│       └── 更新账户quota_cached                                                  │
+│                                                                                 │
+│  CheckChannelCodingStatus (每分钟)                                              │
+│       │                                                                         │
+│       ├── 遍历所有绑定Coding账户的渠道                                          │
+│       ├── 调用driver.shouldDisable() / shouldEnable()                           │
+│       └── 触发渠道禁用/启用                                                     │
+│                                                                                 │
+│  ResetPeriodQuota (每分钟)                                                      │
+│       │                                                                         │
+│       ├── 检查各账户是否进入新周期                                              │
+│       ├── 重置配额使用缓存                                                      │
+│       └── 触发渠道自动启用                                                      │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 12.3 驱动对比
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│                              驱动对比总结                                            │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────┬─────────────────┬─────────────────┬─────────────────┬────────────┐
+│ 特性             │ TokenCoding     │ RequestCoding   │ PromptCoding    │ GLMCoding  │
+├──────────────────┼─────────────────┼─────────────────┼─────────────────┼────────────┤
+│ 计费维度         │ Token           │ 请求次数        │ Prompt次数      │ Prompt/Token│
+│ 周期支持         │ 日/周/月/无     │ 日/周/月/5h/无  │ 日/周/月/5h/无  │ 5h (官方)  │
+│ 模型倍数         │ 支持            │ 支持            │ 支持            │ 支持       │
+│ 外部API同步      │ 可选            │ 可选            │ 可选            │ 必需       │
+│ 适用平台         │ 通用            │ 阿里云/火山等   │ 智谱GLM等       │ 智谱GLM    │
+│ 实现复杂度       │ 低              │ 低              │ 低              │ 中         │
+└──────────────────┴─────────────────┴─────────────────┴─────────────────┴────────────┘
 ```
