@@ -1,4 +1,4 @@
-# 渠道扩展功能设计
+# 渠道 CodingPlan 支持
 
 ## 一、功能概述
 
@@ -23,9 +23,155 @@
 
 ---
 
-## 二、Coding Plan 集成
+## 二、主流 AI Coding 工具计费参考
 
-### 2.1 计费计划类型
+### 2.1 GitHub Copilot 定价 (2025)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    GitHub Copilot 定价体系                           │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌──────────────┬──────────────┬────────────────────────────────────────┐
+│ 计划         │ 价格         │ 配额                                   │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Free         │ $0/月        │ 50 premium requests/月                 │
+│              │              │ 2,000 completions/月                   │
+│              │              │ 50 chat messages/月                    │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Pro          │ $10/月       │ 300 premium requests/月                │
+│ (Most Popular)│ $100/年     │ 无限 completions                       │
+│              │              │ 无限 agent mode (GPT-5 mini)           │
+│              │              │ CLI 支持                               │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Pro+         │ $39/月       │ 1,500 premium requests/月              │
+│              │ $390/年      │ 无限 completions                       │
+│              │              │ Coding Agent (第三方代理)              │
+│              │              │ 优先支持                               │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Business     │ $19/月/用户  │ 300 premium requests/月/用户           │
+│              │              │ 团队管理                               │
+│              │              │ IP 保护                                │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Enterprise   │ $39/月/用户  │ 1,000 premium requests/月/用户         │
+│              │              │ 私有知识库索引                         │
+│              │              │ 自定义模型微调                         │
+│              │              │ SSO 集成                               │
+└──────────────┴──────────────┴────────────────────────────────────────┘
+
+Premium Requests 模型消耗倍数:
+┌─────────────────────────┬────────────────────────────────────────────┐
+│ 模型                    │ 消耗倍数                                   │
+├─────────────────────────┼────────────────────────────────────────────┤
+│ GPT-5 mini              │ 1x (基础模型)                              │
+│ GPT-4o                  │ 2x                                         │
+│ Claude 3.5 Sonnet       │ 2x                                         │
+│ o1-preview              │ 10x                                        │
+│ o1-mini                 │ 5x                                         │
+└─────────────────────────┴────────────────────────────────────────────┘
+
+额外购买: $0.04/premium request
+```
+
+### 2.2 Cursor 定价 (2025)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                       Cursor 定价体系                                │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌──────────────┬──────────────┬────────────────────────────────────────┐
+│ 计划         │ 价格         │ 配额                                   │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Free         │ $0/月        │ 2,000 completions/月                   │
+│              │              │ 50 slow requests/月                    │
+│              │              │ 基础模型访问                           │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Pro          │ $20/月       │ 500 fast requests/月                   │
+│              │ $192/年      │ 无限 slow requests                     │
+│              │              │ 全模型访问                             │
+│              │              │ Claude 3.5 Sonnet, GPT-4o              │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Business     │ $40/月/用户  │ 500 fast requests/月/用户              │
+│              │              │ 团队管理                               │
+│              │              │ 优先支持                               │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Enterprise   │ 定制         │ 定制配额                               │
+│              │              │ SSO 集成                               │
+│              │              │ 私有部署                               │
+└──────────────┴──────────────┴────────────────────────────────────────┘
+
+Fast Requests: 使用高级模型 (Claude 3.5 Sonnet, GPT-4o)
+Slow Requests: 使用基础模型，排队等待
+```
+
+### 2.3 Windsurf (Codeium) 定价 (2025)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Windsurf 定价体系                                 │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌──────────────┬──────────────┬────────────────────────────────────────┐
+│ 计划         │ 价格         │ 配额                                   │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Free         │ $0/月        │ 25 prompt credits/月                   │
+│              │              │ 无限 tab completions                   │
+│              │              │ 基础模型访问                           │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Pro          │ $15/月       │ 500 prompt credits/月                  │
+│              │              │ 全模型访问 (OpenAI, Claude, Gemini)    │
+│              │              │ Fast Context 功能                      │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Teams        │ $30/月/用户  │ 500 prompt credits/月/用户             │
+│              │              │ 团队管理面板                           │
+│              │              │ 优先支持                               │
+├──────────────┼──────────────┼────────────────────────────────────────┤
+│ Enterprise   │ 定制         │ 1,000 prompt credits/月/用户           │
+│              │              │ SSO + RBAC                             │
+│              │              │ 混合部署选项                           │
+└──────────────┴──────────────┴────────────────────────────────────────┘
+
+额外购买: $10/250 prompt credits
+```
+
+### 2.4 行业趋势总结
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    AI Coding 计费趋势                                │
+└─────────────────────────────────────────────────────────────────────┘
+
+核心计费模式:
+├─── 积分制 (Credits): Windsurf 的 prompt credits
+├─── 请求次数制: GitHub 的 premium requests, Cursor 的 fast requests
+├─── 模型差异化: 不同模型消耗不同倍数积分
+└─── 分层定价: Free → Pro → Teams → Enterprise
+
+共同特点:
+├─── 免费层: 有限配额，吸引用户
+├─── 个人层: 月费 $10-20，适合个人开发者
+├─── 团队层: 月费 $30-40/用户，团队协作功能
+├─── 企业层: 定制价格，安全合规功能
+├─── 额外购买: 超出配额可按量付费
+└─── 周期重置: 月度周期，配额每月重置
+
+模型消耗倍数 (参考):
+┌─────────────────────────┬────────────────────────────────────────────┐
+│ 模型级别                │ 建议倍数                                   │
+├─────────────────────────┼────────────────────────────────────────────┤
+│ 基础模型 (GPT-3.5等)    │ 1x                                         │
+│ 标准模型 (GPT-4o等)     │ 2x                                         │
+│ 高级模型 (Claude 3.5)   │ 2-3x                                       │
+│ 推理模型 (o1系列)       │ 5-10x                                      │
+└─────────────────────────┴────────────────────────────────────────────┘
+```
+
+---
+
+## 三、Coding Plan 设计
+
+### 3.1 计费计划类型
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -37,8 +183,9 @@
 │ 类型            │ 说明                                             │
 ├─────────────────┼──────────────────────────────────────────────────┤
 │ free            │ 免费计划，有严格限制                             │
-│ basic           │ 基础计划，适合个人用户                           │
-│ pro             │ 专业计划，适合团队使用                           │
+│ pro             │ 专业计划，适合个人用户                           │
+│ pro_plus        │ 专业增强版，高级模型访问                         │
+│ teams           │ 团队计划，多人协作                               │
 │ enterprise      │ 企业计划，自定义配额                             │
 │ pay_as_you_go   │ 按量付费，无固定限制                             │
 │ trial           │ 试用计划，时间限制                               │
@@ -48,16 +195,17 @@
 ┌─────────────────┬──────────────────────────────────────────────────┐
 │ 维度            │ 说明                                             │
 ├─────────────────┼──────────────────────────────────────────────────┤
+│ credits         │ 积分配额 (核心计费单位)                          │
 │ requests        │ 请求次数限制                                     │
 │ tokens          │ Token 数量限制                                   │
 │ cost            │ 金额限制 (美元)                                  │
 │ models          │ 可用模型限制                                     │
-│ features        │ 功能限制 (streaming, vision, etc.)               │
+│ features        │ 功能限制 (streaming, vision, agent, etc.)        │
 │ time            │ 时间限制 (试用期)                                │
 └─────────────────┴──────────────────────────────────────────────────┘
 ```
 
-### 2.2 数据库设计
+### 3.2 数据库设计
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -70,8 +218,13 @@ CREATE TABLE coding_plans (
     coding_plan_id VARCHAR(100) NOT NULL UNIQUE COMMENT 'Coding 平台计划 ID',
     tenant_id BIGINT UNSIGNED NULL COMMENT '关联租户 ID',
     name VARCHAR(255) NOT NULL COMMENT '计划名称',
-    type ENUM('free', 'basic', 'pro', 'enterprise', 'pay_as_you_go', 'trial') NOT NULL,
+    type ENUM('free', 'pro', 'pro_plus', 'teams', 'enterprise', 'pay_as_you_go', 'trial') NOT NULL,
     status ENUM('active', 'suspended', 'expired', 'cancelled') DEFAULT 'active',
+    
+    -- 积分配额 (核心计费单位)
+    credits_limit INT UNSIGNED DEFAULT 0 COMMENT '积分上限',
+    credits_used INT UNSIGNED DEFAULT 0 COMMENT '已用积分',
+    credits_remaining INT UNSIGNED DEFAULT 0 COMMENT '剩余积分',
     
     -- 配额定义
     quota_definition JSON NOT NULL COMMENT '配额定义',
@@ -103,6 +256,36 @@ CREATE TABLE coding_plans (
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Coding 计费计划表';
 
+模型消耗倍数表 (model_multipliers):
+CREATE TABLE model_multipliers (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    model_pattern VARCHAR(100) NOT NULL COMMENT '模型匹配模式 (支持通配符)',
+    multiplier DECIMAL(5,2) NOT NULL DEFAULT 1.00 COMMENT '消耗倍数',
+    category VARCHAR(50) DEFAULT 'standard' COMMENT '模型分类: basic/standard/advanced/reasoning',
+    description VARCHAR(255) NULL COMMENT '描述',
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    INDEX idx_model_pattern (model_pattern),
+    INDEX idx_category (category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='模型消耗倍数表';
+
+-- 预置模型消耗倍数
+INSERT INTO model_multipliers (model_pattern, multiplier, category, description) VALUES
+('gpt-3.5-*', 1.00, 'basic', 'GPT-3.5 系列基础模型'),
+('gpt-4o-mini*', 1.00, 'basic', 'GPT-4o-mini 基础模型'),
+('gpt-4o*', 2.00, 'standard', 'GPT-4o 标准模型'),
+('gpt-4-turbo*', 2.00, 'standard', 'GPT-4 Turbo 标准模型'),
+('gpt-4-*', 2.00, 'standard', 'GPT-4 标准模型'),
+('claude-3-5-sonnet*', 2.00, 'standard', 'Claude 3.5 Sonnet 标准模型'),
+('claude-3-5-haiku*', 1.00, 'basic', 'Claude 3.5 Haiku 基础模型'),
+('claude-3-opus*', 3.00, 'advanced', 'Claude 3 Opus 高级模型'),
+('o1-preview*', 10.00, 'reasoning', 'o1 推理模型'),
+('o1-mini*', 5.00, 'reasoning', 'o1-mini 推理模型'),
+('gemini-1.5-flash*', 1.00, 'basic', 'Gemini Flash 基础模型'),
+('gemini-1.5-pro*', 2.00, 'standard', 'Gemini Pro 标准模型');
+
 渠道-计划关联表 (channel_plan_pivot):
 CREATE TABLE channel_plan_pivot (
     channel_id BIGINT UNSIGNED NOT NULL,
@@ -132,6 +315,7 @@ CREATE TABLE quota_usage_logs (
     request_id VARCHAR(36) NULL,
     
     -- 使用量
+    credits_used INT UNSIGNED DEFAULT 1 COMMENT '消耗积分',
     requests INT UNSIGNED DEFAULT 1,
     tokens_input INT UNSIGNED DEFAULT 0,
     tokens_output INT UNSIGNED DEFAULT 0,
@@ -139,18 +323,20 @@ CREATE TABLE quota_usage_logs (
     
     -- 模型信息
     model VARCHAR(100) NULL,
+    model_multiplier DECIMAL(5,2) DEFAULT 1.00 COMMENT '使用的模型倍数',
     
     -- 时间
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     INDEX idx_plan_created (plan_id, created_at),
     INDEX idx_channel_created (channel_id, created_at),
+    INDEX idx_model_created (model, created_at),
     FOREIGN KEY (plan_id) REFERENCES coding_plans(id) ON DELETE CASCADE,
     FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='配额使用记录表';
 ```
 
-### 2.3 配额定义结构
+### 3.3 配额定义结构
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -159,6 +345,12 @@ CREATE TABLE quota_usage_logs (
 
 quota_definition 示例:
 {
+    "credits": {
+        "limit": 500,
+        "period": "monthly",
+        "reset_day": 1,
+        "rollover": false
+    },
     "requests": {
         "limit": 10000,
         "period": "monthly",
@@ -176,14 +368,18 @@ quota_definition 示例:
         "period": "monthly"
     },
     "models": {
-        "allowed": ["gpt-4", "gpt-3.5-turbo", "claude-3-sonnet"],
-        "restricted": ["gpt-4-32k", "claude-3-opus"]
+        "allowed": ["gpt-4o", "gpt-3.5-turbo", "claude-3-5-sonnet"],
+        "restricted": ["o1-preview", "claude-3-opus"],
+        "multiplier_override": {
+            "gpt-4o": 1.5
+        }
     },
     "features": {
         "streaming": true,
         "function_calling": true,
         "vision": false,
-        "embeddings": true
+        "agent_mode": true,
+        "code_review": false
     },
     "rate_limits": {
         "requests_per_minute": 60,
@@ -197,6 +393,7 @@ quota_definition 示例:
 
 quota_used 示例:
 {
+    "credits": 350,
     "requests": 8500,
     "tokens": {
         "input": 4000000,
@@ -204,11 +401,16 @@ quota_used 示例:
         "total": 6000000
     },
     "cost": 85.50,
+    "models": {
+        "gpt-4o": {"credits": 200, "requests": 3000},
+        "claude-3-5-sonnet": {"credits": 150, "requests": 5500}
+    },
     "last_updated": "2024-01-15T10:30:00Z"
 }
 
 quota_remaining 示例:
 {
+    "credits": 150,
     "requests": 1500,
     "tokens": {
         "input": 1000000,
@@ -216,15 +418,183 @@ quota_remaining 示例:
         "total": 1500000
     },
     "cost": 14.50,
-    "percentage": 0.145
+    "percentage": 0.30
 }
 ```
 
 ---
 
-## 三、自动禁用/启用机制
+## 四、积分计算核心逻辑
 
-### 3.1 状态流转
+### 4.1 积分消耗计算
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                      积分消耗计算逻辑                                │
+└─────────────────────────────────────────────────────────────────────┘
+
+计算公式:
+credits_used = base_credits × model_multiplier × feature_multiplier
+
+基础积分 (base_credits):
+├─── Chat 请求: 1 credit
+├─── Completion 请求: 1 credit  
+├─── Agent 模式: 2 credits
+├─── Code Review: 2 credits
+└─── Embedding: 0.1 credits
+
+模型消耗倍数 (model_multiplier):
+┌─────────────────────────┬────────────────────────────────────────────┐
+│ 模型分类                │ 倍数范围                                   │
+├─────────────────────────┼────────────────────────────────────────────┤
+│ basic (基础)            │ 1x                                         │
+│ standard (标准)         │ 2x                                         │
+│ advanced (高级)         │ 3x                                         │
+│ reasoning (推理)        │ 5-10x                                      │
+└─────────────────────────┴────────────────────────────────────────────┘
+
+功能消耗倍数 (feature_multiplier):
+├─── 普通请求: 1.0x
+├─── 流式输出: 1.0x
+├─── Vision: 1.5x
+├─── Function Calling: 1.2x
+└─── 长上下文 (>32k): 2.0x
+```
+
+### 4.2 积分计算服务
+
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\CodingPlan;
+use App\Models\ModelMultiplier;
+
+class CreditCalculator
+{
+    protected array $baseCredits = [
+        'chat' => 1,
+        'completion' => 1,
+        'agent' => 2,
+        'code_review' => 2,
+        'embedding' => 0.1,
+    ];
+
+    protected array $featureMultipliers = [
+        'vision' => 1.5,
+        'function_calling' => 1.2,
+        'long_context' => 2.0,
+        'streaming' => 1.0,
+    ];
+
+    public function calculateCredits(
+        string $requestType,
+        string $model,
+        array $features = []
+    ): int {
+        $baseCredits = $this->baseCredits[$requestType] ?? 1;
+        $modelMultiplier = $this->getModelMultiplier($model);
+        $featureMultiplier = $this->getFeatureMultiplier($features);
+
+        return (int) ceil($baseCredits * $modelMultiplier * $featureMultiplier);
+    }
+
+    protected function getModelMultiplier(string $model): float
+    {
+        $multiplier = ModelMultiplier::where('is_active', true)
+            ->where(function ($query) use ($model) {
+                $query->where('model_pattern', $model)
+                    ->orWhereRaw('? LIKE REPLACE(model_pattern, "*", "%")', [$model]);
+            })
+            ->orderByRaw('LENGTH(model_pattern) DESC')
+            ->first();
+
+        return $multiplier?->multiplier ?? 1.0;
+    }
+
+    protected function getFeatureMultiplier(array $features): float
+    {
+        $multiplier = 1.0;
+
+        foreach ($features as $feature => $enabled) {
+            if ($enabled && isset($this->featureMultipliers[$feature])) {
+                $multiplier *= $this->featureMultipliers[$feature];
+            }
+        }
+
+        return $multiplier;
+    }
+}
+```
+
+### 4.3 配额检查服务
+
+```php
+<?php
+
+namespace App\Services;
+
+use App\Models\CodingPlan;
+use App\Models\Channel;
+use Illuminate\Support\Facades\Redis;
+
+class QuotaChecker
+{
+    public function checkQuota(CodingPlan $plan, int $creditsNeeded): array
+    {
+        $cacheKey = "cdapi:quota:{$plan->id}:credits";
+        $cachedCredits = Redis::get($cacheKey);
+        
+        $remainingCredits = $cachedCredits !== null 
+            ? (int) $cachedCredits 
+            : $plan->credits_remaining;
+
+        if ($remainingCredits < $creditsNeeded) {
+            return [
+                'allowed' => false,
+                'reason' => 'insufficient_credits',
+                'remaining' => $remainingCredits,
+                'needed' => $creditsNeeded,
+            ];
+        }
+
+        $usagePercentage = 1 - ($remainingCredits - $creditsNeeded) / $plan->credits_limit;
+
+        return [
+            'allowed' => true,
+            'remaining' => $remainingCredits,
+            'needed' => $creditsNeeded,
+            'usage_percentage' => $usagePercentage,
+            'warning' => $usagePercentage >= 0.8,
+        ];
+    }
+
+    public function consumeCredits(CodingPlan $plan, int $credits, string $model): void
+    {
+        $plan->increment('credits_used', $credits);
+        $plan->decrement('credits_remaining', $credits);
+
+        Redis::decrby("cdapi:quota:{$plan->id}:credits", $credits);
+
+        $this->recordUsage($plan, $credits, $model);
+    }
+
+    protected function recordUsage(CodingPlan $plan, int $credits, string $model): void
+    {
+        $usageKey = "cdapi:usage:{$plan->id}:" . date('Y-m-d');
+        Redis::hincrby($usageKey, "credits", $credits);
+        Redis::hincrby($usageKey, "model:{$model}:credits", $credits);
+        Redis::expire($usageKey, 86400 * 90);
+    }
+}
+```
+
+---
+
+## 五、自动禁用/启用机制
+
+### 5.1 状态流转
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -273,7 +643,7 @@ quota_remaining 示例:
 └─────────────────┴──────────────────────────────────────────────────┘
 ```
 
-### 3.2 自动控制配置
+### 5.2 自动控制配置
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -317,7 +687,7 @@ quota_remaining 示例:
 }
 ```
 
-### 3.3 状态检测流程
+### 5.3 状态检测流程
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -381,9 +751,9 @@ quota_remaining 示例:
 
 ---
 
-## 四、Coding API 集成
+## 六、Coding API 集成
 
-### 4.1 API 接口设计
+### 6.1 API 接口设计
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -455,7 +825,7 @@ POST /api/coding/webhooks/quota-reset
 }
 ```
 
-### 4.2 同步策略
+### 6.2 同步策略
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -494,7 +864,7 @@ POST /api/coding/webhooks/quota-reset
 }
 ```
 
-### 4.3 认证与安全
+### 6.3 认证与安全
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -537,9 +907,9 @@ function verifyWebhook(payload, signature, secret) {
 
 ---
 
-## 五、限流策略
+## 七、限流策略
 
-### 5.1 限流模式
+### 7.1 限流模式
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -581,7 +951,7 @@ function verifyWebhook(payload, signature, secret) {
 }
 ```
 
-### 5.2 限流实现
+### 7.2 限流实现
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -619,9 +989,9 @@ function calculateThrottleRate(quotaRemaining, quotaLimit) {
 
 ---
 
-## 六、通知系统
+## 八、通知系统
 
-### 6.1 通知类型
+### 8.1 通知类型
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -651,7 +1021,7 @@ function calculateThrottleRate(quotaRemaining, quotaLimit) {
 └─── Slack/钉钉: 即时通讯
 ```
 
-### 6.2 通知模板
+### 8.2 通知模板
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -688,9 +1058,9 @@ function calculateThrottleRate(quotaRemaining, quotaLimit) {
 
 ---
 
-## 七、定时任务
+## 九、定时任务
 
-### 7.1 任务设计
+### 9.1 任务设计
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -746,7 +1116,7 @@ SendQuotaReport (发送配额报告):
 └─── 记录发送状态
 ```
 
-### 7.2 Laravel 任务配置
+### 9.2 Laravel 任务配置
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -799,9 +1169,9 @@ protected function schedule(Schedule $schedule)
 
 ---
 
-## 八、API 接口
+## 十、API 接口
 
-### 8.1 管理接口
+### 10.1 管理接口
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -870,7 +1240,7 @@ POST /api/v1/coding-plans/{id}/reset
 POST /api/v1/coding-plans/{id}/sync
 ```
 
-### 8.2 查询接口
+### 10.2 查询接口
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -927,9 +1297,9 @@ GET /api/v1/coding-plans/{id}/history
 
 ---
 
-## 九、监控与告警
+## 十一、监控与告警
 
-### 9.1 监控指标
+### 11.1 监控指标
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -956,7 +1326,7 @@ cdapi_quota_notification_sent_total{plan, event, channel}
 cdapi_quota_notification_failed_total{plan, event, channel}
 ```
 
-### 9.2 告警规则
+### 11.2 告警规则
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -1002,9 +1372,9 @@ ALERT ChannelAutoDisabled
 
 ---
 
-## 十、最佳实践
+## 十二、最佳实践
 
-### 10.1 配置建议
+### 12.1 配置建议
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -1034,7 +1404,7 @@ ALERT ChannelAutoDisabled
 └─── 重置通知: Email + Webhook
 ```
 
-### 10.2 运维建议
+### 12.2 运维建议
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
