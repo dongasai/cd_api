@@ -248,4 +248,111 @@ class PromptCodingStatusDriver extends AbstractCodingStatusDriver
         return [
             'metrics' => $metrics,
             'period' => $periodInfo,
-            'status' =>
+            'status' => $this->getStatus(),
+        ];
+    }
+
+    /**
+     * 获取使用量
+     */
+    protected function getUsage(): array
+    {
+        return [
+            'prompts' => $this->getCurrentUsage('prompts'),
+            'prompts_per_5h' => $this->getCurrentUsage('prompts_per_5h'),
+            'prompts_per_day' => $this->getCurrentUsage('prompts_per_day'),
+        ];
+    }
+
+    /**
+     * 获取默认配额配置
+     */
+    public function getDefaultQuotaConfig(): array
+    {
+        return [
+            'limits' => [
+                'prompts_per_5h' => 80,
+            ],
+            'thresholds' => [
+                'warning' => 0.75,
+                'disable' => 0.90,
+            ],
+            'cycle' => '5h',
+            'period_offset' => 0,
+        ];
+    }
+
+    /**
+     * 获取配置表单字段
+     */
+    public function getConfigFields(): array
+    {
+        return [
+            [
+                'name' => 'limits.prompts',
+                'label' => 'Prompt次数限制 (月度/周度)',
+                'type' => 'number',
+                'min' => 0,
+                'default' => 1000,
+                'help' => '月度或周度周期的Prompt限制',
+            ],
+            [
+                'name' => 'limits.prompts_per_5h',
+                'label' => '5小时周期Prompt限制',
+                'type' => 'number',
+                'min' => 0,
+                'default' => 80,
+                'help' => '智谱GLM等平台使用',
+            ],
+            [
+                'name' => 'limits.prompts_per_day',
+                'label' => '日周期Prompt限制',
+                'type' => 'number',
+                'min' => 0,
+                'default' => 500,
+                'help' => '每日Prompt限制',
+            ],
+            [
+                'name' => 'thresholds',
+                'label' => '阈值配置',
+                'type' => 'key_value',
+                'help' => 'warning: 警告阈值, critical: 临界阈值, disable: 禁用阈值',
+                'default' => [
+                    'warning' => 0.75,
+                    'critical' => 0.85,
+                    'disable' => 0.90,
+                ],
+            ],
+            [
+                'name' => 'cycle',
+                'label' => '重置周期',
+                'type' => 'select',
+                'options' => [
+                    '5h' => '5小时',
+                    'daily' => '每日',
+                    'weekly' => '每周',
+                    'monthly' => '每月',
+                ],
+                'default' => '5h',
+            ],
+            [
+                'name' => 'period_offset',
+                'label' => '周期偏移量 (秒)',
+                'type' => 'number',
+                'min' => 0,
+                'max' => 17999,
+                'default' => 0,
+                'help' => '5小时周期的起始偏移量',
+            ],
+            [
+                'name' => 'reset_day',
+                'label' => '重置日期',
+                'type' => 'number',
+                'min' => 1,
+                'max' => 31,
+                'default' => 1,
+                'help' => '每月重置的日期 (仅月度周期有效)',
+            ],
+        ];
+    }
+}

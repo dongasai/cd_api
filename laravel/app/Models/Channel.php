@@ -48,6 +48,7 @@ class Channel extends Model
         'avg_latency_ms',
         'success_rate',
         'config',
+        'model_mappings',
         'coding_account_id',
         'coding_status_override',
         'description',
@@ -62,6 +63,7 @@ class Channel extends Model
     {
         return [
             'models' => 'array',
+            'model_mappings' => 'array',
             'config' => 'array',
             'coding_status_override' => 'array',
             'last_check_at' => 'datetime',

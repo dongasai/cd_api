@@ -253,7 +253,7 @@ class TokenCodingStatusDriver extends AbstractCodingStatusDriver
      * 获取默认配额配置
      */
     public function getDefaultQuotaConfig(): array
-    [
+    {
         return [
             'limits' => [
                 'tokens_input' => 10000000,

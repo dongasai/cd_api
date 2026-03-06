@@ -59,7 +59,7 @@ class CodingAccount extends Model
     protected function casts(): array
     {
         return [
-            'credentials' => 'encrypted:array',
+            'credentials' => 'array',
             'quota_config' => 'array',
             'quota_cached' => 'array',
             'config' => 'array',
