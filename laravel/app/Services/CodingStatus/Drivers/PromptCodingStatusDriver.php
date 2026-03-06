@@ -165,4 +165,87 @@ class PromptCodingStatusDriver extends AbstractCodingStatusDriver
         // 记录到数据库
         $this->logUsage([
             'channel_id' => $channelId,
-            'request_id' => $request
+            'request_id' => $requestId,
+            'prompts' => $adjustedPrompts,
+            'model' => $model,
+            'model_multiplier' => $multiplier,
+            'status' => $usage['status'] ?? CodingUsageLog::STATUS_SUCCESS,
+            'metadata' => $usage['metadata'] ?? null,
+        ]);
+    }
+
+    /**
+     * 同步配额信息
+     */
+    public function sync(): void
+    {
+        // Prompt次数计费模式通常不需要外部同步
+        // 可以在这里实现从外部API获取配额信息
+
+        $quotaCached = [
+            'synced_at' => now()->toDateTimeString(),
+            'usage' => $this->getUsage(),
+            'limits' => $this->getLimits(),
+        ];
+
+        $this->account->update([
+            'quota_cached' => $quotaCached,
+            'last_sync_at' => now(),
+        ]);
+    }
+
+    /**
+     * 获取配额详细信息
+     */
+    public function getQuotaInfo(): array
+    {
+        $limits = $this->getLimits();
+        $usage = $this->getUsage();
+        $periodInfo = $this->getPeriodInfo();
+        $cycle = $this->getCycle();
+
+        $metrics = [];
+
+        // 根据周期类型显示不同的配额维度
+        if ($cycle === '5h') {
+            if (isset($limits['prompts_per_5h'])) {
+                $used = $usage['prompts_per_5h'] ?? 0;
+                $limit = $limits['prompts_per_5h'];
+                $metrics['prompts_per_5h'] = [
+                    'label' => '5小时周期Prompt次数',
+                    'used' => $used,
+                    'limit' => $limit,
+                    'remaining' => max(0, $limit - $used),
+                    'rate' => $this->calculateUsageRate($used, $limit),
+                ];
+            }
+        } elseif ($cycle === 'daily') {
+            if (isset($limits['prompts_per_day'])) {
+                $used = $usage['prompts_per_day'] ?? 0;
+                $limit = $limits['prompts_per_day'];
+                $metrics['prompts_per_day'] = [
+                    'label' => '日周期Prompt次数',
+                    'used' => $used,
+                    'limit' => $limit,
+                    'remaining' => max(0, $limit - $used),
+                    'rate' => $this->calculateUsageRate($used, $limit),
+                ];
+            }
+        } else {
+            if (isset($limits['prompts'])) {
+                $used = $usage['prompts'] ?? 0;
+                $limit = $limits['prompts'];
+                $metrics['prompts'] = [
+                    'label' => 'Prompt次数',
+                    'used' => $used,
+                    'limit' => $limit,
+                    'remaining' => max(0, $limit - $used),
+                    'rate' => $this->calculateUsageRate($used, $limit),
+                ];
+            }
+        }
+
+        return [
+            'metrics' => $metrics,
+            'period' => $periodInfo,
+            'status' =>
