@@ -1,0 +1,189 @@
+<?php
+
+namespace App\Services\Protocol\DTO;
+
+/**
+ * 多模态内容块
+ */
+class ContentBlock
+{
+    public function __construct(
+        // 内容类型: text, image, image_url, audio, tool_use, tool_result
+        public string $type,
+
+        // 文本内容 (type=text)
+        public ?string $text = null,
+
+        // 图片来源 (type=image)
+        public ?array $source = null,
+
+        // 图片URL (type=image_url)
+        public ?string $imageUrl = null,
+
+        // 图片详情 (OpenAI)
+        public ?string $detail = null,
+
+        // 音频数据
+        public ?string $audioData = null,
+        public ?string $audioFormat = null,
+
+        // 工具调用 (type=tool_use)
+        public ?string $toolId = null,
+        public ?string $toolName = null,
+        public ?array $toolInput = null,
+
+        // 工具结果 (type=tool_result)
+        public ?string $toolResultId = null,
+        public ?string $toolResultContent = null,
+        public ?bool $toolResultIsError = null,
+    ) {}
+
+    /**
+     * 从 OpenAI 格式创建
+     */
+    public static function fromOpenAI(array $block): self
+    {
+        $type = $block['type'] ?? 'text';
+
+        return match ($type) {
+            'text' => new self(
+                type: 'text',
+                text: $block['text'] ?? '',
+            ),
+            'image_url' => new self(
+                type: 'image_url',
+                imageUrl: $block['image_url']['url'] ?? null,
+                detail: $block['image_url']['detail'] ?? null,
+            ),
+            'input_audio' => new self(
+                type: 'audio',
+                audioData: $block['input_audio']['data'] ?? null,
+                audioFormat: $block['input_audio']['format'] ?? null,
+            ),
+            default => new self(type: $type, text: $block['text'] ?? null),
+        };
+    }
+
+    /**
+     * 从 Anthropic 格式创建
+     */
+    public static function fromAnthropic(array $block): self
+    {
+        $type = $block['type'] ?? 'text';
+
+        return match ($type) {
+            'text' => new self(
+                type: 'text',
+                text: $block['text'] ?? '',
+            ),
+            'image' => new self(
+                type: 'image',
+                source: $block['source'] ?? null,
+            ),
+            'tool_use' => new self(
+                type: 'tool_use',
+                toolId: $block['id'] ?? null,
+                toolName: $block['name'] ?? null,
+                toolInput: $block['input'] ?? null,
+            ),
+            'tool_result' => new self(
+                type: 'tool_result',
+                toolResultId: $block['tool_use_id'] ?? null,
+                toolResultContent: is_array($block['content'] ?? null)
+                    ? json_encode($block['content'])
+                    : $block['content'],
+                toolResultIsError: $block['is_error'] ?? false,
+            ),
+            default => new self(type: $type, text: $block['text'] ?? null),
+        };
+    }
+
+    /**
+     * 转换为 OpenAI 格式
+     */
+    public function toOpenAI(): array
+    {
+        return match ($this->type) {
+            'text' => [
+                'type' => 'text',
+                'text' => $this->text ?? '',
+            ],
+            'image', 'image_url' => [
+                'type' => 'image_url',
+                'image_url' => array_filter([
+                    'url' => $this->imageUrl ?? $this->source['url'] ?? null,
+                    'detail' => $this->detail,
+                ], fn ($v) => $v !== null),
+            ],
+            'audio' => [
+                'type' => 'input_audio',
+                'input_audio' => array_filter([
+                    'data' => $this->audioData,
+                    'format' => $this->audioFormat,
+                ], fn ($v) => $v !== null),
+            ],
+            default => [
+                'type' => $this->type,
+                'text' => $this->text,
+            ],
+        };
+    }
+
+    /**
+     * 转换为 Anthropic 格式
+     */
+    public function toAnthropic(): array
+    {
+        return match ($this->type) {
+            'text' => [
+                'type' => 'text',
+                'text' => $this->text ?? '',
+            ],
+            'image', 'image_url' => [
+                'type' => 'image',
+                'source' => $this->source ?? [
+                    'type' => 'url',
+                    'url' => $this->imageUrl,
+                ],
+            ],
+            'tool_use' => [
+                'type' => 'tool_use',
+                'id' => $this->toolId,
+                'name' => $this->toolName,
+                'input' => $this->toolInput ?? [],
+            ],
+            'tool_result' => [
+                'type' => 'tool_result',
+                'tool_use_id' => $this->toolResultId,
+                'content' => $this->toolResultContent,
+                'is_error' => $this->toolResultIsError,
+            ],
+            default => [
+                'type' => $this->type,
+                'text' => $this->text,
+            ],
+        };
+    }
+
+    /**
+     * 转换为数组
+     */
+    public function toArray(): array
+    {
+        return [
+            'type' => $this->type,
+            'text' => $this->text,
+            'source' => $this->source,
+            'image_url' => $this->imageUrl,
+            'detail' => $this->detail,
+            'audio_data' => $this->audioData,
+            'audio_format' => $this->audioFormat,
+            'tool_id' => $this->toolId,
+            'tool_name' => $this->toolName,
+            'tool_input' => $this->toolInput,
+            'tool_result_id' => $this->toolResultId,
+            'tool_result_content' => $this->toolResultContent,
+            'tool_result_is_error' => $this->toolResultIsError,
+        ];
+    }
+}
