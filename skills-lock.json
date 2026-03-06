@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "docs": {
+      "source": "mwguerra/claude-code-plugins",
+      "sourceType": "github",
+      "computedHash": "5f5e5c703477231c4f6b53eed03d9a3c0a29f7d04eff31613aa08af07cb2eb10"
+    }
+  }
+}

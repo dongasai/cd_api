@@ -13,4 +13,4 @@ services:
       - .:/var/www/html
       - ./docker/000-default.local.conf:/etc/apache2/sites-available/000-default.conf
     ports:
-      - "34007:80"
+      - "32126:80"
