@@ -5,8 +5,8 @@ namespace App\Filament\Resources\CodingAccountResource\Pages;
 use App\Filament\Resources\CodingAccountResource;
 use App\Services\CodingStatus\CodingStatusDriverManager;
 use Filament\Actions;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\TextEntry;
 use Filament\Schemas\Schema;
 use Filament\Resources\Pages\ViewRecord;
 
