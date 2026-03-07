@@ -90,9 +90,10 @@ class ProviderManager
      * 根据渠道配置获取供应商实例
      *
      * @param  Channel  $channel  渠道模型
+     * @param  array  $clientHeaders  客户端请求头（用于转发）
      * @return ProviderInterface 供应商实例
      */
-    public function getForChannel(Channel $channel): ProviderInterface
+    public function getForChannel(Channel $channel, array $clientHeaders = []): ProviderInterface
     {
         $providerName = $channel->provider ?? $channel->provider_type ?? 'openai';
 
@@ -100,6 +101,8 @@ class ProviderManager
             'base_url' => $channel->base_url,
             'api_key' => $channel->api_key,
             'name' => $providerName,
+            'forward_headers' => $channel->getForwardHeaderNames(),
+            'client_headers' => $clientHeaders,
         ];
 
         return new OpenAICompatibleProvider($config);

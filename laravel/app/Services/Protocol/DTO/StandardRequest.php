@@ -15,8 +15,8 @@ class StandardRequest
         /** @var StandardMessage[] */
         public array $messages,
 
-        // 系统提示
-        public ?string $systemPrompt = null,
+        // 系统提示 (可以是字符串或数组，Anthropic支持复杂格式)
+        public string|array|null $systemPrompt = null,
 
         // 采样参数
         public ?float $temperature = null,
@@ -179,7 +179,7 @@ class StandardRequest
         ];
 
         // 系统提示
-        if ($this->systemPrompt !== null) {
+        if ($this->hasSystemPrompt()) {
             $request['system'] = $this->systemPrompt;
         }
 
@@ -242,7 +242,21 @@ class StandardRequest
      */
     public function estimateTokens(): int
     {
-        $text = $this->systemPrompt ?? '';
+        $text = '';
+
+        // 处理系统提示
+        if (is_string($this->systemPrompt)) {
+            $text = $this->systemPrompt;
+        } elseif (is_array($this->systemPrompt)) {
+            foreach ($this->systemPrompt as $block) {
+                if (is_string($block)) {
+                    $text .= $block;
+                } elseif (isset($block['text'])) {
+                    $text .= $block['text'];
+                }
+            }
+        }
+
         foreach ($this->messages as $message) {
             $text .= ' '.$message->content;
         }
@@ -264,7 +278,19 @@ class StandardRequest
      */
     public function hasSystemPrompt(): bool
     {
-        return $this->systemPrompt !== null && $this->systemPrompt !== '';
+        if ($this->systemPrompt === null) {
+            return false;
+        }
+
+        if (is_string($this->systemPrompt)) {
+            return $this->systemPrompt !== '';
+        }
+
+        if (is_array($this->systemPrompt)) {
+            return ! empty($this->systemPrompt);
+        }
+
+        return false;
     }
 
     /**
@@ -322,10 +348,28 @@ class StandardRequest
 
         // 添加系统消息
         if ($this->systemPrompt !== null) {
-            $messages[] = [
-                'role' => 'system',
-                'content' => $this->systemPrompt,
-            ];
+            if (is_string($this->systemPrompt)) {
+                $messages[] = [
+                    'role' => 'system',
+                    'content' => $this->systemPrompt,
+                ];
+            } elseif (is_array($this->systemPrompt)) {
+                // Anthropic 复杂格式转换为 OpenAI 格式
+                $systemContent = '';
+                foreach ($this->systemPrompt as $block) {
+                    if (is_string($block)) {
+                        $systemContent .= $block;
+                    } elseif (isset($block['text'])) {
+                        $systemContent .= $block['text'];
+                    }
+                }
+                if ($systemContent !== '') {
+                    $messages[] = [
+                        'role' => 'system',
+                        'content' => $systemContent,
+                    ];
+                }
+            }
         }
 
         // 添加其他消息

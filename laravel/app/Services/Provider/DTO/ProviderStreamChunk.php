@@ -9,40 +9,16 @@ namespace App\Services\Provider\DTO;
  */
 class ProviderStreamChunk
 {
-    /**
-     * 事件类型
-     */
-    public string $event = '';
-
-    /**
-     * 事件数据
-     */
-    public array $data = [];
-
-    /**
-     * 内容增量
-     */
-    public string $delta = '';
-
-    /**
-     * 响应 ID
-     */
-    public ?string $id = null;
-
-    /**
-     * 模型名称
-     */
-    public ?string $model = null;
-
-    /**
-     * 结束原因
-     */
-    public ?string $finishReason = null;
-
-    /**
-     * Token 使用量
-     */
-    public ?TokenUsage $usage = null;
+    public function __construct(
+        public string $event = '',
+        public array $data = [],
+        public string $delta = '',
+        public ?string $id = null,
+        public ?string $model = null,
+        public ?string $finishReason = null,
+        public ?TokenUsage $usage = null,
+        public ?array $toolCalls = null,
+    ) {}
 
     /**
      * 从 OpenAI 格式创建实例
@@ -79,6 +55,7 @@ class ProviderStreamChunk
         $delta = '';
         $finishReason = null;
         $usage = null;
+        $toolCalls = null;
 
         $choices = $parsed['choices'] ?? [];
         $choice = $choices[0] ?? [];
@@ -89,6 +66,10 @@ class ProviderStreamChunk
             // 处理推理内容（DeepSeek 等模型特有）
             if (empty($delta) && isset($choice['delta']['reasoning_content'])) {
                 $delta = $choice['delta']['reasoning_content'];
+            }
+            // 提取工具调用
+            if (isset($choice['delta']['tool_calls'])) {
+                $toolCalls = $choice['delta']['tool_calls'];
             }
         }
 
@@ -108,6 +89,7 @@ class ProviderStreamChunk
             model: $model,
             finishReason: $finishReason,
             usage: $usage,
+            toolCalls: $toolCalls,
         );
     }
 

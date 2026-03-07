@@ -5,10 +5,11 @@ namespace App\Filament\Resources\AuditLogs\Pages;
 use App\Filament\Resources\AuditLogs\AuditLogResource;
 use App\Models\AuditLog;
 use Filament\Actions\Action;
-use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
-use Filament\Infolists\Infolist;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class ViewAuditLog extends ViewRecord
@@ -19,7 +20,7 @@ class ViewAuditLog extends ViewRecord
     {
         return $schema
             ->components([
-                \Filament\Schemas\Components\Grid::make(3)
+                Grid::make(3)
                     ->schema([
                         Section::make('基本信息')
                             ->schema([
@@ -86,7 +87,7 @@ class ViewAuditLog extends ViewRecord
                                     ->placeholder('0'),
                             ])
                             ->columns(5)
-                            ->columnSpan(3),
+                            ->columnSpanFull(),
 
                         Section::make('成本与配额')
                             ->schema([
@@ -113,7 +114,7 @@ class ViewAuditLog extends ViewRecord
                                 TextEntry::make('first_token_ms')
                                     ->label('首Token延迟(ms)')
                                     ->placeholder('无'),
-                                TextEntry::make('is_stream')
+                                IconEntry::make('is_stream')
                                     ->label('流式请求')
                                     ->boolean(),
                                 TextEntry::make('finish_reason')
@@ -133,7 +134,7 @@ class ViewAuditLog extends ViewRecord
                                     ->placeholder('无')
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(3)
+                            ->columnSpanFull()
                             ->visible(fn ($record) => filled($record->error_type)),
 
                         Section::make('元数据')
@@ -148,14 +149,33 @@ class ViewAuditLog extends ViewRecord
                                     ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(3),
-                    ]),
+                            ->columnSpanFull(),
+                    ])
+                    ->columnSpanFull(),
             ]);
     }
 
     protected function getHeaderActions(): array
     {
         return [
+            Action::make('view_api_key')
+                ->label('查看API密钥')
+                ->icon('heroicon-o-key')
+                ->url(fn ($record) => $record->apiKey
+                    ? \App\Filament\Resources\ApiKeys\ApiKeyResource::getUrl('view', ['record' => $record->apiKey])
+                    : null)
+                ->visible(fn ($record) => $record->apiKey !== null)
+                ->openUrlInNewTab(),
+
+            Action::make('view_channel')
+                ->label('查看渠道')
+                ->icon('heroicon-o-server-stack')
+                ->url(fn ($record) => $record->channel
+                    ? \App\Filament\Resources\Channels\ChannelResource::getUrl('view', ['record' => $record->channel])
+                    : null)
+                ->visible(fn ($record) => $record->channel !== null)
+                ->openUrlInNewTab(),
+
             Action::make('view_request')
                 ->label('查看请求日志')
                 ->icon('heroicon-o-arrow-right')

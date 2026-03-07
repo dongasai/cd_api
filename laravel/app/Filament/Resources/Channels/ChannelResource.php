@@ -7,9 +7,9 @@ use App\Filament\Resources\Channels\Tables\ChannelsTable;
 use App\Models\Channel;
 use BackedEnum;
 use Filament\Resources\Resource;
-use UnitEnum;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class ChannelResource extends Resource
 {
@@ -47,6 +47,7 @@ class ChannelResource extends Resource
         return [
             'index' => Pages\ListChannels::route('/'),
             'create' => Pages\CreateChannel::route('/create'),
+            'view' => Pages\ViewChannel::route('/{record}'),
             'edit' => Pages\EditChannel::route('/{record}/edit'),
         ];
     }

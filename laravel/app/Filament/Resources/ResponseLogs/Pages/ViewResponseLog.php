@@ -5,9 +5,10 @@ namespace App\Filament\Resources\ResponseLogs\Pages;
 use App\Filament\Resources\ResponseLogs\ResponseLogResource;
 use App\Models\ResponseLog;
 use Filament\Actions\Action;
-use Filament\Infolists\Components\Section;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class ViewResponseLog extends ViewRecord
@@ -18,7 +19,7 @@ class ViewResponseLog extends ViewRecord
     {
         return $schema
             ->components([
-                \Filament\Schemas\Components\Grid::make(3)
+                Grid::make(3)
                     ->schema([
                         Section::make('基本信息')
                             ->schema([
@@ -63,7 +64,7 @@ class ViewResponseLog extends ViewRecord
                                     ->placeholder('无'),
                                 TextEntry::make('content_length')
                                     ->label('内容长度')
-                                    ->formatStateUsing(fn ($state) => number_format($state) . ' B'),
+                                    ->formatStateUsing(fn ($state) => number_format($state).' B'),
                                 TextEntry::make('finish_reason')
                                     ->label('结束原因')
                                     ->placeholder('无'),
@@ -78,7 +79,7 @@ class ViewResponseLog extends ViewRecord
                                     ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(3),
+                            ->columnSpanFull(),
 
                         Section::make('生成内容')
                             ->schema([
@@ -87,7 +88,7 @@ class ViewResponseLog extends ViewRecord
                                     ->placeholder('无')
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(3)
+                            ->columnSpanFull()
                             ->visible(fn ($record) => filled($record->generated_text)),
 
                         Section::make('流式分块')
@@ -98,7 +99,7 @@ class ViewResponseLog extends ViewRecord
                                     ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(3)
+                            ->columnSpanFull()
                             ->visible(fn ($record) => filled($record->generated_chunks)),
 
                         Section::make('使用量')
@@ -109,7 +110,7 @@ class ViewResponseLog extends ViewRecord
                                     ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(3)
+                            ->columnSpanFull()
                             ->visible(fn ($record) => filled($record->usage)),
 
                         Section::make('错误信息')
@@ -130,7 +131,7 @@ class ViewResponseLog extends ViewRecord
                                     ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(3)
+                            ->columnSpanFull()
                             ->visible(fn ($record) => filled($record->error_type)),
 
                         Section::make('响应体')
@@ -138,9 +139,20 @@ class ViewResponseLog extends ViewRecord
                                 TextEntry::make('body_text')
                                     ->label('')
                                     ->placeholder('无')
+                                    ->formatStateUsing(function ($state) {
+                                        if (empty($state)) {
+                                            return null;
+                                        }
+                                        $decoded = json_decode($state);
+                                        if (json_last_error() === JSON_ERROR_NONE) {
+                                            return json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                                        }
+
+                                        return $state;
+                                    })
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(3)
+                            ->columnSpanFull()
                             ->visible(fn ($record) => filled($record->body_text)),
 
                         Section::make('元数据')
@@ -151,8 +163,9 @@ class ViewResponseLog extends ViewRecord
                                     ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(3),
-                    ]),
+                            ->columnSpanFull(),
+                    ])
+                    ->columnSpanFull(),
             ]);
     }
 

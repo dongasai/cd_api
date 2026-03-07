@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int|null $coding_account_id
  * @property array|null $coding_status_override
  */
-
 class Channel extends Model
 {
     use HasFactory;
@@ -48,6 +47,7 @@ class Channel extends Model
         'avg_latency_ms',
         'success_rate',
         'config',
+        'forward_headers',
         'model_mappings',
         'coding_account_id',
         'coding_status_override',
@@ -65,6 +65,7 @@ class Channel extends Model
             'models' => 'array',
             'model_mappings' => 'array',
             'config' => 'array',
+            'forward_headers' => 'array',
             'coding_status_override' => 'array',
             'last_check_at' => 'datetime',
             'last_failure_at' => 'datetime',
@@ -173,6 +174,7 @@ class Channel extends Model
     public function allowsAutoDisable(): bool
     {
         $override = $this->getCodingStatusOverride();
+
         return $override['auto_disable'] ?? true;
     }
 
@@ -182,7 +184,33 @@ class Channel extends Model
     public function allowsAutoEnable(): bool
     {
         $override = $this->getCodingStatusOverride();
+
         return $override['auto_enable'] ?? true;
+    }
+
+    /**
+     * 获取转发header配置
+     *
+     * @return array 转发配置 ['headers' => ['x-*', 'user-agent'], 'mode' => 'whitelist']
+     */
+    public function getForwardHeadersConfig(): array
+    {
+        return $this->forward_headers ?? [
+            'headers' => [],
+            'mode' => 'whitelist',
+        ];
+    }
+
+    /**
+     * 获取需要转发的header名称列表
+     *
+     * @return array header名称列表，支持通配符如 'x-*'
+     */
+    public function getForwardHeaderNames(): array
+    {
+        $config = $this->getForwardHeadersConfig();
+
+        return $config['headers'] ?? [];
     }
 
     /**
@@ -211,6 +239,7 @@ class Channel extends Model
 
     /**
      * 获取模型列表（兼容旧数据）
+     *
      * @return array<string, string>
      */
     public function getModelsArray(): array
@@ -222,6 +251,7 @@ class Channel extends Model
             foreach ($models as $model) {
                 $result[$model->model_name] = $model->getDisplayName();
             }
+
             return $result;
         }
 
@@ -231,6 +261,7 @@ class Channel extends Model
 
     /**
      * 获取模型映射（兼容旧数据）
+     *
      * @return array<string, string>
      */
     public function getModelMappingsArray(): array
@@ -244,6 +275,7 @@ class Channel extends Model
                     $result[$model->model_name] = $model->mapped_model;
                 }
             }
+
             return $result;
         }
 

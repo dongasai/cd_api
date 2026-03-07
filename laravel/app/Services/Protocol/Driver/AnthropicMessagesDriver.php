@@ -166,6 +166,11 @@ class AnthropicMessagesDriver extends AbstractDriver
     private int $currentBlockIndex = 0;
 
     /**
+     * 是否已发送内容块开始事件
+     */
+    private bool $contentBlockStarted = false;
+
+    /**
      * 解析消息开始事件
      */
     private function parseMessageStart(array $data): ?StandardStreamEvent
@@ -173,6 +178,7 @@ class AnthropicMessagesDriver extends AbstractDriver
         $message = $data['message'] ?? [];
         $this->currentId = $message['id'] ?? '';
         $this->currentBlockIndex = 0;
+        $this->contentBlockStarted = false;
 
         return StandardStreamEvent::start(
             id: $this->currentId,
@@ -307,19 +313,21 @@ class AnthropicMessagesDriver extends AbstractDriver
      */
     private function buildContentBlockDeltaEvent(StandardStreamEvent $event): string
     {
-        // 先发送内容块开始
         $output = '';
 
-        // 内容块开始
-        $blockStart = [
-            'type' => self::EVENT_CONTENT_BLOCK_START,
-            'index' => 0,
-            'content_block' => [
-                'type' => 'text',
-                'text' => '',
-            ],
-        ];
-        $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_START, $this->safeJsonEncode($blockStart));
+        // 只在第一次发送内容块开始事件
+        if (! $this->contentBlockStarted) {
+            $blockStart = [
+                'type' => self::EVENT_CONTENT_BLOCK_START,
+                'index' => 0,
+                'content_block' => [
+                    'type' => 'text',
+                    'text' => '',
+                ],
+            ];
+            $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_START, $this->safeJsonEncode($blockStart));
+            $this->contentBlockStarted = true;
+        }
 
         // 内容增量
         $delta = [
@@ -331,13 +339,6 @@ class AnthropicMessagesDriver extends AbstractDriver
             ],
         ];
         $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_DELTA, $this->safeJsonEncode($delta));
-
-        // 内容块结束
-        $blockStop = [
-            'type' => self::EVENT_CONTENT_BLOCK_STOP,
-            'index' => 0,
-        ];
-        $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_STOP, $this->safeJsonEncode($blockStop));
 
         return $output;
     }
@@ -375,6 +376,15 @@ class AnthropicMessagesDriver extends AbstractDriver
     private function buildMessageStopEvent(StandardStreamEvent $event): string
     {
         $output = '';
+
+        // 发送内容块停止事件
+        if ($this->contentBlockStarted) {
+            $blockStop = [
+                'type' => self::EVENT_CONTENT_BLOCK_STOP,
+                'index' => 0,
+            ];
+            $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_STOP, $this->safeJsonEncode($blockStop));
+        }
 
         // 消息增量
         $delta = [

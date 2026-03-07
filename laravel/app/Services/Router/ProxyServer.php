@@ -128,7 +128,7 @@ class ProxyServer
             // 构建供应商请求
             $providerRequest = $this->buildProviderRequest($standardRequest, $this->selectedChannel, $channelProtocol, $actualModel);
 
-            $provider = $this->providerManager->getForChannel($this->selectedChannel);
+            $provider = $this->providerManager->getForChannel($this->selectedChannel, $request->headers->all());
 
             // 根据是否流式请求分别处理
             if ($isStream) {
@@ -566,12 +566,27 @@ class ProxyServer
     protected function parseStreamChunk($chunk, string $protocol): ?object
     {
         if ($chunk instanceof \App\Services\Provider\DTO\ProviderStreamChunk) {
+            $toolCall = null;
+            if (! empty($chunk->toolCalls)) {
+                $tc = $chunk->toolCalls[0] ?? null;
+                if ($tc) {
+                    $toolCall = new \App\Services\Protocol\DTO\StandardToolCall(
+                        id: $tc['id'] ?? '',
+                        type: $tc['type'] ?? 'function',
+                        name: $tc['function']['name'] ?? '',
+                        arguments: $tc['function']['arguments'] ?? '',
+                        index: $tc['index'] ?? null,
+                    );
+                }
+            }
+
             return new \App\Services\Protocol\DTO\StandardStreamEvent(
-                type: $chunk->finishReason ? 'finish' : 'delta',
+                type: $chunk->finishReason ? 'finish' : ($toolCall ? 'tool_use' : 'delta'),
                 id: $chunk->id ?: uniqid(),
                 model: $chunk->model,
                 contentDelta: $chunk->delta,
                 finishReason: $chunk->finishReason,
+                toolCall: $toolCall,
                 usage: $chunk->usage ? new \App\Services\Protocol\DTO\StandardUsage(
                     promptTokens: $chunk->usage->promptTokens,
                     completionTokens: $chunk->usage->completionTokens,

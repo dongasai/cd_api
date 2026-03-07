@@ -2,10 +2,14 @@
 
 namespace App\Console\Commands;
 
+use Anthropic\Client;
+use Anthropic\Messages\Message;
 use App\Models\ApiKey;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
 
+/**
+ * php artisan  proxy:test-anthropic "" Step-3.5-Flash
+ */
 class TestAnthropicProxy extends Command
 {
     protected $signature = 'proxy:test-anthropic
@@ -44,7 +48,7 @@ class TestAnthropicProxy extends Command
 
         $prompt = $this->option('prompt') ?: '你好啊,介绍一下自己.';
         $useStream = $this->option('stream');
-        $maxTokens = $this->option('max-tokens') ?: 1024;
+        $maxTokens = (int) ($this->option('max-tokens') ?: 1024);
         $baseUrl = config('app.url').'/api/anthropic';
 
         $this->info('=== 本站 Anthropic 代理 API 测试 ===');
@@ -55,14 +59,19 @@ class TestAnthropicProxy extends Command
         $this->info('流式输出: '.($useStream ? '是' : '否'));
         $this->newLine();
 
+        $client = new Client(
+            apiKey: $apiKey,
+            baseUrl: $baseUrl
+        );
+
         try {
             $startTime = microtime(true);
 
             if ($useStream) {
-                return $this->streamResponse($baseUrl, $apiKey, $model, $prompt, $maxTokens, $startTime);
+                return $this->streamResponse($client, $model, $prompt, $maxTokens, $startTime);
             }
 
-            return $this->standardResponse($baseUrl, $apiKey, $model, $prompt, $maxTokens, $startTime);
+            return $this->standardResponse($client, $model, $prompt, $maxTokens, $startTime);
 
         } catch (\Throwable $e) {
             $this->error('请求失败: '.$e->getMessage());
@@ -78,135 +87,79 @@ class TestAnthropicProxy extends Command
         }
     }
 
-    protected function standardResponse(string $baseUrl, string $apiKey, string $model, string $prompt, int $maxTokens, float $startTime): int
+    protected function standardResponse(Client $client, string $model, string $prompt, int $maxTokens, float $startTime): int
     {
         $this->info('发送请求...');
 
-        $response = Http::withHeaders([
-            'x-api-key' => $apiKey,
-            'Content-Type' => 'application/json',
-            'anthropic-version' => '2023-06-01',
-        ])->post(config('app.url').'/api/anthropic/messages', [
-            'model' => $model,
-            'messages' => [
+        $message = $client->messages->create(
+            maxTokens: $maxTokens,
+            model: $model,
+            messages: [
                 ['role' => 'user', 'content' => $prompt],
-            ],
-            'max_tokens' => $maxTokens,
-        ]);
+            ]
+        );
 
         $latency = round((microtime(true) - $startTime) * 1000, 2);
-
-        if (! $response->successful()) {
-            $this->error("请求失败: {$response->status()}");
-            $this->error("响应: {$response->body()}");
-
-            return self::FAILURE;
-        }
-
-        $data = $response->json();
 
         $this->info('✓ 请求成功');
         $this->info("延迟: {$latency}ms");
         $this->newLine();
 
         $this->info('--- 响应内容 ---');
-        $content = $data['content'][0]['text'] ?? '';
+        $content = $this->extractContent($message);
         $this->line($content);
         $this->info('--- 响应结束 ---');
         $this->newLine();
 
-        if (isset($data['usage'])) {
+        if (isset($message->usage)) {
             $this->info('Token 使用:');
-            $this->info("  输入: {$data['usage']['input_tokens']}");
-            $this->info("  输出: {$data['usage']['output_tokens']}");
+            $this->info("  输入: {$message->usage->inputTokens}");
+            $this->info("  输出: {$message->usage->outputTokens}");
         }
 
         $this->newLine();
-        $this->info("模型: {$data['model']}");
-        $this->info("角色: {$data['role']}");
-        $this->info("停止原因: {$data['stop_reason']}");
+        $this->info("模型: {$message->model}");
+        $this->info("角色: {$message->role}");
+        $this->info("停止原因: {$message->stopReason}");
 
         return self::SUCCESS;
     }
 
-    protected function streamResponse(string $baseUrl, string $apiKey, string $model, string $prompt, int $maxTokens, float $startTime): int
+    protected function streamResponse(Client $client, string $model, string $prompt, int $maxTokens, float $startTime): int
     {
         $this->info('发送流式请求...');
         $this->newLine();
         $this->info('--- 响应流 ---');
 
-        $url = config('app.url').'/api/anthropic/messages';
-        $payload = json_encode([
-            'model' => $model,
-            'messages' => [
+        $stream = $client->messages->createStream(
+            maxTokens: $maxTokens,
+            model: $model,
+            messages: [
                 ['role' => 'user', 'content' => $prompt],
-            ],
-            'max_tokens' => $maxTokens,
-            'stream' => true,
-        ]);
-
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $payload,
-            CURLOPT_HTTPHEADER => [
-                'x-api-key: '.$apiKey,
-                'Content-Type: application/json',
-                'anthropic-version: 2025-12-05',
-                'Accept: text/event-stream',
-            ],
-            CURLOPT_RETURNTRANSFER => false,
-            CURLOPT_WRITEFUNCTION => function ($ch, $data) use ($startTime, &$firstToken, &$ttft, &$fullContent) {
-                if ($firstToken) {
-                    $ttft = round((microtime(true) - $startTime) * 1000, 2);
-                    $firstToken = false;
-                }
-
-                $lines = explode("\n", $data);
-                foreach ($lines as $line) {
-                    $line = trim($line);
-                    if (empty($line) || ! str_starts_with($line, 'data:')) {
-                        continue;
-                    }
-
-                    $json = trim(substr($line, 5));
-                    if ($json === '[DONE]') {
-                        return strlen($data);
-                    }
-
-                    $parsed = json_decode($json, true);
-                    if (! $parsed) {
-                        continue;
-                    }
-
-                    $type = $parsed['type'] ?? '';
-
-                    if ($type === 'content_block_delta') {
-                        $delta = $parsed['delta'] ?? [];
-                        $text = $delta['text'] ?? '';
-
-                        if ($text) {
-                            echo $text;
-                            if (ob_get_level() > 0) {
-                                ob_flush();
-                            }
-                            flush();
-                            $fullContent .= $text;
-                        }
-                    }
-                }
-
-                return strlen($data);
-            },
-        ]);
+            ]
+        );
 
         $firstToken = true;
         $ttft = 0;
         $fullContent = '';
 
-        curl_exec($ch);
-        curl_close($ch);
+        foreach ($stream as $event) {
+            if ($firstToken) {
+                $ttft = round((microtime(true) - $startTime) * 1000, 2);
+                $firstToken = false;
+            }
+
+            $text = $this->extractStreamText($event);
+
+            if ($text) {
+                echo $text;
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
+                flush();
+                $fullContent .= $text;
+            }
+        }
 
         $latency = round((microtime(true) - $startTime) * 1000, 2);
 
@@ -219,6 +172,34 @@ class TestAnthropicProxy extends Command
         $this->info("总延迟: {$latency}ms");
 
         return self::SUCCESS;
+    }
+
+    protected function extractContent(Message $message): string
+    {
+        $content = '';
+
+        foreach ($message->content as $block) {
+            if (isset($block->text)) {
+                $content .= $block->text;
+            }
+        }
+
+        return $content;
+    }
+
+    protected function extractStreamText(mixed $event): string
+    {
+        if (! is_object($event)) {
+            return '';
+        }
+
+        if (property_exists($event, 'delta') && is_object($event->delta)) {
+            if (property_exists($event->delta, 'text')) {
+                return $event->delta->text;
+            }
+        }
+
+        return '';
     }
 
     protected function askForModel(): string

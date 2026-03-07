@@ -4,9 +4,11 @@ namespace App\Filament\Resources\RequestLogs\Pages;
 
 use App\Filament\Resources\RequestLogs\RequestLogResource;
 use Filament\Actions\Action;
-use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Pages\ViewRecord;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 
 class ViewRequestLog extends ViewRecord
@@ -17,7 +19,7 @@ class ViewRequestLog extends ViewRecord
     {
         return $schema
             ->components([
-                \Filament\Schemas\Components\Grid::make(2)
+                Grid::make(2)
                     ->schema([
                         Section::make('基本信息')
                             ->schema([
@@ -47,11 +49,11 @@ class ViewRequestLog extends ViewRecord
                                     ->placeholder('无'),
                                 TextEntry::make('content_length')
                                     ->label('内容长度')
-                                    ->formatStateUsing(fn ($state) => number_format($state) . ' B'),
+                                    ->formatStateUsing(fn ($state) => number_format($state).' B'),
                                 TextEntry::make('model')
                                     ->label('请求模型')
                                     ->placeholder('无'),
-                                TextEntry::make('has_sensitive')
+                                IconEntry::make('has_sensitive')
                                     ->label('包含敏感信息')
                                     ->boolean(),
                             ])
@@ -65,7 +67,7 @@ class ViewRequestLog extends ViewRecord
                                     ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(2),
+                            ->columnSpanFull(),
 
                         Section::make('模型参数')
                             ->schema([
@@ -75,7 +77,7 @@ class ViewRequestLog extends ViewRecord
                                     ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(2)
+                            ->columnSpanFull()
                             ->visible(fn ($record) => filled($record->model_params)),
 
                         Section::make('消息内容')
@@ -86,7 +88,7 @@ class ViewRequestLog extends ViewRecord
                                     ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(2)
+                            ->columnSpanFull()
                             ->visible(fn ($record) => filled($record->messages)),
 
                         Section::make('提示词')
@@ -96,7 +98,7 @@ class ViewRequestLog extends ViewRecord
                                     ->placeholder('无')
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(2)
+                            ->columnSpanFull()
                             ->visible(fn ($record) => filled($record->prompt)),
 
                         Section::make('请求体')
@@ -106,7 +108,7 @@ class ViewRequestLog extends ViewRecord
                                     ->placeholder('无')
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(2)
+                            ->columnSpanFull()
                             ->visible(fn ($record) => filled($record->body_text)),
 
                         Section::make('敏感字段')
@@ -117,7 +119,7 @@ class ViewRequestLog extends ViewRecord
                                     ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(2)
+                            ->columnSpanFull()
                             ->visible(fn ($record) => filled($record->sensitive_fields)),
 
                         Section::make('元数据')
@@ -128,8 +130,9 @@ class ViewRequestLog extends ViewRecord
                                     ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
                                     ->columnSpanFull(),
                             ])
-                            ->columnSpan(2),
-                    ]),
+                            ->columnSpanFull(),
+                    ])
+                    ->columnSpanFull(),
             ]);
     }
 

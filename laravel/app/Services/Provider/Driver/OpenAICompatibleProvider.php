@@ -18,36 +18,20 @@ use App\Services\Provider\DTO\ProviderStreamChunk;
  */
 class OpenAICompatibleProvider extends AbstractProvider
 {
-    /**
-     * 供应商名称
-     */
     protected string $providerName;
 
-    /**
-     * 自定义请求头
-     */
     protected array $customHeaders = [];
 
-    /**
-     * 认证头字段名
-     */
     protected ?string $authHeader = null;
 
-    /**
-     * 认证前缀（如 Bearer）
-     */
     protected ?string $authPrefix = null;
 
-    /**
-     * 支持的模型列表
-     */
     protected array $supportedModels = [];
 
-    /**
-     * 构造函数
-     *
-     * @param  array  $config  供应商配置
-     */
+    protected array $forwardHeaders = [];
+
+    protected array $clientHeaders = [];
+
     public function __construct(array $config = [])
     {
         parent::__construct($config);
@@ -56,23 +40,18 @@ class OpenAICompatibleProvider extends AbstractProvider
         $this->authHeader = $config['auth_header'] ?? 'Authorization';
         $this->authPrefix = $config['auth_prefix'] ?? 'Bearer';
         $this->supportedModels = $config['models'] ?? [];
+        $this->forwardHeaders = $config['forward_headers'] ?? [];
+        $this->clientHeaders = $config['client_headers'] ?? [];
     }
 
-    /**
-     * 获取默认 API 基础 URL
-     */
     public function getDefaultBaseUrl(): string
     {
         return $this->config['base_url'] ?? '';
     }
 
-    /**
-     * 获取 API 端点
-     */
     public function getEndpoint(ProviderRequest $request): string
     {
         $baseUrl = $this->baseUrl ?? '';
-        // 如果基础 URL 已包含 /v1，则使用简短路径
         if (str_ends_with($baseUrl, '/v1')) {
             return '/chat/completions';
         }
@@ -80,16 +59,12 @@ class OpenAICompatibleProvider extends AbstractProvider
         return '/v1/chat/completions';
     }
 
-    /**
-     * 获取请求头
-     */
     public function getHeaders(): array
     {
         $headers = [
             'Content-Type' => 'application/json',
         ];
 
-        // 添加认证头
         if (! empty($this->apiKey)) {
             $authValue = $this->authPrefix
                 ? $this->authPrefix.' '.$this->apiKey
@@ -97,41 +72,93 @@ class OpenAICompatibleProvider extends AbstractProvider
             $headers[$this->authHeader] = $authValue;
         }
 
-        // 合并自定义请求头
         foreach ($this->customHeaders as $key => $value) {
             $headers[$key] = $value;
+        }
+
+        $forwardedHeaders = $this->buildForwardedHeaders();
+        foreach ($forwardedHeaders as $key => $value) {
+            if (! isset($headers[$key])) {
+                $headers[$key] = $value;
+            }
         }
 
         return $headers;
     }
 
-    /**
-     * 构建请求体
-     */
+    protected function buildForwardedHeaders(): array
+    {
+        if (empty($this->forwardHeaders) || empty($this->clientHeaders)) {
+            return [];
+        }
+
+        $result = [];
+        $clientHeadersFlat = $this->flattenHeaders($this->clientHeaders);
+
+        foreach ($this->forwardHeaders as $pattern) {
+            $pattern = strtolower(trim($pattern));
+            if (empty($pattern)) {
+                continue;
+            }
+
+            foreach ($clientHeadersFlat as $headerName => $headerValue) {
+                $headerNameLower = strtolower($headerName);
+
+                if ($this->matchHeaderPattern($pattern, $headerNameLower)) {
+                    $result[$headerName] = $headerValue;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    protected function flattenHeaders(array $headers): array
+    {
+        $flat = [];
+        foreach ($headers as $key => $value) {
+            if (is_array($value)) {
+                $flat[$key] = reset($value);
+            } else {
+                $flat[$key] = $value;
+            }
+        }
+
+        return $flat;
+    }
+
+    protected function matchHeaderPattern(string $pattern, string $headerName): bool
+    {
+        if (str_ends_with($pattern, '*')) {
+            $prefix = substr($pattern, 0, -1);
+
+            return str_starts_with($headerName, $prefix);
+        }
+
+        if (str_starts_with($pattern, '*')) {
+            $suffix = substr($pattern, 1);
+
+            return str_ends_with($headerName, $suffix);
+        }
+
+        return $pattern === $headerName;
+    }
+
     public function buildRequestBody(ProviderRequest $request): array
     {
         return $request->toOpenAIFormat();
     }
 
-    /**
-     * 解析响应
-     */
     public function parseResponse(array $response): ProviderResponse
     {
         return ProviderResponse::fromOpenAI($response);
     }
 
-    /**
-     * 解析流式响应块
-     */
     public function parseStreamChunk(string $rawChunk): ?ProviderStreamChunk
     {
         return ProviderStreamChunk::fromOpenAI($rawChunk);
     }
 
-    /**
-     * 获取支持的模型列表
-     */
     public function getModels(): array
     {
         if (! empty($this->supportedModels)) {
@@ -141,17 +168,11 @@ class OpenAICompatibleProvider extends AbstractProvider
         return [];
     }
 
-    /**
-     * 获取供应商名称
-     */
     public function getProviderName(): string
     {
         return $this->providerName;
     }
 
-    /**
-     * 创建 DeepSeek 供应商实例
-     */
     public static function createDeepSeek(string $apiKey): self
     {
         return new self([
@@ -166,9 +187,6 @@ class OpenAICompatibleProvider extends AbstractProvider
         ]);
     }
 
-    /**
-     * 创建智谱 GLM 供应商实例
-     */
     public static function createZhipu(string $apiKey): self
     {
         return new self([
@@ -187,9 +205,6 @@ class OpenAICompatibleProvider extends AbstractProvider
         ]);
     }
 
-    /**
-     * 创建 Moonshot 供应商实例
-     */
     public static function createMoonshot(string $apiKey): self
     {
         return new self([
@@ -204,9 +219,6 @@ class OpenAICompatibleProvider extends AbstractProvider
         ]);
     }
 
-    /**
-     * 创建本地模型供应商实例
-     */
     public static function createLocal(string $baseUrl, string $apiKey = ''): self
     {
         return new self([
@@ -216,9 +228,6 @@ class OpenAICompatibleProvider extends AbstractProvider
         ]);
     }
 
-    /**
-     * 创建 Ollama 供应商实例
-     */
     public static function createOllama(string $baseUrl = 'http://localhost:11434'): self
     {
         return new self([

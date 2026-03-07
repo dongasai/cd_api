@@ -6,6 +6,7 @@ use App\Models\Channel;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -122,6 +123,17 @@ class ChannelForm
                                             ]),
                                     ]),
 
+                                Section::make('请求头转发')
+                                    ->schema([
+                                        TagsInput::make('forward_headers.headers')
+                                            ->label('转发的请求头')
+                                            ->placeholder('输入header名称，如 x-* 或 user-agent')
+                                            ->default(['x-*', 'user-agent'])
+                                            ->splitKeys([',', 'Tab', ' '])
+                                            ->helperText('支持通配符: x-* 匹配所有以 x- 开头的header，*agent 匹配以 agent 结尾的header')
+                                            ->columnSpanFull(),
+                                    ]),
+
                                 Section::make('模型配置')
                                     ->schema([
                                         Repeater::make('channelModels')
@@ -161,7 +173,7 @@ class ChannelForm
                                                                     // 获取当前 repeater 的所有项
                                                                     $items = $get('../../') ?? [];
                                                                     $currentItem = $get('../');
-                                                                    
+
                                                                     // 找到当前项的索引
                                                                     $currentKey = null;
                                                                     foreach ($items as $key => $item) {
@@ -170,11 +182,11 @@ class ChannelForm
                                                                             break;
                                                                         }
                                                                     }
-                                                                    
+
                                                                     // 取消其他项的默认状态
                                                                     if ($currentKey !== null) {
                                                                         foreach ($items as $key => $item) {
-                                                                            if ($key !== $currentKey && !empty($item['is_default'])) {
+                                                                            if ($key !== $currentKey && ! empty($item['is_default'])) {
                                                                                 $set("../../{$key}.is_default", false);
                                                                             }
                                                                         }

@@ -9,65 +9,20 @@ namespace App\Services\Provider\DTO;
  */
 class ProviderRequest
 {
-    /**
-     * 模型名称
-     */
-    public string $model;
-
-    /**
-     * 消息列表
-     */
-    public array $messages;
-
-    /**
-     * 采样温度参数
-     */
-    public ?float $temperature = null;
-
-    /**
-     * 最大输出 Token 数
-     */
-    public ?int $maxTokens = null;
-
-    /**
-     * 是否启用流式响应
-     */
-    public bool $stream = false;
-
-    /**
-     * 其他参数
-     */
-    public array $parameters = [];
-
-    /**
-     * 系统提示
-     */
-    public ?string $systemPrompt = null;
-
-    /**
-     * Top-P 采样参数
-     */
-    public ?float $topP = null;
-
-    /**
-     * 停止序列
-     */
-    public ?array $stop = null;
-
-    /**
-     * 工具定义
-     */
-    public ?array $tools = null;
-
-    /**
-     * 工具选择策略
-     */
-    public mixed $toolChoice = null;
-
-    /**
-     * 用户标识
-     */
-    public ?string $user = null;
+    public function __construct(
+        public string $model = '',
+        public array $messages = [],
+        public ?float $temperature = null,
+        public ?int $maxTokens = null,
+        public bool $stream = false,
+        public array $parameters = [],
+        public ?string $systemPrompt = null,
+        public ?float $topP = null,
+        public ?array $stop = null,
+        public ?array $tools = null,
+        public mixed $toolChoice = null,
+        public ?string $user = null,
+    ) {}
 
     /**
      * 从数组创建实例

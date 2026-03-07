@@ -12,3 +12,4 @@ Route::prefix('openai/v1')->group(function () {
 });
 
 Route::post('/anthropic/messages', [ProxyController::class, 'anthropicMessages']);
+Route::post('/anthropic/v1/messages', [ProxyController::class, 'anthropicMessages']);
