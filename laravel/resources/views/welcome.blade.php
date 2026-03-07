@@ -36,6 +36,11 @@
                 text-decoration: none;
             }
             .nav-link:hover { color: #111827; }
+            .nav-links {
+                display: flex;
+                align-items: center;
+                gap: 1.5rem;
+            }
             .main {
                 flex: 1;
                 display: flex;
@@ -171,7 +176,9 @@
         <header class="header">
             <div class="header-content">
                 <div class="logo">CdApi</div>
-                <nav>
+                <nav class="nav-links">
+                    <a href="{{ url('/admin') }}" class="nav-link">管理中心</a>
+                    <a href="https://github.com" target="_blank" class="nav-link">文档</a>
                     @if (Route::has('login'))
                         @auth
                             <a href="{{ url('/admin') }}" class="nav-link">管理后台</a>

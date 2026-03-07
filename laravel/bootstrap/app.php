@@ -16,5 +16,18 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->renderable(function (\Symfony\Component\HttpKernel\Exception\HttpException $e, \Illuminate\Http\Request $request) {
+            if ($request->is('api/*') || $request->wantsJson()) {
+                return null;
+            }
+
+            $statusCode = $e->getStatusCode();
+            $viewPath = "errors.{$statusCode}";
+
+            if (view()->exists($viewPath)) {
+                return response()->view($viewPath, ['exception' => $e], $statusCode);
+            }
+
+            return null;
+        });
     })->create();

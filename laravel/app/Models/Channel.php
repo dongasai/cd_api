@@ -184,4 +184,85 @@ class Channel extends Model
         $override = $this->getCodingStatusOverride();
         return $override['auto_enable'] ?? true;
     }
+
+    /**
+     * 渠道支持的模型列表
+     */
+    public function channelModels(): HasMany
+    {
+        return $this->hasMany(ChannelModel::class, 'channel_id');
+    }
+
+    /**
+     * 启用的模型列表
+     */
+    public function enabledModels(): HasMany
+    {
+        return $this->channelModels()->where('is_enabled', true);
+    }
+
+    /**
+     * 默认模型
+     */
+    public function defaultModel(): ?ChannelModel
+    {
+        return $this->channelModels()->where('is_default', true)->first();
+    }
+
+    /**
+     * 获取模型列表（兼容旧数据）
+     * @return array<string, string>
+     */
+    public function getModelsArray(): array
+    {
+        // 优先从新表获取
+        $models = $this->enabledModels()->get();
+        if ($models->isNotEmpty()) {
+            $result = [];
+            foreach ($models as $model) {
+                $result[$model->model_name] = $model->getDisplayName();
+            }
+            return $result;
+        }
+
+        // 兼容旧数据
+        return $this->models ?? [];
+    }
+
+    /**
+     * 获取模型映射（兼容旧数据）
+     * @return array<string, string>
+     */
+    public function getModelMappingsArray(): array
+    {
+        // 优先从新表获取
+        $models = $this->enabledModels()->get();
+        if ($models->isNotEmpty()) {
+            $result = [];
+            foreach ($models as $model) {
+                if ($model->mapped_model) {
+                    $result[$model->model_name] = $model->mapped_model;
+                }
+            }
+            return $result;
+        }
+
+        // 兼容旧数据
+        return $this->model_mappings ?? [];
+    }
+
+    /**
+     * 获取默认模型名称（兼容旧数据）
+     */
+    public function getDefaultModelName(): ?string
+    {
+        // 优先从新表获取
+        $defaultModel = $this->defaultModel();
+        if ($defaultModel) {
+            return $defaultModel->model_name;
+        }
+
+        // 兼容旧数据
+        return $this->default_model;
+    }
 }

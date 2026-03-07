@@ -7,6 +7,7 @@ use App\Filament\Resources\ChannelGroups\Tables\ChannelGroupsTable;
 use App\Models\ChannelGroup;
 use BackedEnum;
 use Filament\Resources\Resource;
+use UnitEnum;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 
@@ -19,6 +20,8 @@ class ChannelGroupResource extends Resource
     protected static ?string $pluralModelLabel = '渠道分组';
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-folder';
+
+    protected static string|UnitEnum|null $navigationGroup = '渠道管理';
 
     protected static ?int $navigationSort = 2;
 

@@ -4,9 +4,11 @@ namespace App\Filament\Resources\Channels\Schemas;
 
 use App\Models\Channel;
 use Filament\Forms\Components\KeyValue;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
@@ -122,25 +124,94 @@ class ChannelForm
 
                                 Section::make('模型配置')
                                     ->schema([
-                                        KeyValue::make('models')
+                                        Repeater::make('channelModels')
                                             ->label('支持的模型')
-                                            ->keyLabel('模型标识')
-                                            ->valueLabel('模型名称')
+                                            ->relationship('channelModels')
                                             ->addActionLabel('添加模型')
-                                            ->columnSpanFull(),
+                                            ->reorderable()
+                                            ->collapsible()
+                                            ->schema([
+                                                Grid::make(3)
+                                                    ->schema([
+                                                        TextInput::make('model_name')
+                                                            ->label('模型名称')
+                                                            ->required()
+                                                            ->placeholder('如: gpt-4')
+                                                            ->columnSpan(1),
 
-                                        Select::make('default_model')
-                                            ->label('默认模型')
-                                            ->helperText('用于测试请求的默认模型')
-                                            ->options(function (callable $get) {
-                                                $models = $get('models');
-                                                if (!is_array($models) || empty($models)) {
-                                                    return [];
-                                                }
-                                                return array_combine(array_keys($models), array_keys($models));
-                                            })
-                                            ->searchable()
-                                            ->placeholder('请先添加支持的模型'),
+                                                        TextInput::make('display_name')
+                                                            ->label('显示名称')
+                                                            ->placeholder('如: GPT-4')
+                                                            ->columnSpan(1),
+
+                                                        TextInput::make('mapped_model')
+                                                            ->label('映射模型')
+                                                            ->placeholder('渠道实际使用的模型名称')
+                                                            ->columnSpan(1),
+                                                    ]),
+
+                                                Grid::make(4)
+                                                    ->schema([
+                                                        Toggle::make('is_default')
+                                                            ->label('默认模型')
+                                                            ->helperText('只能设置一个默认模型')
+                                                            ->live()
+                                                            ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                                                                if ($state) {
+                                                                    // 获取当前 repeater 的所有项
+                                                                    $items = $get('../../') ?? [];
+                                                                    $currentItem = $get('../');
+                                                                    
+                                                                    // 找到当前项的索引
+                                                                    $currentKey = null;
+                                                                    foreach ($items as $key => $item) {
+                                                                        if ($item === $currentItem) {
+                                                                            $currentKey = $key;
+                                                                            break;
+                                                                        }
+                                                                    }
+                                                                    
+                                                                    // 取消其他项的默认状态
+                                                                    if ($currentKey !== null) {
+                                                                        foreach ($items as $key => $item) {
+                                                                            if ($key !== $currentKey && !empty($item['is_default'])) {
+                                                                                $set("../../{$key}.is_default", false);
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }),
+
+                                                        Toggle::make('is_enabled')
+                                                            ->label('启用')
+                                                            ->default(true),
+
+                                                        TextInput::make('rpm_limit')
+                                                            ->label('RPM 限制')
+                                                            ->numeric()
+                                                            ->minValue(0)
+                                                            ->placeholder('无限制'),
+
+                                                        TextInput::make('context_length')
+                                                            ->label('上下文长度')
+                                                            ->numeric()
+                                                            ->minValue(0)
+                                                            ->placeholder('如: 8192'),
+                                                    ]),
+
+                                                Grid::make(2)
+                                                    ->schema([
+                                                        TextInput::make('multiplier')
+                                                            ->label('消耗倍率')
+                                                            ->numeric()
+                                                            ->minValue(0)
+                                                            ->maxValue(9999.9999)
+                                                            ->default(1.0000)
+                                                            ->step(0.0001)
+                                                            ->helperText('默认 1.00，用于调整消耗计算'),
+                                                    ]),
+                                            ])
+                                            ->columnSpanFull(),
                                     ]),
                             ]),
 
