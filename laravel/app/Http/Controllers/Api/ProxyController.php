@@ -50,9 +50,17 @@ class ProxyController extends Controller
 
     public function models(Request $request): JsonResponse
     {
-        $modelMappings = \App\Models\ModelMapping::where('enabled', true)
-            ->with('channel')
-            ->get();
+        $apiKey = $request->attributes->get('api_key');
+        $allowedModels = $apiKey?->allowed_models;
+
+        $query = \App\Models\ModelMapping::where('enabled', true)
+            ->with('channel');
+
+        if (! empty($allowedModels) && is_array($allowedModels)) {
+            $query->whereIn('alias', $allowedModels);
+        }
+
+        $modelMappings = $query->get();
 
         $data = $modelMappings->map(function ($mapping) {
             $ownedBy = 'system';

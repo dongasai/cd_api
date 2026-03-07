@@ -3,15 +3,28 @@
 namespace App\Services\Router;
 
 use App\Models\Channel;
-use App\Models\ModelMapping;
 use App\Models\ChannelGroup;
+use App\Models\ModelMapping;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * 渠道路由服务
+ *
+ * 负责根据模型选择合适的渠道，实现负载均衡和故障转移
+ */
 class ChannelRouterService
 {
+    /**
+     * 服务配置
+     */
     protected array $config;
 
+    /**
+     * 构造函数
+     *
+     * @param  array  $config  服务配置
+     */
     public function __construct(array $config = [])
     {
         $this->config = array_merge([
@@ -21,6 +34,15 @@ class ChannelRouterService
         ], $config);
     }
 
+    /**
+     * 为指定模型选择渠道
+     *
+     * @param  string  $model  模型名称
+     * @param  array  $context  上下文信息（可包含负载均衡算法等）
+     * @return Channel 选中的渠道
+     *
+     * @throws \RuntimeException 当没有可用渠道时
+     */
     public function selectChannel(string $model, array $context = []): Channel
     {
         $channels = $this->getAvailableChannels($model);
@@ -41,6 +63,12 @@ class ChannelRouterService
         return $channel;
     }
 
+    /**
+     * 获取指定模型的可用渠道列表
+     *
+     * @param  string  $model  模型名称
+     * @return \Illuminate\Database\Eloquent\Collection 可用渠道集合
+     */
     public function getAvailableChannels(string $model): \Illuminate\Database\Eloquent\Collection
     {
         $cacheKey = "channels:available:{$model}";
@@ -66,6 +94,12 @@ class ChannelRouterService
         });
     }
 
+    /**
+     * 获取支持指定模型的渠道 ID 列表
+     *
+     * @param  string  $model  模型名称
+     * @return int[] 渠道 ID 数组
+     */
     protected function getChannelIdsForModel(string $model): array
     {
         // 查找指定了具体渠道的映射
@@ -75,7 +109,7 @@ class ChannelRouterService
             ->pluck('channel_id')
             ->toArray();
 
-        if (!empty($specificMappings)) {
+        if (! empty($specificMappings)) {
             return $specificMappings;
         }
 
@@ -94,6 +128,13 @@ class ChannelRouterService
             ->toArray();
     }
 
+    /**
+     * 应用负载均衡算法选择渠道
+     *
+     * @param  mixed  $channels  渠道集合
+     * @param  array  $context  上下文信息
+     * @return Channel 选中的渠道
+     */
     protected function applyLoadBalancing($channels, array $context = []): Channel
     {
         $algorithm = $context['lb_algorithm'] ?? 'weighted_round_robin';
@@ -105,6 +146,11 @@ class ChannelRouterService
         };
     }
 
+    /**
+     * 加权轮询负载均衡
+     *
+     * 根据渠道权重随机选择
+     */
     protected function weightedRoundRobinBalance($channels): Channel
     {
         $totalWeight = $channels->sum('weight');
@@ -121,19 +167,38 @@ class ChannelRouterService
         return $channels->first();
     }
 
+    /**
+     * 最少连接数负载均衡
+     *
+     * 选择当前请求数最少的渠道
+     */
     protected function leastConnectionsBalance($channels): Channel
     {
         return $channels->sortBy('total_requests')->first();
     }
 
+    /**
+     * 响应时间负载均衡
+     *
+     * 选择平均响应时间最短的渠道
+     */
     protected function responseTimeBalance($channels): Channel
     {
         return $channels->sortBy('avg_latency_ms')->first();
     }
 
+    /**
+     * 获取故障转移渠道
+     *
+     * 当主渠道失败时，获取备选渠道
+     *
+     * @param  Channel  $failedChannel  失败的渠道
+     * @param  string  $model  模型名称
+     * @return Channel|null 备选渠道，无可用渠道时返回 null
+     */
     public function getFallbackChannel(Channel $failedChannel, string $model): ?Channel
     {
-        if (!$this->config['enable_failover']) {
+        if (! $this->config['enable_failover']) {
             return null;
         }
 
@@ -142,11 +207,17 @@ class ChannelRouterService
         return $channels->where('id', '!=', $failedChannel->id)->first();
     }
 
+    /**
+     * 根据分组获取渠道列表
+     *
+     * @param  string  $groupSlug  分组标识
+     * @return \Illuminate\Database\Eloquent\Collection 渠道集合
+     */
     public function getChannelsByGroup(string $groupSlug): \Illuminate\Database\Eloquent\Collection
     {
         $group = ChannelGroup::where('slug', $groupSlug)->first();
 
-        if (!$group) {
+        if (! $group) {
             return collect();
         }
 
@@ -157,6 +228,12 @@ class ChannelRouterService
             ->get();
     }
 
+    /**
+     * 根据标签获取渠道列表
+     *
+     * @param  string  $tagName  标签名称
+     * @return \Illuminate\Database\Eloquent\Collection 渠道集合
+     */
     public function getChannelsByTag(string $tagName): \Illuminate\Database\Eloquent\Collection
     {
         return Channel::whereHas('tags', function ($query) use ($tagName) {
@@ -167,6 +244,15 @@ class ChannelRouterService
             ->get();
     }
 
+    /**
+     * 解析模型名称
+     *
+     * 将别名映射到实际模型名称
+     *
+     * @param  string  $model  模型名称或别名
+     * @param  Channel|null  $channel  渠道（可选）
+     * @return string 实际模型名称
+     */
     public function resolveModel(string $model, ?Channel $channel = null): string
     {
         if ($channel) {
@@ -191,6 +277,14 @@ class ChannelRouterService
         return $model;
     }
 
+    /**
+     * 标记渠道失败
+     *
+     * 记录失败信息并检查渠道健康状态
+     *
+     * @param  Channel  $channel  失败的渠道
+     * @param  string  $reason  失败原因
+     */
     public function markChannelFailed(Channel $channel, string $reason = ''): void
     {
         $channel->increment('failure_count');
@@ -208,6 +302,13 @@ class ChannelRouterService
         $this->checkChannelHealth($channel);
     }
 
+    /**
+     * 标记渠道成功
+     *
+     * 更新成功计数和健康状态
+     *
+     * @param  Channel  $channel  成功的渠道
+     */
     public function markChannelSuccess(Channel $channel): void
     {
         $channel->increment('success_count');
@@ -220,6 +321,13 @@ class ChannelRouterService
         }
     }
 
+    /**
+     * 检查渠道健康状态
+     *
+     * 根据失败率自动标记不健康的渠道
+     *
+     * @param  Channel  $channel  要检查的渠道
+     */
     protected function checkChannelHealth(Channel $channel): void
     {
         $totalRequests = $channel->success_count + $channel->failure_count;
@@ -240,6 +348,12 @@ class ChannelRouterService
         }
     }
 
+    /**
+     * 获取渠道统计信息
+     *
+     * @param  Channel  $channel  渠道实例
+     * @return array 统计信息数组
+     */
     public function getChannelStats(Channel $channel): array
     {
         return [
@@ -259,6 +373,11 @@ class ChannelRouterService
         ];
     }
 
+    /**
+     * 清除渠道缓存
+     *
+     * @param  string|null  $model  指定模型名称，为 null 时清除所有模型缓存
+     */
     public function clearCache(?string $model = null): void
     {
         if ($model) {

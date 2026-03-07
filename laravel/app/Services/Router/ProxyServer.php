@@ -18,24 +18,66 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
+/**
+ * 代理服务器
+ *
+ * 核心 AI 请求代理服务，负责：
+ * - 接收客户端请求
+ * - 协议转换（OpenAI/Anthropic 等）
+ * - 渠道选择与路由
+ * - 流式/非流式响应处理
+ * - 日志记录与审计
+ */
 class ProxyServer
 {
+    /**
+     * 协议转换器
+     */
     protected ProtocolConverter $protocolConverter;
 
+    /**
+     * 供应商管理器
+     */
     protected ProviderManager $providerManager;
 
+    /**
+     * 渠道路由服务
+     */
     protected ChannelRouterService $channelRouter;
 
+    /**
+     * 编码状态服务
+     */
     protected ChannelCodingStatusService $codingStatusService;
 
+    /**
+     * 当前请求 ID
+     */
     protected ?string $requestId = null;
 
+    /**
+     * 请求开始时间
+     */
     protected float $startTime;
 
+    /**
+     * 首个 Token 延迟（毫秒）
+     */
     protected ?int $firstTokenMs = null;
 
+    /**
+     * 当前选中的渠道
+     */
     protected ?Channel $selectedChannel = null;
 
+    /**
+     * 构造函数
+     *
+     * @param  ProtocolConverter  $protocolConverter  协议转换器
+     * @param  ProviderManager  $providerManager  供应商管理器
+     * @param  ChannelRouterService  $channelRouter  渠道路由服务
+     * @param  ChannelCodingStatusService  $codingStatusService  编码状态服务
+     */
     public function __construct(
         ProtocolConverter $protocolConverter,
         ProviderManager $providerManager,
@@ -49,6 +91,15 @@ class ProxyServer
         $this->startTime = microtime(true);
     }
 
+    /**
+     * 执行代理请求
+     *
+     * @param  Request  $request  HTTP 请求
+     * @param  string  $protocol  源协议类型（openai/anthropic）
+     * @return array|Generator 响应数组或流式生成器
+     *
+     * @throws \Exception
+     */
     public function proxy(Request $request, string $protocol = 'openai'): array|Generator
     {
         $this->requestId = $request->attributes->get('request_id', Str::uuid()->toString());
@@ -60,20 +111,26 @@ class ProxyServer
         $requestLog = $this->createRequestLog($request, $rawRequest, $protocol);
 
         try {
+            // 标准化请求
             $standardRequest = $this->protocolConverter->normalizeRequest($rawRequest, $protocol);
 
             $this->updateRequestLogModel($requestLog, $standardRequest);
 
+            // 选择渠道
             $this->selectedChannel = $this->channelRouter->selectChannel($standardRequest->model);
 
+            // 解析实际模型名称
             $actualModel = $this->channelRouter->resolveModel($standardRequest->model, $this->selectedChannel);
 
+            // 获取渠道协议
             $channelProtocol = $this->getChannelProtocol($this->selectedChannel);
 
+            // 构建供应商请求
             $providerRequest = $this->buildProviderRequest($standardRequest, $this->selectedChannel, $channelProtocol, $actualModel);
 
             $provider = $this->providerManager->getForChannel($this->selectedChannel);
 
+            // 根据是否流式请求分别处理
             if ($isStream) {
                 return $this->handleStreamRequest($request, $standardRequest, $providerRequest, $provider, $protocol, $channelProtocol, $requestLog);
             }
@@ -86,6 +143,18 @@ class ProxyServer
         }
     }
 
+    /**
+     * 处理非流式请求
+     *
+     * @param  Request  $httpRequest  HTTP 请求
+     * @param  StandardRequest  $standardRequest  标准化请求
+     * @param  ProviderRequest  $providerRequest  供应商请求
+     * @param  mixed  $provider  供应商实例
+     * @param  string  $sourceProtocol  源协议
+     * @param  string  $targetProtocol  目标协议
+     * @param  RequestLog  $requestLog  请求日志
+     * @return array 响应数组
+     */
     protected function handleNonStreamRequest(
         Request $httpRequest,
         StandardRequest $standardRequest,
@@ -112,6 +181,18 @@ class ProxyServer
         return $response;
     }
 
+    /**
+     * 处理流式请求
+     *
+     * @param  Request  $httpRequest  HTTP 请求
+     * @param  StandardRequest  $standardRequest  标准化请求
+     * @param  ProviderRequest  $providerRequest  供应商请求
+     * @param  mixed  $provider  供应商实例
+     * @param  string  $sourceProtocol  源协议
+     * @param  string  $targetProtocol  目标协议
+     * @param  RequestLog  $requestLog  请求日志
+     * @return Generator 流式响应生成器
+     */
     protected function handleStreamRequest(
         Request $httpRequest,
         StandardRequest $standardRequest,
@@ -129,6 +210,7 @@ class ProxyServer
         $firstTokenTime = null;
 
         foreach ($stream as $chunk) {
+            // 记录首个 Token 时间
             if ($firstTokenTime === null) {
                 $this->firstTokenMs = (int) ((microtime(true) - $this->startTime) * 1000);
                 $firstTokenTime = microtime(true);
@@ -139,6 +221,7 @@ class ProxyServer
                 continue;
             }
 
+            // 累积内容
             if ($standardEvent->contentDelta) {
                 $fullContent .= $standardEvent->contentDelta;
             }
@@ -158,6 +241,7 @@ class ProxyServer
 
         $latencyMs = $this->calculateLatency();
 
+        // 构建完整响应用于日志记录
         $standardResponse = new StandardResponse(
             id: uniqid('chatcmpl-'),
             content: $fullContent,
@@ -173,6 +257,14 @@ class ProxyServer
         $this->recordUsage($standardRequest, $standardResponse);
     }
 
+    /**
+     * 创建请求日志
+     *
+     * @param  Request  $request  HTTP 请求
+     * @param  array  $rawRequest  原始请求数据
+     * @param  string  $protocol  协议类型
+     * @return RequestLog 请求日志实例
+     */
     protected function createRequestLog(Request $request, array $rawRequest, string $protocol): RequestLog
     {
         return RequestLog::create([
@@ -198,6 +290,12 @@ class ProxyServer
         ]);
     }
 
+    /**
+     * 更新请求日志的模型信息
+     *
+     * @param  RequestLog  $log  请求日志
+     * @param  StandardRequest  $request  标准化请求
+     */
     protected function updateRequestLogModel(RequestLog $log, StandardRequest $request): void
     {
         $log->update([
@@ -211,6 +309,17 @@ class ProxyServer
         ]);
     }
 
+    /**
+     * 创建审计日志
+     *
+     * @param  Request  $httpRequest  HTTP 请求
+     * @param  StandardRequest  $standardRequest  标准化请求
+     * @param  StandardResponse  $standardResponse  标准化响应
+     * @param  int  $latencyMs  延迟毫秒数
+     * @param  ProviderResponse|null  $providerResponse  供应商响应
+     * @param  bool  $isStream  是否流式请求
+     * @return AuditLog 审计日志实例
+     */
     protected function createAuditLog(
         Request $httpRequest,
         StandardRequest $standardRequest,
@@ -254,6 +363,19 @@ class ProxyServer
         ]);
     }
 
+    /**
+     * 创建响应日志
+     *
+     * @param  RequestLog  $requestLog  请求日志
+     * @param  array  $response  响应数据
+     * @param  ProviderResponse|null  $providerResponse  供应商响应
+     * @param  int  $latencyMs  延迟毫秒数
+     * @param  int|null  $auditLogId  审计日志 ID
+     * @param  bool  $isStream  是否流式请求
+     * @param  mixed  $usage  Token 使用量
+     * @param  string|null  $finishReason  结束原因
+     * @return ResponseLog 响应日志实例
+     */
     protected function createResponseLog(
         RequestLog $requestLog,
         array $response,
@@ -286,6 +408,15 @@ class ProxyServer
         ]);
     }
 
+    /**
+     * 处理错误
+     *
+     * 记录错误日志并创建审计记录
+     *
+     * @param  \Exception  $e  异常实例
+     * @param  Request  $request  HTTP 请求
+     * @param  RequestLog  $requestLog  请求日志
+     */
     protected function handleError(\Exception $e, Request $request, RequestLog $requestLog): void
     {
         $latencyMs = $this->calculateLatency();
@@ -319,6 +450,12 @@ class ProxyServer
         ]);
     }
 
+    /**
+     * 获取渠道协议类型
+     *
+     * @param  Channel  $channel  渠道实例
+     * @return string 协议类型（openai/anthropic）
+     */
     protected function getChannelProtocol(Channel $channel): string
     {
         $provider = $channel->provider;
@@ -330,6 +467,15 @@ class ProxyServer
         return 'openai';
     }
 
+    /**
+     * 构建供应商请求
+     *
+     * @param  StandardRequest  $standardRequest  标准化请求
+     * @param  Channel  $channel  渠道实例
+     * @param  string  $targetProtocol  目标协议
+     * @param  string  $actualModel  实际模型名称
+     * @return ProviderRequest 供应商请求实例
+     */
     protected function buildProviderRequest(StandardRequest $standardRequest, Channel $channel, string $targetProtocol, string $actualModel): ProviderRequest
     {
         if ($targetProtocol === 'anthropic') {
@@ -343,6 +489,13 @@ class ProxyServer
         return ProviderRequest::fromArray($requestData);
     }
 
+    /**
+     * 构建 API 端点 URL
+     *
+     * @param  Channel  $channel  渠道实例
+     * @param  StandardRequest  $request  标准化请求
+     * @return string API 端点 URL
+     */
     protected function buildEndpoint(Channel $channel, StandardRequest $request): string
     {
         $baseUrl = rtrim($channel->base_url, '/');
@@ -356,6 +509,12 @@ class ProxyServer
         return $baseUrl.'/v1/chat/completions';
     }
 
+    /**
+     * 构建请求头
+     *
+     * @param  Channel  $channel  渠道实例
+     * @return array 请求头数组
+     */
     protected function buildHeaders(Channel $channel): array
     {
         $provider = strtolower($channel->provider);
@@ -373,16 +532,37 @@ class ProxyServer
         return $headers;
     }
 
+    /**
+     * 标准化供应商响应
+     *
+     * @param  ProviderResponse  $response  供应商响应
+     * @param  string  $protocol  协议类型
+     * @return StandardResponse 标准化响应
+     */
     protected function normalizeProviderResponse(ProviderResponse $response, string $protocol): StandardResponse
     {
         return $this->protocolConverter->normalizeResponse($response->rawResponse ?? [], $protocol);
     }
 
+    /**
+     * 构建响应
+     *
+     * @param  StandardResponse  $standardResponse  标准化响应
+     * @param  string  $protocol  目标协议
+     * @return array 响应数组
+     */
     protected function buildResponse(StandardResponse $standardResponse, string $protocol): array
     {
         return $this->protocolConverter->denormalizeResponse($standardResponse, $protocol);
     }
 
+    /**
+     * 解析流式响应块
+     *
+     * @param  mixed  $chunk  原始响应块
+     * @param  string  $protocol  协议类型
+     * @return object|null 标准化流式事件
+     */
     protected function parseStreamChunk($chunk, string $protocol): ?object
     {
         if ($chunk instanceof \App\Services\Provider\DTO\ProviderStreamChunk) {
@@ -405,6 +585,13 @@ class ProxyServer
         return $driver->parseStreamEvent($chunk);
     }
 
+    /**
+     * 转换流式响应块
+     *
+     * @param  object  $event  标准化流式事件
+     * @param  string  $targetProtocol  目标协议
+     * @return string 格式化的流式响应块
+     */
     protected function convertStreamChunk(object $event, string $targetProtocol): string
     {
         $driver = $this->protocolConverter->driver($targetProtocol);
@@ -412,11 +599,23 @@ class ProxyServer
         return $driver->buildStreamChunk($event);
     }
 
+    /**
+     * 计算延迟时间
+     *
+     * @return int 延迟毫秒数
+     */
     protected function calculateLatency(): int
     {
         return (int) ((microtime(true) - $this->startTime) * 1000);
     }
 
+    /**
+     * 计算请求成本
+     *
+     * @param  string  $model  模型名称
+     * @param  mixed  $usage  Token 使用量
+     * @return float 成本金额
+     */
     protected function calculateCost(string $model, $usage): float
     {
         if (! $usage) {
@@ -429,6 +628,7 @@ class ProxyServer
         $promptRate = 0.00001;
         $completionRate = 0.00003;
 
+        // 根据模型类型调整费率
         if (str_contains(strtolower($model), 'gpt-4')) {
             $promptRate = 0.00003;
             $completionRate = 0.00006;
@@ -440,6 +640,14 @@ class ProxyServer
         return ($promptTokens * $promptRate) + ($completionTokens * $completionRate);
     }
 
+    /**
+     * 记录使用量
+     *
+     * 用于编码账户的配额统计
+     *
+     * @param  StandardRequest  $request  标准化请求
+     * @param  StandardResponse  $response  标准化响应
+     */
     protected function recordUsage(StandardRequest $request, StandardResponse $response): void
     {
         if (! $this->selectedChannel || ! $this->selectedChannel->hasCodingAccount()) {
@@ -459,6 +667,12 @@ class ProxyServer
         ]);
     }
 
+    /**
+     * 过滤敏感请求头
+     *
+     * @param  array  $headers  原始请求头
+     * @return array 过滤后的请求头
+     */
     protected function filterSensitiveHeaders(array $headers): array
     {
         $sensitiveKeys = ['authorization', 'x-api-key', 'cookie', 'set-cookie'];
@@ -470,6 +684,15 @@ class ProxyServer
         );
     }
 
+    /**
+     * 截断请求体
+     *
+     * 防止日志过大
+     *
+     * @param  string|null  $body  原始请求体
+     * @param  int  $maxLength  最大长度
+     * @return string|null 截断后的请求体
+     */
     protected function truncateBody(?string $body, int $maxLength = 10000): ?string
     {
         if (! $body) {
@@ -483,6 +706,12 @@ class ProxyServer
         return substr($body, 0, $maxLength).'...[truncated]';
     }
 
+    /**
+     * 提取模型参数
+     *
+     * @param  array  $request  请求数据
+     * @return array 模型参数
+     */
     protected function extractModelParams(array $request): array
     {
         $params = [];
@@ -497,6 +726,14 @@ class ProxyServer
         return $params;
     }
 
+    /**
+     * 提取提示词
+     *
+     * 从消息列表中提取文本内容
+     *
+     * @param  array  $request  请求数据
+     * @return string|null 提示词文本
+     */
     protected function extractPrompt(array $request): ?string
     {
         $messages = $request['messages'] ?? [];
@@ -514,6 +751,12 @@ class ProxyServer
         return $prompt ?: null;
     }
 
+    /**
+     * 获取异常的 HTTP 状态码
+     *
+     * @param  \Exception  $e  异常实例
+     * @return int HTTP 状态码
+     */
     protected function getStatusCode(\Exception $e): int
     {
         if (method_exists($e, 'getStatusCode')) {
@@ -527,11 +770,21 @@ class ProxyServer
         return 500;
     }
 
+    /**
+     * 获取当前请求 ID
+     *
+     * @return string|null 请求 ID
+     */
     public function getRequestId(): ?string
     {
         return $this->requestId;
     }
 
+    /**
+     * 获取当前选中的渠道
+     *
+     * @return Channel|null 渠道实例
+     */
     public function getSelectedChannel(): ?Channel
     {
         return $this->selectedChannel;

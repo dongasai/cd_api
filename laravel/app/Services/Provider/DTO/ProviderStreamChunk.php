@@ -2,24 +2,60 @@
 
 namespace App\Services\Provider\DTO;
 
+/**
+ * 供应商流式响应块数据传输对象
+ *
+ * 用于封装 AI 供应商流式响应中的单个数据块
+ */
 class ProviderStreamChunk
 {
-    public function __construct(
-        public string $event = '',
-        public array $data = [],
-        public string $delta = '',
-        public ?string $id = null,
-        public ?string $model = null,
-        public ?string $finishReason = null,
-        public ?TokenUsage $usage = null,
-    ) {}
+    /**
+     * 事件类型
+     */
+    public string $event = '';
 
+    /**
+     * 事件数据
+     */
+    public array $data = [];
+
+    /**
+     * 内容增量
+     */
+    public string $delta = '';
+
+    /**
+     * 响应 ID
+     */
+    public ?string $id = null;
+
+    /**
+     * 模型名称
+     */
+    public ?string $model = null;
+
+    /**
+     * 结束原因
+     */
+    public ?string $finishReason = null;
+
+    /**
+     * Token 使用量
+     */
+    public ?TokenUsage $usage = null;
+
+    /**
+     * 从 OpenAI 格式创建实例
+     *
+     * @param  string  $rawEvent  原始 SSE 事件数据
+     */
     public static function fromOpenAI(string $rawEvent): ?self
     {
         $lines = explode("\n", trim($rawEvent));
         $event = '';
         $data = '';
 
+        // 解析 SSE 格式
         foreach ($lines as $line) {
             if (str_starts_with($line, 'event:')) {
                 $event = trim(substr($line, 6));
@@ -28,6 +64,7 @@ class ProviderStreamChunk
             }
         }
 
+        // 跳过空数据和结束标记
         if (empty($data) || $data === '[DONE]') {
             return null;
         }
@@ -46,8 +83,10 @@ class ProviderStreamChunk
         $choices = $parsed['choices'] ?? [];
         $choice = $choices[0] ?? [];
 
+        // 提取内容增量
         if (isset($choice['delta'])) {
             $delta = $choice['delta']['content'] ?? '';
+            // 处理推理内容（DeepSeek 等模型特有）
             if (empty($delta) && isset($choice['delta']['reasoning_content'])) {
                 $delta = $choice['delta']['reasoning_content'];
             }
@@ -72,12 +111,18 @@ class ProviderStreamChunk
         );
     }
 
+    /**
+     * 从 Anthropic 格式创建实例
+     *
+     * @param  string  $rawEvent  原始 SSE 事件数据
+     */
     public static function fromAnthropic(string $rawEvent): ?self
     {
         $lines = explode("\n", trim($rawEvent));
         $event = '';
         $data = '';
 
+        // 解析 SSE 格式
         foreach ($lines as $line) {
             if (str_starts_with($line, 'event:')) {
                 $event = trim(substr($line, 6));
@@ -101,6 +146,7 @@ class ProviderStreamChunk
         $finishReason = null;
         $usage = null;
 
+        // 根据事件类型解析数据
         switch ($event) {
             case 'message_start':
                 $message = $parsed['message'] ?? [];
@@ -138,6 +184,9 @@ class ProviderStreamChunk
         );
     }
 
+    /**
+     * 转换为 OpenAI 流式块格式
+     */
     public function toOpenAIChunk(string $id, string $model): string
     {
         $chunk = [
@@ -161,6 +210,9 @@ class ProviderStreamChunk
         return 'data: '.json_encode($chunk, JSON_UNESCAPED_UNICODE)."\n\n";
     }
 
+    /**
+     * 转换为 Anthropic 流式事件格式
+     */
     public function toAnthropicEvent(): string
     {
         $output = "event: {$this->event}\n";
@@ -169,16 +221,25 @@ class ProviderStreamChunk
         return $output;
     }
 
+    /**
+     * 是否为空数据块
+     */
     public function isEmpty(): bool
     {
         return empty($this->delta) && empty($this->finishReason) && empty($this->usage);
     }
 
+    /**
+     * 是否为结束数据块
+     */
     public function isDone(): bool
     {
         return $this->event === 'message_stop' || $this->finishReason !== null;
     }
 
+    /**
+     * 转换为数组格式
+     */
     public function toArray(): array
     {
         return [

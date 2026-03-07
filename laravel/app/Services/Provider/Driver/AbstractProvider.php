@@ -11,36 +11,92 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * 抽象供应商基类
+ *
+ * 提供供应商的公共功能实现，包括：
+ * - HTTP 请求发送
+ * - 重试机制
+ * - 熔断器模式
+ * - 流式响应处理
+ */
 abstract class AbstractProvider implements ProviderInterface
 {
+    /**
+     * API 基础 URL
+     */
     protected string $baseUrl;
 
+    /**
+     * API 密钥
+     */
     protected string $apiKey;
 
+    /**
+     * 供应商配置
+     */
     protected array $config;
 
+    /**
+     * 最后一次错误消息
+     */
     protected ?string $lastErrorMessage = null;
 
+    /**
+     * 请求超时时间（秒）
+     */
     protected int $timeout = 60;
 
+    /**
+     * 连接超时时间（秒）
+     */
     protected int $connectTimeout = 10;
 
+    /**
+     * 最大重试次数
+     */
     protected int $maxRetries = 3;
 
+    /**
+     * 重试延迟（毫秒）
+     */
     protected int $retryDelay = 1000;
 
+    /**
+     * 重试延迟倍数
+     */
     protected float $retryMultiplier = 2.0;
 
+    /**
+     * 熔断器失败阈值
+     */
     protected int $circuitFailureThreshold = 5;
 
+    /**
+     * 熔断器重置超时（秒）
+     */
     protected int $circuitResetTimeout = 60;
 
+    /**
+     * 熔断器当前失败次数
+     */
     protected int $circuitFailures = 0;
 
+    /**
+     * 熔断器打开时间
+     */
     protected ?int $circuitOpenTime = null;
 
+    /**
+     * 熔断器状态：closed, open, half-open
+     */
     protected string $circuitState = 'closed';
 
+    /**
+     * 构造函数
+     *
+     * @param  array  $config  供应商配置
+     */
     public function __construct(array $config = [])
     {
         $this->config = $config;
@@ -55,18 +111,41 @@ abstract class AbstractProvider implements ProviderInterface
         $this->circuitResetTimeout = $config['circuit_reset_timeout'] ?? 60;
     }
 
+    /**
+     * 获取默认 API 基础 URL
+     */
     abstract public function getDefaultBaseUrl(): string;
 
+    /**
+     * 构建请求体
+     */
     abstract public function buildRequestBody(ProviderRequest $request): array;
 
+    /**
+     * 解析响应
+     */
     abstract public function parseResponse(array $response): ProviderResponse;
 
+    /**
+     * 解析流式响应块
+     */
     abstract public function parseStreamChunk(string $rawChunk): ?ProviderStreamChunk;
 
+    /**
+     * 获取 API 端点
+     */
     abstract public function getEndpoint(ProviderRequest $request): string;
 
+    /**
+     * 获取请求头
+     */
     abstract public function getHeaders(): array;
 
+    /**
+     * 发送同步请求
+     *
+     * 包含重试机制和熔断器保护
+     */
     public function send(ProviderRequest $request): ProviderResponse
     {
         $this->checkCircuitBreaker();
@@ -79,11 +158,14 @@ abstract class AbstractProvider implements ProviderInterface
             } catch (ProviderException $e) {
                 $lastException = $e;
 
+                // 如果错误不应重试，直接抛出
                 if ($e->shouldSkipRetry()) {
                     throw $e;
                 }
 
+                // 如果还有重试机会且错误可重试
                 if ($attempt < $this->maxRetries && $e->isRetryable()) {
+                    // 指数退避延迟
                     $delay = (int) ($this->retryDelay * pow($this->retryMultiplier, $attempt));
                     usleep($delay * 1000);
 
@@ -108,6 +190,11 @@ abstract class AbstractProvider implements ProviderInterface
         throw $lastException ?? ProviderException::networkError('Unknown error occurred');
     }
 
+    /**
+     * 发送流式请求
+     *
+     * @return Generator<ProviderStreamChunk>
+     */
     public function sendStream(ProviderRequest $request): Generator
     {
         $this->checkCircuitBreaker();
@@ -129,10 +216,12 @@ abstract class AbstractProvider implements ProviderInterface
             $buffer = '';
             $stream = $response->toPsrResponse()->getBody();
 
+            // 逐块读取流式响应
             while (! $stream->eof()) {
                 $chunk = $stream->read(1024);
                 $buffer .= $chunk;
 
+                // 按双换行符分割事件
                 while (($pos = strpos($buffer, "\n\n")) !== false) {
                     $rawChunk = substr($buffer, 0, $pos);
                     $buffer = substr($buffer, $pos + 2);
@@ -144,6 +233,7 @@ abstract class AbstractProvider implements ProviderInterface
                 }
             }
 
+            // 处理剩余的缓冲区数据
             if (! empty($buffer)) {
                 $parsed = $this->parseStreamChunk($buffer);
                 if ($parsed !== null) {
@@ -156,6 +246,9 @@ abstract class AbstractProvider implements ProviderInterface
         }
     }
 
+    /**
+     * 执行 HTTP 请求
+     */
     protected function executeRequest(ProviderRequest $request): ProviderResponse
     {
         $body = $this->buildRequestBody($request);
@@ -176,6 +269,9 @@ abstract class AbstractProvider implements ProviderInterface
         return $this->parseResponse($response->json());
     }
 
+    /**
+     * 从响应创建错误异常
+     */
     protected function createErrorFromResponse($response): ProviderException
     {
         $statusCode = $response->status();
@@ -193,11 +289,17 @@ abstract class AbstractProvider implements ProviderInterface
         };
     }
 
+    /**
+     * 检查熔断器状态
+     *
+     * @throws ProviderException 当熔断器打开时
+     */
     protected function checkCircuitBreaker(): void
     {
         if ($this->circuitState === 'open') {
             $elapsed = time() - ($this->circuitOpenTime ?? 0);
 
+            // 检查是否可以尝试半开状态
             if ($elapsed >= $this->circuitResetTimeout) {
                 $this->circuitState = 'half-open';
             } else {
@@ -206,6 +308,9 @@ abstract class AbstractProvider implements ProviderInterface
         }
     }
 
+    /**
+     * 记录失败（用于熔断器）
+     */
     protected function recordFailure(): void
     {
         $this->circuitFailures++;
@@ -218,6 +323,9 @@ abstract class AbstractProvider implements ProviderInterface
         }
     }
 
+    /**
+     * 记录成功（用于熔断器）
+     */
     protected function recordSuccess(): void
     {
         $this->circuitFailures = 0;
@@ -225,6 +333,11 @@ abstract class AbstractProvider implements ProviderInterface
         $this->lastErrorMessage = null;
     }
 
+    /**
+     * 健康检查
+     *
+     * 通过获取模型列表来验证供应商是否可用
+     */
     public function healthCheck(): bool
     {
         try {
@@ -238,21 +351,33 @@ abstract class AbstractProvider implements ProviderInterface
         }
     }
 
+    /**
+     * 检查供应商是否可用
+     */
     public function isAvailable(): bool
     {
         return $this->circuitState !== 'open' && ! empty($this->apiKey);
     }
 
+    /**
+     * 获取最后一次错误消息
+     */
     public function getLastErrorMessage(): ?string
     {
         return $this->lastErrorMessage;
     }
 
+    /**
+     * 获取配置项
+     */
     public function getConfig(string $key, mixed $default = null): mixed
     {
         return $this->config[$key] ?? $default;
     }
 
+    /**
+     * 设置配置
+     */
     public function setConfig(array $config): self
     {
         $this->config = array_merge($this->config, $config);
@@ -260,6 +385,9 @@ abstract class AbstractProvider implements ProviderInterface
         return $this;
     }
 
+    /**
+     * 安全解析 JSON
+     */
     protected function safeJsonDecode(string $json, ?array $default = null): ?array
     {
         try {

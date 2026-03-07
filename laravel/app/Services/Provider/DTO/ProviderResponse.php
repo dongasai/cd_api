@@ -2,23 +2,90 @@
 
 namespace App\Services\Provider\DTO;
 
+/**
+ * 供应商响应数据传输对象
+ *
+ * 用于封装 AI 供应商返回的响应数据
+ */
 class ProviderResponse
 {
+    /**
+     * 响应 ID
+     */
+    public string $id;
+
+    /**
+     * 模型名称
+     */
+    public string $model;
+
+    /**
+     * 生成的内容
+     */
+    public string $content = '';
+
+    /**
+     * 结束原因
+     */
+    public ?string $finishReason = null;
+
+    /**
+     * Token 使用量
+     */
+    public ?TokenUsage $usage = null;
+
+    /**
+     * 原始响应数据（用于调试）
+     */
+    public ?array $rawResponse = null;
+
+    /**
+     * 工具调用列表
+     */
+    public ?array $toolCalls = null;
+
+    /**
+     * 创建时间戳
+     */
+    public int $created = 0;
+
+    /**
+     * 构造函数
+     *
+     * @param  string  $id  响应 ID
+     * @param  string  $model  模型名称
+     * @param  string  $content  生成内容
+     * @param  string|null  $finishReason  结束原因
+     * @param  TokenUsage|null  $usage  Token 使用量
+     * @param  array|null  $rawResponse  原始响应
+     * @param  array|null  $toolCalls  工具调用
+     * @param  int  $created  创建时间戳
+     */
     public function __construct(
-        public string $id,
-        public string $model,
-        public string $content = '',
-        public ?string $finishReason = null,
-        public ?TokenUsage $usage = null,
-        public ?array $rawResponse = null,
-        public ?array $toolCalls = null,
-        public int $created = 0,
+        string $id,
+        string $model,
+        string $content = '',
+        ?string $finishReason = null,
+        ?TokenUsage $usage = null,
+        ?array $rawResponse = null,
+        ?array $toolCalls = null,
+        int $created = 0,
     ) {
-        if ($this->created === 0) {
-            $this->created = time();
-        }
+        $this->id = $id;
+        $this->model = $model;
+        $this->content = $content;
+        $this->finishReason = $finishReason;
+        $this->usage = $usage;
+        $this->rawResponse = $rawResponse;
+        $this->toolCalls = $toolCalls;
+        $this->created = $created ?: time();
     }
 
+    /**
+     * 从 OpenAI 格式创建实例
+     *
+     * @param  array  $response  OpenAI 响应数据
+     */
     public static function fromOpenAI(array $response): self
     {
         $id = $response['id'] ?? '';
@@ -32,11 +99,13 @@ class ProviderResponse
         $content = $message['content'] ?? '';
         $finishReason = $choice['finish_reason'] ?? null;
 
+        // 处理工具调用
         $toolCalls = null;
         if (isset($message['tool_calls'])) {
             $toolCalls = $message['tool_calls'];
         }
 
+        // 处理 Token 使用量
         $usage = null;
         if (isset($response['usage'])) {
             $usage = TokenUsage::fromOpenAI($response['usage']);
@@ -54,6 +123,11 @@ class ProviderResponse
         );
     }
 
+    /**
+     * 从 Anthropic 格式创建实例
+     *
+     * @param  array  $response  Anthropic 响应数据
+     */
     public static function fromAnthropic(array $response): self
     {
         $id = $response['id'] ?? '';
@@ -63,6 +137,7 @@ class ProviderResponse
         $content = '';
         $toolCalls = null;
 
+        // 解析内容块
         if (isset($response['content']) && is_array($response['content'])) {
             foreach ($response['content'] as $block) {
                 if (($block['type'] ?? '') === 'text') {
@@ -80,6 +155,7 @@ class ProviderResponse
             }
         }
 
+        // 处理 Token 使用量
         $usage = null;
         if (isset($response['usage'])) {
             $usage = TokenUsage::fromAnthropic($response['usage']);
@@ -96,6 +172,9 @@ class ProviderResponse
         );
     }
 
+    /**
+     * 转换为 OpenAI 格式
+     */
     public function toOpenAI(): array
     {
         $response = [
@@ -119,6 +198,9 @@ class ProviderResponse
         return $response;
     }
 
+    /**
+     * 转换为 Anthropic 格式
+     */
     public function toAnthropic(): array
     {
         $response = [
@@ -138,11 +220,17 @@ class ProviderResponse
         return $response;
     }
 
+    /**
+     * 是否包含工具调用
+     */
     public function hasToolCalls(): bool
     {
         return $this->toolCalls !== null && count($this->toolCalls) > 0;
     }
 
+    /**
+     * 转换为数组格式
+     */
     public function toArray(): array
     {
         return [
@@ -156,6 +244,9 @@ class ProviderResponse
         ];
     }
 
+    /**
+     * 构建 OpenAI 消息对象
+     */
     private function buildMessage(): array
     {
         $message = [
@@ -173,6 +264,9 @@ class ProviderResponse
         return $message;
     }
 
+    /**
+     * 构建 Anthropic 内容块
+     */
     private function buildContentBlocks(): array
     {
         $blocks = [];
@@ -198,6 +292,9 @@ class ProviderResponse
         return $blocks;
     }
 
+    /**
+     * 映射 Anthropic stop_reason 到标准格式
+     */
     private static function mapStopReason(?string $stopReason): ?string
     {
         return match ($stopReason) {
@@ -210,6 +307,9 @@ class ProviderResponse
         };
     }
 
+    /**
+     * 映射标准 finish_reason 到 Anthropic 格式
+     */
     private function mapFinishReason(?string $finishReason): ?string
     {
         return match ($finishReason) {
