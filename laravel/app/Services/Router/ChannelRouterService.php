@@ -68,21 +68,30 @@ class ChannelRouterService
 
     protected function getChannelIdsForModel(string $model): array
     {
-        $mappings = ModelMapping::where('alias', $model)
+        // 查找指定了具体渠道的映射
+        $specificMappings = ModelMapping::where('alias', $model)
             ->where('enabled', true)
+            ->whereNotNull('channel_id')
             ->pluck('channel_id')
             ->toArray();
 
-        if (!empty($mappings)) {
-            return $mappings;
+        if (!empty($specificMappings)) {
+            return $specificMappings;
         }
 
-        $channelModels = \App\Models\ChannelModel::where('model_name', $model)
+        // 查找未指定渠道的映射，获取实际的模型名称
+        $generalMapping = ModelMapping::where('alias', $model)
+            ->where('enabled', true)
+            ->whereNull('channel_id')
+            ->first();
+
+        $actualModel = $generalMapping?->actual_model ?? $model;
+
+        // 使用实际模型名称在所有渠道中查找
+        return \App\Models\ChannelModel::where('model_name', $actualModel)
             ->where('is_enabled', true)
             ->pluck('channel_id')
             ->toArray();
-
-        return $channelModels;
     }
 
     protected function applyLoadBalancing($channels, array $context = []): Channel
