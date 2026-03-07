@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\Router\ProxyServer;
+use Generator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\StreamedResponse;
-use Generator;
 
 class ProxyController extends Controller
 {
@@ -18,7 +18,7 @@ class ProxyController extends Controller
         $this->proxyServer = $proxyServer;
     }
 
-    public function chatCompletions(Request $request): JsonResponse|StreamedResponse
+    public function chatCompletions(Request $request): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
     {
         return $this->handleRequest($request, 'openai');
     }
@@ -50,51 +50,36 @@ class ProxyController extends Controller
 
     public function models(Request $request): JsonResponse
     {
-        $models = [
-            'object' => 'list',
-            'data' => [
-                [
-                    'id' => 'gpt-4',
-                    'object' => 'model',
-                    'created' => time(),
-                    'owned_by' => 'openai',
-                ],
-                [
-                    'id' => 'gpt-4-turbo',
-                    'object' => 'model',
-                    'created' => time(),
-                    'owned_by' => 'openai',
-                ],
-                [
-                    'id' => 'gpt-3.5-turbo',
-                    'object' => 'model',
-                    'created' => time(),
-                    'owned_by' => 'openai',
-                ],
-                [
-                    'id' => 'claude-3-opus',
-                    'object' => 'model',
-                    'created' => time(),
-                    'owned_by' => 'anthropic',
-                ],
-                [
-                    'id' => 'claude-3-sonnet',
-                    'object' => 'model',
-                    'created' => time(),
-                    'owned_by' => 'anthropic',
-                ],
-            ],
-        ];
+        $modelMappings = \App\Models\ModelMapping::where('enabled', true)
+            ->with('channel')
+            ->get();
 
-        return response()->json($models);
+        $data = $modelMappings->map(function ($mapping) {
+            $ownedBy = 'system';
+            if ($mapping->channel && $mapping->channel->provider) {
+                $ownedBy = $mapping->channel->provider;
+            }
+
+            return [
+                'id' => $mapping->alias,
+                'object' => 'model',
+                'created' => $mapping->created_at?->timestamp ?? time(),
+                'owned_by' => $ownedBy,
+            ];
+        })->values()->toArray();
+
+        return response()->json([
+            'object' => 'list',
+            'data' => $data,
+        ]);
     }
 
-    public function anthropicMessages(Request $request): JsonResponse|StreamedResponse
+    public function anthropicMessages(Request $request): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
     {
         return $this->handleRequest($request, 'anthropic');
     }
 
-    protected function handleRequest(Request $request, string $protocol): JsonResponse|StreamedResponse
+    protected function handleRequest(Request $request, string $protocol): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
     {
         try {
             $result = $this->proxyServer->proxy($request, $protocol);
@@ -109,7 +94,7 @@ class ProxyController extends Controller
         }
     }
 
-    protected function streamResponse(Generator $generator, string $protocol): StreamedResponse
+    protected function streamResponse(Generator $generator, string $protocol): \Symfony\Component\HttpFoundation\StreamedResponse
     {
         $headers = [
             'Content-Type' => 'text/event-stream',
@@ -126,7 +111,9 @@ class ProxyController extends Controller
             foreach ($generator as $chunk) {
                 echo $chunk;
                 echo "\n";
-                ob_flush();
+                if (ob_get_level() > 0) {
+                    ob_flush();
+                }
                 flush();
             }
         }, 200, $headers);

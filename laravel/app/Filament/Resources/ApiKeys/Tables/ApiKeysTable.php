@@ -8,6 +8,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -84,7 +85,9 @@ class ApiKeysTable
                         'expired' => '已过期',
                     ]),
             ])
+            ->recordUrl(fn (ApiKey $record): string => route('filament.admin.resources.api-keys.view', $record))
             ->recordActions([
+                ViewAction::make(),
                 EditAction::make(),
                 Action::make('regenerateKey')
                     ->label('重新生成密钥')

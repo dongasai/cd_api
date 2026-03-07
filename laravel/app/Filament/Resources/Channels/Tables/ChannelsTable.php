@@ -7,6 +7,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
@@ -82,6 +83,11 @@ class ChannelsTable
                         'gray' => 'unknown',
                     ]),
 
+                TextColumn::make('groups.name')
+                    ->label('分组')
+                    ->badge()
+                    ->limitList(3),
+
                 TextColumn::make('priority')
                     ->label('优先级')
                     ->sortable(),
@@ -141,7 +147,7 @@ class ChannelsTable
                         'unhealthy' => '不健康',
                         'unknown' => '未知',
                     ]),
-            ])
+            ], layout: FiltersLayout::AboveContent)
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),

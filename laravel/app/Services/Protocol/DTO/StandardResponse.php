@@ -56,6 +56,9 @@ class StandardResponse
 
         $message = $choice['message'] ?? [];
         $content = $message['content'] ?? '';
+        if (empty($content) && isset($message['reasoning_content'])) {
+            $content = $message['reasoning_content'];
+        }
         $finishReason = $choice['finish_reason'] ?? null;
 
         // 处理工具调用

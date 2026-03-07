@@ -3,12 +3,14 @@
 namespace App\Services\Provider;
 
 use App\Models\Channel;
+use App\Services\Provider\Driver\OpenAICompatibleProvider;
 use App\Services\Provider\Driver\ProviderInterface;
 use App\Services\Provider\Exceptions\ProviderException;
 
 class ProviderManager
 {
     protected array $providers = [];
+
     protected array $resolved = [];
 
     public function register(string $name, ProviderInterface|callable|string $provider): self
@@ -53,7 +55,13 @@ class ProviderManager
     {
         $providerName = $channel->provider ?? $channel->provider_type ?? 'openai';
 
-        return $this->get($providerName);
+        $config = [
+            'base_url' => $channel->base_url,
+            'api_key' => $channel->api_key,
+            'name' => $providerName,
+        ];
+
+        return new OpenAICompatibleProvider($config);
     }
 
     public function has(string $name): bool

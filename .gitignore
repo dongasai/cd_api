@@ -2,3 +2,4 @@ compose.yml
 docker/000-default.local.conf
 .trae/mcp.json
 .trae/specs/*/*.md
+*.s.md

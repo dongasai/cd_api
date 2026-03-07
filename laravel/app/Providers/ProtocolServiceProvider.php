@@ -27,7 +27,15 @@ class ProtocolServiceProvider extends ServiceProvider
                 return new OpenAiChatCompletionsDriver;
             });
 
+            $manager->register('openai', function () {
+                return new OpenAiChatCompletionsDriver;
+            });
+
             $manager->register('anthropic_messages', function () {
+                return new AnthropicMessagesDriver;
+            });
+
+            $manager->register('anthropic', function () {
                 return new AnthropicMessagesDriver;
             });
 

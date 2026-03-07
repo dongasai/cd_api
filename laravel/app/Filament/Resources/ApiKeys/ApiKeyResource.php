@@ -44,6 +44,7 @@ class ApiKeyResource extends Resource
         return [
             'index' => Pages\ListApiKeys::route('/'),
             'create' => Pages\CreateApiKey::route('/create'),
+            'view' => Pages\ViewApiKey::route('/{record}'),
             'edit' => Pages\EditApiKey::route('/{record}/edit'),
         ];
     }

@@ -14,21 +14,31 @@ use Illuminate\Support\Facades\Log;
 abstract class AbstractProvider implements ProviderInterface
 {
     protected string $baseUrl;
+
     protected string $apiKey;
+
     protected array $config;
+
     protected ?string $lastErrorMessage = null;
 
     protected int $timeout = 60;
+
     protected int $connectTimeout = 10;
 
     protected int $maxRetries = 3;
+
     protected int $retryDelay = 1000;
+
     protected float $retryMultiplier = 2.0;
 
     protected int $circuitFailureThreshold = 5;
+
     protected int $circuitResetTimeout = 60;
+
     protected int $circuitFailures = 0;
+
     protected ?int $circuitOpenTime = null;
+
     protected string $circuitState = 'closed';
 
     public function __construct(array $config = [])
@@ -76,6 +86,7 @@ abstract class AbstractProvider implements ProviderInterface
                 if ($attempt < $this->maxRetries && $e->isRetryable()) {
                     $delay = (int) ($this->retryDelay * pow($this->retryMultiplier, $attempt));
                     usleep($delay * 1000);
+
                     continue;
                 }
 
@@ -87,6 +98,7 @@ abstract class AbstractProvider implements ProviderInterface
                 if ($attempt < $this->maxRetries) {
                     $delay = (int) ($this->retryDelay * pow($this->retryMultiplier, $attempt));
                     usleep($delay * 1000);
+
                     continue;
                 }
             }
@@ -109,12 +121,8 @@ abstract class AbstractProvider implements ProviderInterface
             $response = Http::withHeaders($this->getHeaders())
                 ->timeout($this->timeout)
                 ->connectTimeout($this->connectTimeout)
+                ->withOptions(['stream' => true])
                 ->post($url, $body);
-
-            if (! $response->ok()) {
-                $this->recordFailure();
-                throw $this->createErrorFromResponse($response);
-            }
 
             $this->recordSuccess();
 
@@ -133,6 +141,13 @@ abstract class AbstractProvider implements ProviderInterface
                     if ($parsed !== null) {
                         yield $parsed;
                     }
+                }
+            }
+
+            if (! empty($buffer)) {
+                $parsed = $this->parseStreamChunk($buffer);
+                if ($parsed !== null) {
+                    yield $parsed;
                 }
             }
         } catch (ConnectionException $e) {

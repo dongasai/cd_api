@@ -33,6 +33,11 @@ class ChannelGroupsTable
                     ->counts('channels')
                     ->sortable(),
 
+                TextColumn::make('channels.name')
+                    ->label('渠道')
+                    ->badge()
+                    ->limitList(3),
+
                 TextColumn::make('description')
                     ->label('描述')
                     ->limit(50)

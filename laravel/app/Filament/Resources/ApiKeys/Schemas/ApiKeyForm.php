@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\ApiKeys\Schemas;
 
+use App\Models\ModelMapping;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
@@ -69,11 +71,13 @@ class ApiKeyForm
 
                 Section::make('模型配置')
                     ->schema([
-                        KeyValue::make('allowed_models')
+                        CheckboxList::make('allowed_models')
                             ->label('允许的模型')
-                            ->keyLabel('模型标识')
-                            ->valueLabel('模型名称')
-                            ->addActionLabel('添加模型')
+                            ->options(ModelMapping::where('enabled', true)->pluck('alias', 'alias'))
+                            ->searchable()
+                            ->bulkToggleable()
+                            ->columns(2)
+                            ->helperText('从模型映射表中选择允许访问的模型')
                             ->columnSpanFull(),
                     ]),
 

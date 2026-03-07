@@ -13,21 +13,27 @@ use App\Services\Protocol\ProtocolConverter;
 use App\Services\Provider\DTO\ProviderRequest;
 use App\Services\Provider\DTO\ProviderResponse;
 use App\Services\Provider\ProviderManager;
+use Generator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Generator;
 
 class ProxyServer
 {
     protected ProtocolConverter $protocolConverter;
+
     protected ProviderManager $providerManager;
+
     protected ChannelRouterService $channelRouter;
+
     protected ChannelCodingStatusService $codingStatusService;
 
     protected ?string $requestId = null;
+
     protected float $startTime;
+
     protected ?int $firstTokenMs = null;
+
     protected ?Channel $selectedChannel = null;
 
     public function __construct(
@@ -60,9 +66,11 @@ class ProxyServer
 
             $this->selectedChannel = $this->channelRouter->selectChannel($standardRequest->model);
 
+            $actualModel = $this->channelRouter->resolveModel($standardRequest->model, $this->selectedChannel);
+
             $channelProtocol = $this->getChannelProtocol($this->selectedChannel);
 
-            $providerRequest = $this->buildProviderRequest($standardRequest, $this->selectedChannel, $channelProtocol);
+            $providerRequest = $this->buildProviderRequest($standardRequest, $this->selectedChannel, $channelProtocol, $actualModel);
 
             $provider = $this->providerManager->getForChannel($this->selectedChannel);
 
@@ -95,9 +103,9 @@ class ProxyServer
 
         $response = $this->buildResponse($standardResponse, $sourceProtocol);
 
-        $this->createAuditLog($httpRequest, $standardRequest, $standardResponse, $latencyMs, $providerResponse);
+        $auditLog = $this->createAuditLog($httpRequest, $standardRequest, $standardResponse, $latencyMs, $providerResponse);
 
-        $this->createResponseLog($requestLog, $response, $providerResponse, $latencyMs);
+        $this->createResponseLog($requestLog, $response, $providerResponse, $latencyMs, $auditLog?->id);
 
         $this->recordUsage($standardRequest, $standardResponse);
 
@@ -131,8 +139,8 @@ class ProxyServer
                 continue;
             }
 
-            if ($standardEvent->content) {
-                $fullContent .= $standardEvent->content;
+            if ($standardEvent->contentDelta) {
+                $fullContent .= $standardEvent->contentDelta;
             }
 
             if ($standardEvent->usage) {
@@ -151,16 +159,16 @@ class ProxyServer
         $latencyMs = $this->calculateLatency();
 
         $standardResponse = new StandardResponse(
+            id: uniqid('chatcmpl-'),
             content: $fullContent,
             model: $standardRequest->model,
             usage: $usage,
-            finishReason: $finishReason,
-            isStream: true
+            finishReason: $finishReason
         );
 
-        $this->createAuditLog($httpRequest, $standardRequest, $standardResponse, $latencyMs, null, true);
+        $auditLog = $this->createAuditLog($httpRequest, $standardRequest, $standardResponse, $latencyMs, null, true);
 
-        $this->createResponseLog($requestLog, ['stream' => true, 'content' => $fullContent], null, $latencyMs, true, $usage, $finishReason);
+        $this->createResponseLog($requestLog, ['stream' => true, 'content' => $fullContent], null, $latencyMs, $auditLog?->id, true, $usage, $finishReason);
 
         $this->recordUsage($standardRequest, $standardResponse);
     }
@@ -173,7 +181,7 @@ class ProxyServer
             'path' => $request->path(),
             'query_string' => $request->getQueryString(),
             'headers' => $this->filterSensitiveHeaders($request->headers->all()),
-            'content_type' => $request->contentType(),
+            'content_type' => $request->header('Content-Type'),
             'content_length' => strlen($request->getContent()),
             'body_text' => $this->truncateBody(json_encode($rawRequest)),
             'model' => $rawRequest['model'] ?? null,
@@ -237,7 +245,7 @@ class ProxyServer
             'billing_source' => AuditLog::BILLING_SOURCE_QUOTA,
             'status_code' => 200,
             'latency_ms' => $latencyMs,
-            'first_token_ms' => $this->firstTokenMs,
+            'first_token_ms' => $this->firstTokenMs ?? 0,
             'is_stream' => $isStream,
             'finish_reason' => $standardResponse->finishReason,
             'client_ip' => $httpRequest->ip(),
@@ -251,12 +259,13 @@ class ProxyServer
         array $response,
         ?ProviderResponse $providerResponse,
         int $latencyMs,
+        ?int $auditLogId = null,
         bool $isStream = false,
         $usage = null,
         ?string $finishReason = null
     ): ResponseLog {
         return ResponseLog::create([
-            'audit_log_id' => $requestLog->audit_log_id,
+            'audit_log_id' => $auditLogId ?? $requestLog->audit_log_id,
             'request_id' => $this->requestId,
             'request_log_id' => $requestLog->id,
             'status_code' => 200,
@@ -321,7 +330,7 @@ class ProxyServer
         return 'openai';
     }
 
-    protected function buildProviderRequest(StandardRequest $standardRequest, Channel $channel, string $targetProtocol): ProviderRequest
+    protected function buildProviderRequest(StandardRequest $standardRequest, Channel $channel, string $targetProtocol, string $actualModel): ProviderRequest
     {
         if ($targetProtocol === 'anthropic') {
             $requestData = $standardRequest->toAnthropic();
@@ -329,14 +338,9 @@ class ProxyServer
             $requestData = $standardRequest->toOpenAI();
         }
 
-        return new ProviderRequest(
-            endpoint: $this->buildEndpoint($channel, $standardRequest),
-            method: 'POST',
-            headers: $this->buildHeaders($channel),
-            body: $requestData,
-            timeout: 300,
-            model: $standardRequest->model
-        );
+        $requestData['model'] = $actualModel;
+
+        return ProviderRequest::fromArray($requestData);
     }
 
     protected function buildEndpoint(Channel $channel, StandardRequest $request): string
@@ -371,7 +375,7 @@ class ProxyServer
 
     protected function normalizeProviderResponse(ProviderResponse $response, string $protocol): StandardResponse
     {
-        return $this->protocolConverter->normalizeResponse($response->data, $protocol);
+        return $this->protocolConverter->normalizeResponse($response->rawResponse ?? [], $protocol);
     }
 
     protected function buildResponse(StandardResponse $standardResponse, string $protocol): array
@@ -379,8 +383,23 @@ class ProxyServer
         return $this->protocolConverter->denormalizeResponse($standardResponse, $protocol);
     }
 
-    protected function parseStreamChunk(string $chunk, string $protocol): ?object
+    protected function parseStreamChunk($chunk, string $protocol): ?object
     {
+        if ($chunk instanceof \App\Services\Provider\DTO\ProviderStreamChunk) {
+            return new \App\Services\Protocol\DTO\StandardStreamEvent(
+                type: $chunk->finishReason ? 'finish' : 'delta',
+                id: $chunk->id ?: uniqid(),
+                model: $chunk->model,
+                contentDelta: $chunk->delta,
+                finishReason: $chunk->finishReason,
+                usage: $chunk->usage ? new \App\Services\Protocol\DTO\StandardUsage(
+                    promptTokens: $chunk->usage->promptTokens,
+                    completionTokens: $chunk->usage->completionTokens,
+                    totalTokens: $chunk->usage->totalTokens,
+                ) : null,
+            );
+        }
+
         $driver = $this->protocolConverter->driver($protocol);
 
         return $driver->parseStreamEvent($chunk);
@@ -400,7 +419,7 @@ class ProxyServer
 
     protected function calculateCost(string $model, $usage): float
     {
-        if (!$usage) {
+        if (! $usage) {
             return 0.0;
         }
 
@@ -423,12 +442,12 @@ class ProxyServer
 
     protected function recordUsage(StandardRequest $request, StandardResponse $response): void
     {
-        if (!$this->selectedChannel || !$this->selectedChannel->hasCodingAccount()) {
+        if (! $this->selectedChannel || ! $this->selectedChannel->hasCodingAccount()) {
             return;
         }
 
         $usage = $response->usage;
-        if (!$usage) {
+        if (! $usage) {
             return;
         }
 
@@ -446,14 +465,14 @@ class ProxyServer
 
         return array_filter(
             $headers,
-            fn ($key) => !in_array(strtolower($key), $sensitiveKeys),
+            fn ($key) => ! in_array(strtolower($key), $sensitiveKeys),
             ARRAY_FILTER_USE_KEY
         );
     }
 
     protected function truncateBody(?string $body, int $maxLength = 10000): ?string
     {
-        if (!$body) {
+        if (! $body) {
             return null;
         }
 

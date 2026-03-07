@@ -48,6 +48,9 @@ class ProviderStreamChunk
 
         if (isset($choice['delta'])) {
             $delta = $choice['delta']['content'] ?? '';
+            if (empty($delta) && isset($choice['delta']['reasoning_content'])) {
+                $delta = $choice['delta']['reasoning_content'];
+            }
         }
 
         if (isset($choice['finish_reason'])) {
@@ -155,7 +158,7 @@ class ProviderStreamChunk
             $chunk['usage'] = $this->usage->toOpenAI();
         }
 
-        return "data: ".json_encode($chunk, JSON_UNESCAPED_UNICODE)."\n\n";
+        return 'data: '.json_encode($chunk, JSON_UNESCAPED_UNICODE)."\n\n";
     }
 
     public function toAnthropicEvent(): string

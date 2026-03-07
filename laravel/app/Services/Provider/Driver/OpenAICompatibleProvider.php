@@ -9,9 +9,13 @@ use App\Services\Provider\DTO\ProviderStreamChunk;
 class OpenAICompatibleProvider extends AbstractProvider
 {
     protected string $providerName;
+
     protected array $customHeaders = [];
+
     protected ?string $authHeader = null;
+
     protected ?string $authPrefix = null;
+
     protected array $supportedModels = [];
 
     public function __construct(array $config = [])
@@ -31,6 +35,11 @@ class OpenAICompatibleProvider extends AbstractProvider
 
     public function getEndpoint(ProviderRequest $request): string
     {
+        $baseUrl = $this->baseUrl ?? '';
+        if (str_ends_with($baseUrl, '/v1')) {
+            return '/chat/completions';
+        }
+
         return '/v1/chat/completions';
     }
 
