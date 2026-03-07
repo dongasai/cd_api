@@ -39,6 +39,29 @@ class ModelMappingsTable
                     ->placeholder('未指定')
                     ->sortable(),
 
+                TextColumn::make('capabilities')
+                    ->label('模型能力')
+                    ->badge()
+                    ->formatStateUsing(function ($state) {
+                        if (empty($state)) {
+                            return '未设置';
+                        }
+
+                        $labels = [
+                            'reasoning' => '推理',
+                            'text' => '文本',
+                            'image' => '图片',
+                            'audio' => '语音',
+                            'video' => '视频',
+                            'tool_call' => '工具调用',
+                            'web_search' => '联网',
+                        ];
+
+                        return collect($state)->map(fn ($cap) => $labels[$cap] ?? $cap)->implode(', ');
+                    })
+                    ->color(fn ($state) => empty($state) ? 'gray' : 'primary')
+                    ->toggleable(),
+
                 IconColumn::make('enabled')
                     ->label('状态')
                     ->boolean()

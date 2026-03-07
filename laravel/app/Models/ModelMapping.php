@@ -20,6 +20,7 @@ class ModelMapping extends Model
         'actual_model',
         'channel_id',
         'enabled',
+        'capabilities',
     ];
 
     /**
@@ -31,6 +32,7 @@ class ModelMapping extends Model
     {
         return [
             'enabled' => 'boolean',
+            'capabilities' => 'array',
         ];
     }
 

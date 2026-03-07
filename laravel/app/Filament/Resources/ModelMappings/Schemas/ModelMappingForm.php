@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ModelMappings\Schemas;
 
 use App\Models\Channel;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -46,6 +47,21 @@ class ModelMappingForm
                                     ->label('启用')
                                     ->default(true)
                                     ->helperText('是否启用此模型映射'),
+
+                                CheckboxList::make('capabilities')
+                                    ->label('模型能力')
+                                    ->options([
+                                        'reasoning' => '推理',
+                                        'text' => '文本',
+                                        'image' => '图片',
+                                        'audio' => '语音',
+                                        'video' => '视频',
+                                        'tool_call' => '工具调用',
+                                        'web_search' => '联网',
+                                    ])
+                                    ->columns(4)
+                                    ->helperText('选择该模型支持的能力')
+                                    ->columnSpanFull(),
                             ]),
                     ]),
             ]);
