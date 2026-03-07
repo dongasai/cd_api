@@ -45,8 +45,10 @@ class ApiKeyForm
                                 TextInput::make('key_prefix')
                                     ->label('密钥前缀')
                                     ->maxLength(20)
-                                    ->placeholder('如: sk-abc123')
-                                    ->helperText('用于识别密钥的前缀'),
+                                    ->disabled()
+                                    ->dehydrated(false)
+                                    ->visibleOn('edit')
+                                    ->helperText('密钥前缀（创建时自动生成）'),
 
                                 DateTimePicker::make('expires_at')
                                     ->label('过期时间')

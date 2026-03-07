@@ -2,13 +2,17 @@
 
 namespace App\Filament\Resources\ApiKeys\Tables;
 
+use App\Models\ApiKey;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 
 class ApiKeysTable
 {
@@ -25,10 +29,12 @@ class ApiKeysTable
                     ->searchable()
                     ->sortable(),
 
-                TextColumn::make('key_prefix')
-                    ->label('密钥前缀')
-                    ->searchable()
-                    ->formatStateUsing(fn ($state) => $state ? $state . '...' : '-'),
+                TextColumn::make('key')
+                    ->label('密钥')
+                    ->copyable()
+                    ->copyMessage('密钥已复制到剪贴板')
+                    ->copyMessageDuration(1500)
+                    ->formatStateUsing(fn ($state) => $state ? $state : '-'),
 
                 TextColumn::make('status')
                     ->label('状态')
@@ -80,6 +86,15 @@ class ApiKeysTable
             ])
             ->recordActions([
                 EditAction::make(),
+                Action::make('regenerateKey')
+                    ->label('重新生成密钥')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading('重新生成密钥')
+                    ->modalDescription('确定要重新生成密钥吗？旧密钥将立即失效。')
+                    ->modalSubmitActionLabel('确认生成')
+                    ->action(fn (ApiKey $record) => self::regenerateKey($record)),
                 DeleteAction::make(),
             ])
             ->toolbarActions([
@@ -88,5 +103,21 @@ class ApiKeysTable
                 ]),
             ])
             ->defaultSort('created_at', 'desc');
+    }
+
+    public static function regenerateKey(ApiKey $record): void
+    {
+        $plainKey = 'sk-'.Str::random(48);
+
+        $record->update([
+            'key' => $plainKey,
+            'key_hash' => hash('sha256', $plainKey),
+            'key_prefix' => substr($plainKey, 0, 12),
+        ]);
+
+        Notification::make()
+            ->title('密钥已重新生成')
+            ->success()
+            ->send();
     }
 }
