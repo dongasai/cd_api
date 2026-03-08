@@ -1,18 +1,17 @@
 <?php
 
-namespace App\Filament\Resources\ModelMappings\Tables;
+namespace App\Filament\Resources\ModelLists\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\SelectFilter;
-use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 
-class ModelMappingsTable
+class ModelListsTable
 {
     public static function configure(Table $table): Table
     {
@@ -22,31 +21,28 @@ class ModelMappingsTable
                     ->label('ID')
                     ->sortable(),
 
-                TextColumn::make('alias')
-                    ->label('模型别名')
+                TextColumn::make('model_name')
+                    ->label('模型名称')
                     ->searchable()
-                    ->sortable()
-                    ->weight('font-bold'),
-
-                TextColumn::make('actual_model')
-                    ->label('实际模型')
-                    ->searchable()
-                    ->sortable()
-                    ->color('gray'),
-
-                TextColumn::make('channel.name')
-                    ->label('默认渠道')
-                    ->placeholder('未指定')
                     ->sortable(),
 
-                TextColumn::make('capabilities')
-                    ->label('模型能力')
-                    ->badge()
-                    ->formatStateUsing(function ($state) {
-                        if (empty($state)) {
-                            return '未设置';
-                        }
+                TextColumn::make('display_name')
+                    ->label('显示名称')
+                    ->searchable()
+                    ->default('-'),
 
+                TextColumn::make('provider')
+                    ->label('提供商')
+                    ->searchable()
+                    ->default('-'),
+
+                TextColumn::make('capabilities')
+                    ->label('能力')
+                    ->badge()
+                    ->formatStateUsing(function (?array $state): string {
+                        if (empty($state)) {
+                            return '-';
+                        }
                         $labels = [
                             'reasoning' => '推理',
                             'text' => '文本',
@@ -57,12 +53,18 @@ class ModelMappingsTable
                             'web_search' => '联网',
                         ];
 
-                        return collect($state)->map(fn ($cap) => $labels[$cap] ?? $cap)->implode(', ');
+                        return collect($state)
+                            ->map(fn ($item) => $labels[$item] ?? $item)
+                            ->join(', ');
                     })
-                    ->color(fn ($state) => empty($state) ? 'gray' : 'primary')
                     ->toggleable(),
 
-                IconColumn::make('enabled')
+                TextColumn::make('context_length')
+                    ->label('上下文长度')
+                    ->formatStateUsing(fn ($state) => $state ? number_format($state) : '-')
+                    ->sortable(),
+
+                IconColumn::make('is_enabled')
                     ->label('状态')
                     ->boolean()
                     ->trueIcon('heroicon-o-check-circle')
@@ -82,18 +84,8 @@ class ModelMappingsTable
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                TernaryFilter::make('enabled')
-                    ->label('启用状态')
-                    ->placeholder('全部')
-                    ->trueLabel('已启用')
-                    ->falseLabel('已禁用'),
-
-                SelectFilter::make('channel_id')
-                    ->label('默认渠道')
-                    ->relationship('channel', 'name')
-                    ->searchable()
-                    ->preload(),
+            ->headerActions([
+                CreateAction::make(),
             ])
             ->recordActions([
                 EditAction::make(),
@@ -104,6 +96,6 @@ class ModelMappingsTable
                     DeleteBulkAction::make(),
                 ]),
             ])
-            ->defaultSort('created_at', 'desc');
+            ->defaultSort('id', 'desc');
     }
 }

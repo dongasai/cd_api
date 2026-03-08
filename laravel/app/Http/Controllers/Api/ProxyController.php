@@ -53,26 +53,20 @@ class ProxyController extends Controller
         $apiKey = $request->attributes->get('api_key');
         $allowedModels = $apiKey?->allowed_models;
 
-        $query = \App\Models\ModelMapping::where('enabled', true)
-            ->with('channel');
+        $query = \App\Models\ModelList::where('is_enabled', true);
 
         if (! empty($allowedModels) && is_array($allowedModels)) {
-            $query->whereIn('alias', $allowedModels);
+            $query->whereIn('model_name', $allowedModels);
         }
 
-        $modelMappings = $query->get();
+        $modelLists = $query->get();
 
-        $data = $modelMappings->map(function ($mapping) {
-            $ownedBy = 'system';
-            if ($mapping->channel && $mapping->channel->provider) {
-                $ownedBy = $mapping->channel->provider;
-            }
-
+        $data = $modelLists->map(function ($modelList) {
             return [
-                'id' => $mapping->alias,
+                'id' => $modelList->model_name,
                 'object' => 'model',
-                'created' => $mapping->created_at?->timestamp ?? time(),
-                'owned_by' => $ownedBy,
+                'created' => $modelList->created_at?->timestamp ?? time(),
+                'owned_by' => $modelList->provider ?? 'system',
             ];
         })->values()->toArray();
 

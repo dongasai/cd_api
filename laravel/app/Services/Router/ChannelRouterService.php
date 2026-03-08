@@ -4,7 +4,6 @@ namespace App\Services\Router;
 
 use App\Models\Channel;
 use App\Models\ChannelGroup;
-use App\Models\ModelMapping;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -102,27 +101,7 @@ class ChannelRouterService
      */
     protected function getChannelIdsForModel(string $model): array
     {
-        // 查找指定了具体渠道的映射
-        $specificMappings = ModelMapping::where('alias', $model)
-            ->where('enabled', true)
-            ->whereNotNull('channel_id')
-            ->pluck('channel_id')
-            ->toArray();
-
-        if (! empty($specificMappings)) {
-            return $specificMappings;
-        }
-
-        // 查找未指定渠道的映射，获取实际的模型名称
-        $generalMapping = ModelMapping::where('alias', $model)
-            ->where('enabled', true)
-            ->whereNull('channel_id')
-            ->first();
-
-        $actualModel = $generalMapping?->actual_model ?? $model;
-
-        // 使用实际模型名称在所有渠道中查找
-        return \App\Models\ChannelModel::where('model_name', $actualModel)
+        return \App\Models\ChannelModel::where('model_name', $model)
             ->where('is_enabled', true)
             ->pluck('channel_id')
             ->toArray();
@@ -266,14 +245,6 @@ class ChannelRouterService
             }
         }
 
-        $mapping = ModelMapping::where('alias', $model)
-            ->where('enabled', true)
-            ->first();
-
-        if ($mapping) {
-            return $mapping->actual_model;
-        }
-
         return $model;
     }
 
@@ -383,7 +354,7 @@ class ChannelRouterService
         if ($model) {
             Cache::forget("channels:available:{$model}");
         } else {
-            $models = ModelMapping::distinct()->pluck('alias');
+            $models = \App\Models\ChannelModel::distinct()->pluck('model_name');
             foreach ($models as $model) {
                 Cache::forget("channels:available:{$model}");
             }

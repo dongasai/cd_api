@@ -48,7 +48,6 @@ class Channel extends Model
         'success_rate',
         'config',
         'forward_headers',
-        'model_mappings',
         'coding_account_id',
         'coding_status_override',
         'description',
@@ -63,7 +62,6 @@ class Channel extends Model
     {
         return [
             'models' => 'array',
-            'model_mappings' => 'array',
             'config' => 'array',
             'forward_headers' => 'array',
             'coding_status_override' => 'array',
@@ -260,27 +258,21 @@ class Channel extends Model
     }
 
     /**
-     * 获取模型映射（兼容旧数据）
+     * 获取模型映射
      *
      * @return array<string, string>
      */
     public function getModelMappingsArray(): array
     {
-        // 优先从新表获取
         $models = $this->enabledModels()->get();
-        if ($models->isNotEmpty()) {
-            $result = [];
-            foreach ($models as $model) {
-                if ($model->mapped_model) {
-                    $result[$model->model_name] = $model->mapped_model;
-                }
+        $result = [];
+        foreach ($models as $model) {
+            if ($model->mapped_model) {
+                $result[$model->model_name] = $model->mapped_model;
             }
-
-            return $result;
         }
 
-        // 兼容旧数据
-        return $this->model_mappings ?? [];
+        return $result;
     }
 
     /**
