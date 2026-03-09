@@ -116,6 +116,9 @@ class ProxyServer
 
             $this->updateRequestLogModel($requestLog, $standardRequest);
 
+            // 验证模型是否在允许的列表中
+            $this->validateModel($standardRequest->model, $request);
+
             // 应用 Key 级别的模型映射
             $apiKey = $request->attributes->get('api_key');
             if ($apiKey && method_exists($apiKey, 'resolveModel')) {
@@ -789,6 +792,45 @@ class ProxyServer
         }
 
         return 500;
+    }
+
+    /**
+     * 验证模型是否在允许的列表中
+     *
+     * @param  string  $model  模型名称
+     * @param  Request  $request  HTTP 请求
+     *
+     * @throws \InvalidArgumentException 当模型不在允许列表中时
+     */
+    protected function validateModel(string $model, Request $request): void
+    {
+        $apiKey = $request->attributes->get('api_key');
+
+        // 检查 API Key 的模型映射（别名）
+        if ($apiKey && ! empty($apiKey->model_mappings)) {
+            $mappings = $apiKey->model_mappings;
+            if (isset($mappings[$model])) {
+                return;
+            }
+        }
+
+        // 检查 API Key 的允许模型列表
+        if ($apiKey && ! empty($apiKey->allowed_models)) {
+            if (in_array($model, $apiKey->allowed_models, true)) {
+                return;
+            }
+
+            throw new \InvalidArgumentException("Model '{$model}' is not in the allowed models list for this API key");
+        }
+
+        // 检查全局模型列表
+        $exists = \App\Models\ModelList::where('model_name', $model)
+            ->where('is_enabled', true)
+            ->exists();
+
+        if (! $exists) {
+            throw new \InvalidArgumentException("Model '{$model}' is not available");
+        }
     }
 
     /**

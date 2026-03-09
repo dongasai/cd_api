@@ -76,12 +76,7 @@ class ChannelRouterService
             $channelIds = $this->getChannelIdsForModel($model);
 
             if (empty($channelIds)) {
-                return Channel::where('status', 'active')
-                    ->where('health_status', 'healthy')
-                    ->whereNotNull('api_key')
-                    ->orderBy('priority', 'desc')
-                    ->orderBy('weight', 'desc')
-                    ->get();
+                return collect();
             }
 
             return Channel::whereIn('id', $channelIds)

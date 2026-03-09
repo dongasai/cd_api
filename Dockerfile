@@ -1,16 +1,9 @@
-# MCP Tools 开发容器 - 基于 Apache + PHP 8.3
+# php容器 - 基于 Apache + PHP 8.3
 FROM php:8.3-apache
 
 # 设置工作目录
 WORKDIR /var/www/html
 
-#配置国内镜像加速器
-RUN echo "🔧 配置国内镜像加速器..." && \
-    # 替换 apt 源为阿里云镜像
-    sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
-    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
-    echo "✅ APT 源已切换为阿里云镜像"
-# 分多步骤进行，增强缓存，减少重复构建
 # 安装系统依赖 (仅必需的)
 RUN apt-get update
 RUN apt-get install -y \
@@ -92,7 +85,9 @@ RUN echo "🔧 安装 Node.js..." && \
     echo "✅ Node.js 安装完成" && \
     node --version && \
     npm --version
+
 USER php
 
+COPY laravel /var/www/html
 
 # 保持简洁，不运行杂七杂八的

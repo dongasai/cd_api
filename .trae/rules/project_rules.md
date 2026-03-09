@@ -123,6 +123,33 @@ cd laravel && php artisan serve
 5. **运行测试**: 确保所有测试通过
 6. **提交代码**: 不要提交敏感信息和配置
 
+## API 测试命令
+
+> **注意**: 服务器已启动，不需要重新启动。修改代码后 Laravel 会自动生效。
+
+### 测试 chat/completions 接口
+
+```bash
+# 测试 Step-3.5-Flash 模型 (50秒超时)
+curl -s --max-time 50 -X POST http://192.168.4.107:32126/api/openai/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-GVvku4fqCVnLVkvzEBj107iqNA2l8a9YpkDu7Agt54bferCX" \
+  -d '{
+    "model": "Step-3.5-Flash",
+    "messages": [
+      {"role": "system", "content": "你是一个有用的助手"},
+      {"role": "user", "content": "介绍自己"}
+    ]
+  }'
+```
+
+### 测试模型列表接口
+
+```bash
+curl -s http://192.168.4.107:32126/api/openai/v1/models \
+  -H "Authorization: Bearer sk-GVvku4fqCVnLVkvzEBj107iqNA2l8a9YpkDu7Agt54bferCX"
+```
+
 ## 注意事项
 
 - Filament 4 使用 Livewire 3,注意版本差异
