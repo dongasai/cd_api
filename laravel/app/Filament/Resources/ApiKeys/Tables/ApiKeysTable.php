@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ApiKeys\Tables;
 
 use App\Models\ApiKey;
+use App\Models\Channel;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -63,6 +64,32 @@ class ApiKeysTable
                     ->dateTime('Y-m-d H:i')
                     ->sortable()
                     ->formatStateUsing(fn ($state) => $state ? $state->format('Y-m-d H:i') : '从未使用'),
+
+                TextColumn::make('channel_restriction')
+                    ->label('渠道限制')
+                    ->formatStateUsing(function (ApiKey $record) {
+                        $whitelist = $record->getAllowedChannelIds();
+                        $blacklist = $record->getNotAllowedChannelIds();
+
+                        if (empty($whitelist) && empty($blacklist)) {
+                            return '无限制';
+                        }
+
+                        $parts = [];
+
+                        if (! empty($whitelist)) {
+                            $names = Channel::whereIn('id', $whitelist)->pluck('name')->join(', ');
+                            $parts[] = '白名单: '.$names;
+                        }
+
+                        if (! empty($blacklist)) {
+                            $names = Channel::whereIn('id', $blacklist)->pluck('name')->join(', ');
+                            $parts[] = '黑名单: '.$names;
+                        }
+
+                        return implode(' | ', $parts);
+                    })
+                    ->toggleable(),
 
                 TextColumn::make('created_at')
                     ->label('创建时间')

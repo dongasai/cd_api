@@ -3,6 +3,9 @@
 namespace App\Filament\Resources\SystemSettings\Tables;
 
 use App\Models\SystemSetting;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
 use Filament\Tables;
 use Filament\Tables\Table;
 
@@ -80,11 +83,13 @@ class SystemSettingsTable
                 Tables\Filters\TernaryFilter::make('is_public')
                     ->label('是否公开'),
             ])
-            ->actions([
-                Tables\Actions\EditAction::make(),
+            ->recordActions([
+                EditAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([]),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
             ])
             ->defaultSort('sort_order')
             ->reorderable('sort_order');

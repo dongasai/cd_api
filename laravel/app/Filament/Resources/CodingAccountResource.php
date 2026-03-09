@@ -5,15 +5,19 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\CodingAccountResource\Pages;
 use App\Models\CodingAccount;
 use App\Services\CodingStatus\CodingStatusDriverManager;
+use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\EditAction;
+use Filament\Actions\ViewAction;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Actions;
-use Filament\Schemas\Components\Form;
-use Filament\Schemas\Components\Group;
-use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\TextInput;
-use Filament\Schemas\Components\Select;
-use Filament\Schemas\Components\KeyValue;
 use Filament\Schemas\Components\DateTimePicker;
+use Filament\Schemas\Components\Form;
+use Filament\Schemas\Components\KeyValue;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Select;
+use Filament\Schemas\Components\TextInput;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -24,7 +28,7 @@ class CodingAccountResource extends Resource
 {
     protected static ?string $model = CodingAccount::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-credit-card';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-credit-card';
 
     protected static ?string $navigationLabel = 'Coding账户';
 
@@ -32,7 +36,7 @@ class CodingAccountResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Coding账户';
 
-    protected static string | \UnitEnum | null $navigationGroup = '渠道管理';
+    protected static string|\UnitEnum|null $navigationGroup = '渠道管理';
 
     public static function form(Schema $schema): Schema
     {
@@ -54,7 +58,7 @@ class CodingAccountResource extends Resource
                                 ->afterStateUpdated(function ($state, $set) {
                                     $manager = app(CodingStatusDriverManager::class);
                                     $recommendedDrivers = $manager->getRecommendedDriversForPlatform($state);
-                                    if (!empty($recommendedDrivers)) {
+                                    if (! empty($recommendedDrivers)) {
                                         $set('driver_class', $recommendedDrivers[0]);
                                     }
                                 }),
@@ -63,6 +67,7 @@ class CodingAccountResource extends Resource
                                 ->label('驱动类型')
                                 ->options(function () {
                                     $manager = app(CodingStatusDriverManager::class);
+
                                     return $manager->getDriverOptions();
                                 })
                                 ->required()
@@ -220,11 +225,12 @@ class CodingAccountResource extends Resource
                     ->label('驱动类型')
                     ->options(function () {
                         $manager = app(CodingStatusDriverManager::class);
+
                         return $manager->getDriverOptions();
                     }),
             ])
-            ->actions([
-                Tables\Actions\Action::make('sync')
+            ->recordActions([
+                Action::make('sync')
                     ->label('同步配额')
                     ->icon('heroicon-m-arrow-path')
                     ->color('primary')
@@ -237,11 +243,11 @@ class CodingAccountResource extends Resource
 
                             return redirect()->back()->with('success', '配额同步成功');
                         } catch (\Exception $e) {
-                            return redirect()->back()->with('error', '同步失败: ' . $e->getMessage());
+                            return redirect()->back()->with('error', '同步失败: '.$e->getMessage());
                         }
                     }),
 
-                Tables\Actions\Action::make('validate')
+                Action::make('validate')
                     ->label('验证凭证')
                     ->icon('heroicon-m-shield-check')
                     ->color('success')
@@ -257,13 +263,13 @@ class CodingAccountResource extends Resource
                         }
                     }),
 
-                Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                ViewAction::make(),
+                EditAction::make(),
+                DeleteAction::make(),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+            ->toolbarActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
                 ]),
             ]);
     }

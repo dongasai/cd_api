@@ -14,7 +14,7 @@ class CodingAccountResource extends Resource
 {
     protected static ?string $model = CodingAccount::class;
 
-    protected static string | BackedEnum | null $navigationIcon = 'heroicon-o-credit-card';
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-credit-card';
 
     protected static ?string $navigationLabel = 'Coding账户';
 
@@ -22,7 +22,7 @@ class CodingAccountResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Coding账户';
 
-    protected static string | \UnitEnum | null $navigationGroup = '渠道管理';
+    protected static string|\UnitEnum|null $navigationGroup = '渠道管理';
 
     protected static ?int $navigationSort = 5;
 
@@ -39,7 +39,7 @@ class CodingAccountResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            RelationManagers\ChannelsRelationManager::class,
         ];
     }
 

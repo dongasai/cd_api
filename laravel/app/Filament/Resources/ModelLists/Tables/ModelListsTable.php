@@ -38,10 +38,12 @@ class ModelListsTable
 
                 TextColumn::make('capabilities')
                     ->label('能力')
-                    ->badge()
-                    ->formatStateUsing(function (?array $state): string {
+                    ->formatStateUsing(function ($state): array {
                         if (empty($state)) {
-                            return '-';
+                            return [];
+                        }
+                        if (is_string($state)) {
+                            $state = json_decode($state, true) ?? [];
                         }
                         $labels = [
                             'reasoning' => '推理',
@@ -55,8 +57,11 @@ class ModelListsTable
 
                         return collect($state)
                             ->map(fn ($item) => $labels[$item] ?? $item)
-                            ->join(', ');
+                            ->values()
+                            ->all();
                     })
+                    ->badge()
+                    ->listWithLineBreaks()
                     ->toggleable(),
 
                 TextColumn::make('context_length')

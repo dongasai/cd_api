@@ -6,9 +6,10 @@ use App\Filament\Resources\CodingAccounts\CodingAccountResource;
 use App\Services\CodingStatus\CodingStatusDriverManager;
 use Filament\Actions;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Notifications\Notification;
+use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Resources\Pages\ViewRecord;
 
 class ViewCodingAccount extends ViewRecord
 {
@@ -71,6 +72,7 @@ class ViewCodingAccount extends ViewRecord
                                 if (is_array($state)) {
                                     return json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
                                 }
+
                                 return $state;
                             })
                             ->prose()
@@ -83,6 +85,7 @@ class ViewCodingAccount extends ViewRecord
                                 if (is_array($state)) {
                                     return json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
                                 }
+
                                 return $state ?? '无缓存数据';
                             })
                             ->prose()
@@ -141,10 +144,16 @@ class ViewCodingAccount extends ViewRecord
                         $driver = $manager->driverForAccount($this->record);
                         $driver->sync();
 
-                        $this->notify('success', '配额同步成功');
+                        Notification::make()
+                            ->title('配额同步成功')
+                            ->success()
+                            ->send();
                         $this->redirect($this->getResource()::getUrl('view', ['record' => $this->record]));
                     } catch (\Exception $e) {
-                        $this->notify('danger', '同步失败: ' . $e->getMessage());
+                        Notification::make()
+                            ->title('同步失败: '.$e->getMessage())
+                            ->danger()
+                            ->send();
                     }
                 }),
 

@@ -10,6 +10,7 @@ use App\Services\CodingStatus\Drivers\RequestCodingStatusDriver;
 use App\Services\CodingStatus\Drivers\SlidingRequestCodingStatusDriver;
 use App\Services\CodingStatus\Drivers\SlidingTokenCodingStatusDriver;
 use App\Services\CodingStatus\Drivers\TokenCodingStatusDriver;
+use Illuminate\Contracts\Container\Container;
 use InvalidArgumentException;
 
 /**
@@ -40,6 +41,8 @@ class CodingStatusDriverManager
      */
     protected array $instances = [];
 
+    public function __construct(protected Container $container) {}
+
     /**
      * 获取驱动实例
      */
@@ -60,8 +63,8 @@ class CodingStatusDriverManager
             throw new InvalidArgumentException("驱动类必须实现 CodingStatusDriver 接口: {$driverClass}");
         }
 
-        // 创建实例
-        $instance = new $driverClass;
+        // 使用容器创建实例，自动解析依赖
+        $instance = $this->container->make($driverClass);
 
         // 如果提供了账户，设置账户
         if ($account !== null) {
@@ -90,7 +93,7 @@ class CodingStatusDriverManager
 
         foreach ($this->drivers as $name => $class) {
             /** @var CodingStatusDriver $instance */
-            $instance = new $class;
+            $instance = $this->container->make($class);
             $result[$name] = [
                 'name' => $instance->getName(),
                 'class' => $class,

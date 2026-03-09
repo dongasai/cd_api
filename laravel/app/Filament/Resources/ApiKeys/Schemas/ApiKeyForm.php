@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ApiKeys\Schemas;
 
+use App\Models\Channel;
 use App\Models\ModelList;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\DateTimePicker;
@@ -89,6 +90,27 @@ class ApiKeyForm
                             ->valueLabel('实际模型')
                             ->addActionLabel('添加映射')
                             ->helperText('配置模型别名映射，例如: cd-coding-latest => gpt-4o。客户端使用别名请求时，系统会自动映射到实际模型。')
+                            ->columnSpanFull(),
+                    ]),
+
+                Section::make('渠道限制')
+                    ->schema([
+                        CheckboxList::make('allowed_channels')
+                            ->label('允许的渠道 (白名单)')
+                            ->options(Channel::where('status', 'active')->pluck('name', 'id'))
+                            ->searchable()
+                            ->bulkToggleable()
+                            ->columns(2)
+                            ->helperText('留空表示不限制。设置后，此 Key 只能使用选中的渠道。')
+                            ->columnSpanFull(),
+
+                        CheckboxList::make('not_allowed_channels')
+                            ->label('禁止的渠道 (黑名单)')
+                            ->options(Channel::where('status', 'active')->pluck('name', 'id'))
+                            ->searchable()
+                            ->bulkToggleable()
+                            ->columns(2)
+                            ->helperText('设置后，此 Key 不能使用选中的渠道。黑名单优先级高于白名单。')
                             ->columnSpanFull(),
                     ]),
 
