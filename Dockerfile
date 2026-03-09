@@ -34,7 +34,8 @@ RUN docker-php-ext-install \
     zip \
     sockets \
     zip \
-    intl
+    intl \
+    opcache
 
 # 复制自定义 PHP 配置
 COPY docker/php.ini /usr/local/etc/php/conf.d/custom.ini
