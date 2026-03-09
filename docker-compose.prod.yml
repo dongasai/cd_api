@@ -1,11 +1,12 @@
 version: '3.8'
 
+name: cdapi-prod
+
 services:
   app:
-    container_name: laravel_module_all
+    container_name: cd_api
     image: ghcr.io/dongasai/cd_api:latest
     restart: unless-stopped
-    working_dir: /www/var/html
     # command: composer run devd
     volumes:
       - .:/www/var/html
