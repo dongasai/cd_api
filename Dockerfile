@@ -19,7 +19,8 @@ RUN apt-get install -y \
     libsqlite3-dev \
     libzip-dev \
     libicu-dev \
-    icu-devtools
+    icu-devtools \
+    supervisor
 
 # 安装 PHP 扩展 (仅必需的)
 RUN docker-php-ext-install \
@@ -91,4 +92,12 @@ USER php
 
 COPY laravel /var/www/html
 
-# 保持简洁，不运行杂七杂八的
+# 复制 supervisor 配置
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# 创建 supervisor 日志目录
+USER root
+RUN mkdir -p /var/log/supervisor
+
+# 启动 supervisor
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

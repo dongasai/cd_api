@@ -2,10 +2,8 @@ version: '3.8'
 
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: laravel_module_all
+    image: ghcr.io/dongasai/cd_api:latest
     restart: unless-stopped
     working_dir: /www/var/html
     # command: composer run devd
