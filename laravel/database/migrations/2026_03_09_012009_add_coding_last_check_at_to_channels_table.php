@@ -6,20 +6,17 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::table('channels', function (Blueprint $table) {
-            $table->string('default_model', 100)->nullable()->after('models')->comment('默认模型(用于测试)');
+            $table->timestamp('coding_last_check_at')->nullable()->after('coding_status_override');
         });
     }
 
     public function down(): void
     {
         Schema::table('channels', function (Blueprint $table) {
-            $table->dropColumn('default_model');
+            $table->dropColumn('coding_last_check_at');
         });
     }
 };

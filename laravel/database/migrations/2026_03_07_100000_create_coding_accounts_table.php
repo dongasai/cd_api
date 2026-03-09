@@ -54,9 +54,6 @@ return new class extends Migration
             $table->index('last_sync_at', 'idx_sync');
             $table->index('expires_at', 'idx_expires');
         });
-
-        // 添加表注释
-        DB::statement("ALTER TABLE coding_accounts COMMENT='Coding 账户表'");
     }
 
     /**

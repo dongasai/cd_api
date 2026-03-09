@@ -32,9 +32,9 @@ return new class extends Migration
             $table->timestamp('created_at')->useCurrent();
 
             // 索引和外键
-            $table->index(['account_id', 'created_at'], 'idx_account_created');
-            $table->index(['channel_id', 'created_at'], 'idx_channel_created');
-            $table->index(['from_status', 'to_status'], 'idx_status_change');
+            $table->index(['account_id', 'created_at'], 'idx_status_logs_account_created');
+            $table->index(['channel_id', 'created_at'], 'idx_status_logs_channel_created');
+            $table->index(['from_status', 'to_status'], 'idx_status_logs_status_change');
 
             $table->foreign('account_id')
                 ->references('id')
@@ -45,8 +45,6 @@ return new class extends Migration
                 ->on('channels')
                 ->onDelete('set null');
         });
-
-        DB::statement("ALTER TABLE coding_status_logs COMMENT='Coding状态变更日志表'");
     }
 
     /**

@@ -18,6 +18,7 @@ return new class extends Migration
             $table->text('description')->nullable()->comment('分组描述');
             $table->json('config')->nullable()->comment('分组配置');
             $table->timestamps();
+            $table->softDeletes();
 
             $table->index('slug');
         });
@@ -26,6 +27,9 @@ return new class extends Migration
             $table->unsignedBigInteger('channel_id');
             $table->unsignedBigInteger('group_id');
             $table->unsignedInteger('priority')->default(1)->comment('组内优先级');
+            $table->timestamp('created_at')->nullable();
+            $table->timestamp('updated_at')->nullable();
+            $table->softDeletes();
 
             $table->primary(['channel_id', 'group_id']);
         });

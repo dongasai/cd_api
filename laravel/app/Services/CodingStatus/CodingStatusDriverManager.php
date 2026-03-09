@@ -7,6 +7,8 @@ use App\Services\CodingStatus\Drivers\CodingStatusDriver;
 use App\Services\CodingStatus\Drivers\GLMCodingStatusDriver;
 use App\Services\CodingStatus\Drivers\PromptCodingStatusDriver;
 use App\Services\CodingStatus\Drivers\RequestCodingStatusDriver;
+use App\Services\CodingStatus\Drivers\SlidingRequestCodingStatusDriver;
+use App\Services\CodingStatus\Drivers\SlidingTokenCodingStatusDriver;
 use App\Services\CodingStatus\Drivers\TokenCodingStatusDriver;
 use InvalidArgumentException;
 
@@ -27,6 +29,8 @@ class CodingStatusDriverManager
         'RequestCodingStatus' => RequestCodingStatusDriver::class,
         'PromptCodingStatus' => PromptCodingStatusDriver::class,
         'GLMCodingStatus' => GLMCodingStatusDriver::class,
+        'SlidingTokenCodingStatus' => SlidingTokenCodingStatusDriver::class,
+        'SlidingRequestCodingStatus' => SlidingRequestCodingStatusDriver::class,
     ];
 
     /**
@@ -47,17 +51,17 @@ class CodingStatusDriverManager
         }
 
         // 检查驱动类是否存在
-        if (!class_exists($driverClass)) {
+        if (! class_exists($driverClass)) {
             throw new InvalidArgumentException("驱动类不存在: {$driverClass}");
         }
 
         // 检查是否实现了接口
-        if (!in_array(CodingStatusDriver::class, class_implements($driverClass), true)) {
+        if (! in_array(CodingStatusDriver::class, class_implements($driverClass), true)) {
             throw new InvalidArgumentException("驱动类必须实现 CodingStatusDriver 接口: {$driverClass}");
         }
 
         // 创建实例
-        $instance = new $driverClass();
+        $instance = new $driverClass;
 
         // 如果提供了账户，设置账户
         if ($account !== null) {
@@ -86,7 +90,7 @@ class CodingStatusDriverManager
 
         foreach ($this->drivers as $name => $class) {
             /** @var CodingStatusDriver $instance */
-            $instance = new $class();
+            $instance = new $class;
             $result[$name] = [
                 'name' => $instance->getName(),
                 'class' => $class,
@@ -108,7 +112,7 @@ class CodingStatusDriverManager
         $options = [];
 
         foreach ($this->getAvailableDrivers() as $name => $info) {
-            $options[$name] = $info['name'] . ' - ' . $info['description'];
+            $options[$name] = $info['name'].' - '.$info['description'];
         }
 
         return $options;
@@ -117,15 +121,15 @@ class CodingStatusDriverManager
     /**
      * 注册新驱动
      *
-     * @param class-string<CodingStatusDriver> $driverClass
+     * @param  class-string<CodingStatusDriver>  $driverClass
      */
     public function registerDriver(string $name, string $driverClass): self
     {
-        if (!class_exists($driverClass)) {
+        if (! class_exists($driverClass)) {
             throw new InvalidArgumentException("驱动类不存在: {$driverClass}");
         }
 
-        if (!in_array(CodingStatusDriver::class, class_implements($driverClass), true)) {
+        if (! in_array(CodingStatusDriver::class, class_implements($driverClass), true)) {
             throw new InvalidArgumentException("驱动类必须实现 CodingStatusDriver 接口: {$driverClass}");
         }
 
@@ -158,12 +162,13 @@ class CodingStatusDriverManager
     public function getRecommendedDriversForPlatform(string $platform): array
     {
         return match ($platform) {
-            CodingAccount::PLATFORM_ALIYUN => ['RequestCodingStatus', 'TokenCodingStatus'],
-            CodingAccount::PLATFORM_VOLCANO => ['RequestCodingStatus'],
+            CodingAccount::PLATFORM_ALIYUN => ['RequestCodingStatus', 'SlidingRequestCodingStatus', 'TokenCodingStatus'],
+            CodingAccount::PLATFORM_VOLCANO => ['RequestCodingStatus', 'SlidingRequestCodingStatus'],
             CodingAccount::PLATFORM_ZHIPU => ['PromptCodingStatus', 'GLMCodingStatus'],
-            CodingAccount::PLATFORM_GITHUB => ['RequestCodingStatus'],
-            CodingAccount::PLATFORM_CURSOR => ['RequestCodingStatus'],
-            default => ['TokenCodingStatus'],
+            CodingAccount::PLATFORM_GITHUB => ['RequestCodingStatus', 'SlidingRequestCodingStatus'],
+            CodingAccount::PLATFORM_CURSOR => ['RequestCodingStatus', 'SlidingRequestCodingStatus'],
+            CodingAccount::PLATFORM_INFINI => ['SlidingRequestCodingStatus', 'SlidingTokenCodingStatus', 'RequestCodingStatus'],
+            default => ['TokenCodingStatus', 'SlidingTokenCodingStatus'],
         };
     }
 
@@ -175,6 +180,7 @@ class CodingStatusDriverManager
     public function getDefaultConfig(string $driverClass): array
     {
         $driver = $this->driver($driverClass);
+
         return $driver->getDefaultQuotaConfig();
     }
 
@@ -186,6 +192,7 @@ class CodingStatusDriverManager
     public function getConfigFields(string $driverClass): array
     {
         $driver = $this->driver($driverClass);
+
         return $driver->getConfigFields();
     }
 }

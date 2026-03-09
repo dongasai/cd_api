@@ -43,7 +43,7 @@ interface CodingStatusDriver
     /**
      * 检查配额是否充足
      *
-     * @param array<string, mixed> $context 检查上下文 (model, tokens, requests等)
+     * @param  array<string, mixed>  $context  检查上下文 (model, tokens, requests等)
      * @return array<string, mixed> 检查结果
      */
     public function checkQuota(array $context): array;
@@ -51,7 +51,7 @@ interface CodingStatusDriver
     /**
      * 消耗配额
      *
-     * @param array<string, mixed> $usage 使用量 (tokens, requests, prompts等)
+     * @param  array<string, mixed>  $usage  使用量 (tokens, requests, prompts等)
      */
     public function consume(array $usage): void;
 
@@ -106,4 +106,15 @@ interface CodingStatusDriver
      * @return array<string, mixed>
      */
     public function getDefaultQuotaConfig(): array;
+
+    /**
+     * 获取检查间隔（秒）
+     *
+     * 用于定时任务决定检查频率，不同驱动类型有不同的推荐间隔
+     * 滑动窗口驱动：较长间隔（如300秒），因为配额持续变化
+     * 固定周期驱动：较短间隔（如60秒），需要在周期重置时及时检查
+     *
+     * @return int 检查间隔秒数
+     */
+    public function getCheckInterval(): int;
 }

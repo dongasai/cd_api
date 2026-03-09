@@ -8,7 +8,8 @@ use Illuminate\Console\Command;
 /**
  * 检查渠道Coding状态定时任务
  *
- * 每分钟执行一次，检查所有绑定Coding账户的渠道状态
+ * 检查所有绑定Coding账户的渠道状态，触发启用/禁用操作
+ * 检查间隔由各驱动的 check_interval 配置决定
  */
 class CheckChannelCodingStatus extends Command
 {
@@ -43,8 +44,9 @@ class CheckChannelCodingStatus extends Command
         // 如果指定了渠道ID
         if ($this->option('channel')) {
             $channel = \App\Models\Channel::find($this->option('channel'));
-            if (!$channel) {
+            if (! $channel) {
                 $this->error('渠道不存在');
+
                 return self::FAILURE;
             }
 

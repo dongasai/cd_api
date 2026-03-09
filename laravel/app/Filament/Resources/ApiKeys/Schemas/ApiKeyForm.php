@@ -81,6 +81,17 @@ class ApiKeyForm
                             ->columnSpanFull(),
                     ]),
 
+                Section::make('模型映射配置')
+                    ->schema([
+                        KeyValue::make('model_mappings')
+                            ->label('模型映射')
+                            ->keyLabel('别名模型')
+                            ->valueLabel('实际模型')
+                            ->addActionLabel('添加映射')
+                            ->helperText('配置模型别名映射，例如: cd-coding-latest => gpt-4o。客户端使用别名请求时，系统会自动映射到实际模型。')
+                            ->columnSpanFull(),
+                    ]),
+
                 Section::make('限流配置')
                     ->schema([
                         KeyValue::make('rate_limit')

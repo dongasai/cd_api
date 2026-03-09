@@ -19,6 +19,7 @@ class ApiKey extends Model
         'key_prefix',
         'permissions',
         'allowed_models',
+        'model_mappings',
         'rate_limit',
         'expires_at',
         'last_used_at',
@@ -30,6 +31,7 @@ class ApiKey extends Model
         return [
             'permissions' => 'array',
             'allowed_models' => 'array',
+            'model_mappings' => 'array',
             'rate_limit' => 'array',
             'expires_at' => 'datetime',
             'last_used_at' => 'datetime',
@@ -64,6 +66,27 @@ class ApiKey extends Model
             return '未设置';
         }
 
-        return $this->key_prefix . '...';
+        return $this->key_prefix.'...';
+    }
+
+    /**
+     * 获取模型映射配置
+     */
+    public function getModelMappings(): array
+    {
+        return $this->model_mappings ?? [];
+    }
+
+    /**
+     * 解析模型名称，如果映射存在则返回映射后的模型
+     *
+     * @param  string  $model  原始模型名称
+     * @return string 映射后的模型名称
+     */
+    public function resolveModel(string $model): string
+    {
+        $mappings = $this->getModelMappings();
+
+        return $mappings[$model] ?? $model;
     }
 }

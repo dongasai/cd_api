@@ -53,8 +53,6 @@ return new class extends Migration
                 ->on('channels')
                 ->onDelete('set null');
         });
-
-        DB::statement("ALTER TABLE coding_usage_logs COMMENT='Coding配额使用记录表'");
     }
 
     /**

@@ -16,7 +16,8 @@ return new class extends Migration
             $table->string('name', 100)->unique()->comment('标签名称');
             $table->string('color', 7)->default('#666666')->comment('标签颜色');
             $table->string('description', 255)->nullable()->comment('标签描述');
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamps();
+            $table->softDeletes();
 
             $table->index('name');
         });
@@ -24,6 +25,9 @@ return new class extends Migration
         Schema::create('channel_tag_pivot', function (Blueprint $table) {
             $table->unsignedBigInteger('channel_id');
             $table->unsignedBigInteger('tag_id');
+            $table->timestamp('created_at')->nullable();
+            $table->timestamp('updated_at')->nullable();
+            $table->softDeletes();
 
             $table->primary(['channel_id', 'tag_id']);
         });

@@ -5,7 +5,6 @@ namespace App\Services\CodingStatus;
 use App\Models\Channel;
 use App\Models\CodingAccount;
 use App\Models\CodingStatusLog;
-use App\Services\CodingStatus\Drivers\CodingStatusDriver;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -29,7 +28,7 @@ class ChannelCodingStatusService
      */
     public function checkAndUpdateChannel(Channel $channel): array
     {
-        if (!$channel->hasCodingAccount()) {
+        if (! $channel->hasCodingAccount()) {
             return [
                 'updated' => false,
                 'message' => '渠道未绑定Coding账户',
@@ -37,7 +36,7 @@ class ChannelCodingStatusService
         }
 
         $account = $channel->codingAccount;
-        if (!$account) {
+        if (! $account) {
             return [
                 'updated' => false,
                 'message' => 'Coding账户不存在',
@@ -67,7 +66,7 @@ class ChannelCodingStatusService
         }
 
         // 检查是否需要启用
-        if (!$channel->isActive() && $driver->shouldEnable()) {
+        if (! $channel->isActive() && $driver->shouldEnable()) {
             if ($channel->allowsAutoEnable()) {
                 $this->enableChannel($channel, $account, '配额恢复');
                 $result['updated'] = true;
@@ -128,7 +127,7 @@ class ChannelCodingStatusService
      */
     public function manualDisableChannel(Channel $channel, ?int $userId = null, ?string $reason = null): array
     {
-        if (!$channel->hasCodingAccount()) {
+        if (! $channel->hasCodingAccount()) {
             return [
                 'success' => false,
                 'message' => '渠道未绑定Coding账户',
@@ -136,7 +135,7 @@ class ChannelCodingStatusService
         }
 
         $account = $channel->codingAccount;
-        if (!$account) {
+        if (! $account) {
             return [
                 'success' => false,
                 'message' => 'Coding账户不存在',
@@ -170,7 +169,7 @@ class ChannelCodingStatusService
      */
     public function manualEnableChannel(Channel $channel, ?int $userId = null, ?string $reason = null): array
     {
-        if (!$channel->hasCodingAccount()) {
+        if (! $channel->hasCodingAccount()) {
             return [
                 'success' => false,
                 'message' => '渠道未绑定Coding账户',
@@ -178,7 +177,7 @@ class ChannelCodingStatusService
         }
 
         $account = $channel->codingAccount;
-        if (!$account) {
+        if (! $account) {
             return [
                 'success' => false,
                 'message' => 'Coding账户不存在',
@@ -227,7 +226,7 @@ class ChannelCodingStatusService
      */
     public function checkRequestAllowed(Channel $channel, array $context): array
     {
-        if (!$channel->hasCodingAccount()) {
+        if (! $channel->hasCodingAccount()) {
             return [
                 'allowed' => true,
                 'message' => '渠道未绑定Coding账户，直接放行',
@@ -235,7 +234,7 @@ class ChannelCodingStatusService
         }
 
         $account = $channel->codingAccount;
-        if (!$account) {
+        if (! $account) {
             return [
                 'allowed' => false,
                 'message' => 'Coding账户不存在',
@@ -280,10 +279,10 @@ class ChannelCodingStatusService
         $driver = $this->driverManager->driverForAccount($account);
         $quotaCheck = $driver->checkQuota($context);
 
-        if (!$quotaCheck['sufficient']) {
+        if (! $quotaCheck['sufficient']) {
             return [
                 'allowed' => false,
-                'message' => '配额不足: ' . implode(', ', $quotaCheck['insufficient_metrics']),
+                'message' => '配额不足: '.implode(', ', $quotaCheck['insufficient_metrics']),
                 'code' => 'QUOTA_INSUFFICIENT',
                 'details' => $quotaCheck,
             ];
@@ -303,12 +302,12 @@ class ChannelCodingStatusService
      */
     public function recordUsage(Channel $channel, array $usage): void
     {
-        if (!$channel->hasCodingAccount()) {
+        if (! $channel->hasCodingAccount()) {
             return;
         }
 
         $account = $channel->codingAccount;
-        if (!$account) {
+        if (! $account) {
             return;
         }
 
@@ -328,7 +327,7 @@ class ChannelCodingStatusService
      */
     public function getChannelCodingStatus(Channel $channel): array
     {
-        if (!$channel->hasCodingAccount()) {
+        if (! $channel->hasCodingAccount()) {
             return [
                 'has_coding_account' => false,
                 'message' => '渠道未绑定Coding账户',
@@ -336,7 +335,7 @@ class ChannelCodingStatusService
         }
 
         $account = $channel->codingAccount;
-        if (!$account) {
+        if (! $account) {
             return [
                 'has_coding_account' => false,
                 'message' => 'Coding账户不存在',
@@ -401,6 +400,8 @@ class ChannelCodingStatusService
     /**
      * 批量检查并更新所有渠道状态
      *
+     * 根据各驱动的 check_interval 配置决定是否需要检查
+     *
      * @return array<string, mixed>
      */
     public function batchCheckAndUpdate(): array
@@ -410,7 +411,7 @@ class ChannelCodingStatusService
 
         foreach ($channels as $channel) {
             try {
-                $result = $this->checkAndUpdateChannel($channel);
+                $result = $this->checkChannelIfNeeded($channel);
                 $results[$channel->id] = $result;
             } catch (\Exception $e) {
                 Log::error('检查渠道状态失败', [
@@ -428,5 +429,49 @@ class ChannelCodingStatusService
             'total' => $channels->count(),
             'results' => $results,
         ];
+    }
+
+    /**
+     * 检查渠道是否需要检查（根据驱动的检查间隔）
+     */
+    protected function checkChannelIfNeeded(Channel $channel): array
+    {
+        if (! $channel->hasCodingAccount()) {
+            return [
+                'updated' => false,
+                'message' => '渠道未绑定Coding账户',
+            ];
+        }
+
+        $account = $channel->codingAccount;
+        if (! $account) {
+            return [
+                'updated' => false,
+                'message' => 'Coding账户不存在',
+            ];
+        }
+
+        $driver = $this->driverManager->driverForAccount($account);
+        $checkInterval = $driver->getCheckInterval();
+
+        $lastCheckAt = $channel->coding_last_check_at ?? null;
+
+        if ($lastCheckAt) {
+            $nextCheckAt = \Carbon\Carbon::parse($lastCheckAt)->addSeconds($checkInterval);
+            if (now()->lt($nextCheckAt)) {
+                return [
+                    'updated' => false,
+                    'message' => "距下次检查还有 {$nextCheckAt->diffInSeconds(now())} 秒",
+                    'check_interval' => $checkInterval,
+                    'next_check_at' => $nextCheckAt->toDateTimeString(),
+                ];
+            }
+        }
+
+        $result = $this->checkAndUpdateChannel($channel);
+
+        $channel->update(['coding_last_check_at' => now()]);
+
+        return $result;
     }
 }

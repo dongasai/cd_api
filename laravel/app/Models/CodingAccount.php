@@ -14,21 +14,34 @@ class CodingAccount extends Model
      * 状态常量
      */
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_WARNING = 'warning';
+
     public const STATUS_CRITICAL = 'critical';
+
     public const STATUS_EXHAUSTED = 'exhausted';
+
     public const STATUS_EXPIRED = 'expired';
+
     public const STATUS_SUSPENDED = 'suspended';
+
     public const STATUS_ERROR = 'error';
 
     /**
      * 平台类型常量
      */
     public const PLATFORM_ALIYUN = 'aliyun';
+
     public const PLATFORM_VOLCANO = 'volcano';
+
     public const PLATFORM_ZHIPU = 'zhipu';
+
     public const PLATFORM_GITHUB = 'github';
+
     public const PLATFORM_CURSOR = 'cursor';
+
+    public const PLATFORM_INFINI = 'infini';
+
     public const PLATFORM_CUSTOM = 'custom';
 
     /**
@@ -166,6 +179,7 @@ class CodingAccount extends Model
             self::PLATFORM_ZHIPU => '智谱GLM',
             self::PLATFORM_GITHUB => 'GitHub',
             self::PLATFORM_CURSOR => 'Cursor',
+            self::PLATFORM_INFINI => '无问芯穹',
             self::PLATFORM_CUSTOM => '自定义',
         ];
     }

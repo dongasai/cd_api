@@ -23,6 +23,7 @@ return new class extends Migration
             $table->timestamp('last_used_at')->nullable()->comment('最后使用时间');
             $table->enum('status', ['active', 'revoked', 'expired'])->default('active')->comment('状态');
             $table->timestamps();
+            $table->softDeletes();
 
             $table->index('key_prefix');
         });

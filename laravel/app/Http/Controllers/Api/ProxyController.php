@@ -52,6 +52,7 @@ class ProxyController extends Controller
     {
         $apiKey = $request->attributes->get('api_key');
         $allowedModels = $apiKey?->allowed_models;
+        $modelMappings = $apiKey?->model_mappings ?? [];
 
         $query = \App\Models\ModelList::where('is_enabled', true);
 
@@ -69,6 +70,18 @@ class ProxyController extends Controller
                 'owned_by' => $modelList->provider ?? 'system',
             ];
         })->values()->toArray();
+
+        // 添加映射的模型别名
+        if (! empty($modelMappings)) {
+            foreach ($modelMappings as $alias => $actualModel) {
+                $data[] = [
+                    'id' => $alias,
+                    'object' => 'model',
+                    'created' => time(),
+                    'owned_by' => 'cdapi',
+                ];
+            }
+        }
 
         return response()->json([
             'object' => 'list',

@@ -116,6 +116,12 @@ class ProxyServer
 
             $this->updateRequestLogModel($requestLog, $standardRequest);
 
+            // 应用 Key 级别的模型映射
+            $apiKey = $request->attributes->get('api_key');
+            if ($apiKey && method_exists($apiKey, 'resolveModel')) {
+                $standardRequest->model = $apiKey->resolveModel($standardRequest->model);
+            }
+
             // 选择渠道
             $this->selectedChannel = $this->channelRouter->selectChannel($standardRequest->model);
 

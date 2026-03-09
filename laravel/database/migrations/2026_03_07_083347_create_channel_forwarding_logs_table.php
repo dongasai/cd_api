@@ -49,7 +49,7 @@ return new class extends Migration
             // 时间记录
             $table->timestamp('started_at', 3)->nullable()->comment('转发开始时间');
             $table->timestamp('ended_at', 3)->nullable()->comment('转发结束时间');
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamps();
 
             // 索引
             $table->index('audit_log_id');

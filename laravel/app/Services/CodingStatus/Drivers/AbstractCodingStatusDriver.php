@@ -5,7 +5,6 @@ namespace App\Services\CodingStatus\Drivers;
 use App\Models\CodingAccount;
 use App\Models\CodingUsageLog;
 use App\Models\ModelMultiplier;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Redis;
 
 /**
@@ -23,6 +22,7 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
     public function setAccount(CodingAccount $account): self
     {
         $this->account = $account;
+
         return $this;
     }
 
@@ -40,7 +40,8 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
     protected function getUsageKey(string $metric): string
     {
         $period = $this->getCurrentPeriodKey();
-        return $this->getRedisKeyPrefix() . "usage:{$metric}:{$period}";
+
+        return $this->getRedisKeyPrefix()."usage:{$metric}:{$period}";
     }
 
     /**
@@ -49,6 +50,7 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
     protected function getCurrentPeriodKey(): string
     {
         $periodInfo = $this->getPeriodInfo();
+
         return $periodInfo['key'] ?? date('Y-m-d');
     }
 
@@ -66,6 +68,7 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
     protected function getThresholds(): array
     {
         $config = $this->getQuotaConfig();
+
         return $config['thresholds'] ?? [
             'warning' => 0.80,
             'critical' => 0.90,
@@ -79,6 +82,7 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
     protected function getLimits(): array
     {
         $config = $this->getQuotaConfig();
+
         return $config['limits'] ?? [];
     }
 
@@ -88,6 +92,7 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
     protected function getCycle(): string
     {
         $config = $this->getQuotaConfig();
+
         return $config['cycle'] ?? 'monthly';
     }
 
@@ -97,6 +102,7 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
     protected function getCurrentUsage(string $metric): int
     {
         $key = $this->getUsageKey($metric);
+
         return (int) Redis::get($key) ?: 0;
     }
 
@@ -164,6 +170,7 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
     public function shouldDisable(): bool
     {
         $status = $this->getStatus();
+
         return in_array($status['status'], [
             CodingAccount::STATUS_EXHAUSTED,
             CodingAccount::STATUS_EXPIRED,
@@ -264,7 +271,7 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
 
         return [
             'type' => '5h',
-            'key' => $now->format('Y-m-d') . '-' . $periodIndex,
+            'key' => $now->format('Y-m-d').'-'.$periodIndex,
             'starts_at' => $periodStart,
             'ends_at' => $periodEnd,
             'next_reset' => $periodEnd,
@@ -381,6 +388,18 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
             'cycle' => 'monthly',
             'reset_day' => 1,
         ];
+    }
+
+    /**
+     * 获取检查间隔（秒）
+     *
+     * 固定周期驱动默认60秒检查一次
+     */
+    public function getCheckInterval(): int
+    {
+        $config = $this->getQuotaConfig();
+
+        return $config['check_interval'] ?? 60;
     }
 
     /**

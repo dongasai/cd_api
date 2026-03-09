@@ -43,6 +43,7 @@ return new class extends Migration
             $table->text('description')->nullable()->comment('配置描述');
             $table->boolean('is_default')->default(false)->comment('是否默认配置');
             $table->timestamps();
+            $table->softDeletes();
 
             // 索引
             $table->index(['scope', 'scope_id']);

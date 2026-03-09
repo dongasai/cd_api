@@ -68,7 +68,7 @@ return new class extends Migration
 
             // 扩展信息
             $table->json('metadata')->nullable()->comment('额外元数据');
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamps();
 
             // 索引
             $table->index(['user_id', 'created_at']);

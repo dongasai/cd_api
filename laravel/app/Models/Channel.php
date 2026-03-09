@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 /**
  * @property int|null $coding_account_id
  * @property array|null $coding_status_override
+ * @property \Carbon\Carbon|null $coding_last_check_at
  */
 class Channel extends Model
 {
@@ -50,6 +51,7 @@ class Channel extends Model
         'forward_headers',
         'coding_account_id',
         'coding_status_override',
+        'coding_last_check_at',
         'description',
     ];
 
@@ -68,6 +70,7 @@ class Channel extends Model
             'last_check_at' => 'datetime',
             'last_failure_at' => 'datetime',
             'last_success_at' => 'datetime',
+            'coding_last_check_at' => 'datetime',
             'total_cost' => 'decimal:6',
             'success_rate' => 'decimal:4',
         ];

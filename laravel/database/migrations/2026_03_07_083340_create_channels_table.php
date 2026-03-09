@@ -30,6 +30,7 @@ return new class extends Migration
 
             // 模型配置 (可继承)
             $table->json('models')->nullable()->comment('支持的模型列表');
+            $table->string('default_model', 100)->nullable()->comment('默认模型(用于测试)');
 
             // 负载均衡
             $table->unsignedInteger('weight')->default(1)->comment('负载均衡权重 (1-100)');
@@ -59,6 +60,7 @@ return new class extends Migration
             // 元数据
             $table->text('description')->nullable()->comment('渠道描述');
             $table->timestamps();
+            $table->softDeletes();
 
             // 索引
             $table->index('parent_id');

@@ -4,6 +4,10 @@
 
 CdApi 是一个AI大模型API代理工具,基于 Laravel 12 + Filament 4 构建。
 
+### 核心功能特性
+
+- **Key 级别模型映射**: 每个 API Key 可配置独立的模型别名映射,支持使用统一别名(如 `cd-coding-latest`)映射到不同的实际模型,实现 Key 级别的模型路由控制
+
 ## 技术栈
 
 - **框架**: Laravel 12 (位于 `laravel/` 目录)

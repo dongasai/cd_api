@@ -37,8 +37,6 @@ return new class extends Migration
             $table->index('category', 'idx_category');
             $table->index('is_active', 'idx_active');
         });
-
-        DB::statement("ALTER TABLE model_multipliers COMMENT='模型消耗倍数表'");
     }
 
     /**
