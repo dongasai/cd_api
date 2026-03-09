@@ -5,8 +5,7 @@ FROM php:8.3-apache
 WORKDIR /var/www/html
 
 # 安装系统依赖 (仅必需的)
-RUN apt-get update
-RUN apt-get install -y \
+RUN apt-get update && apt-get install -y \
     git \
     curl \
     libpng-dev \
@@ -20,7 +19,15 @@ RUN apt-get install -y \
     libzip-dev \
     libicu-dev \
     icu-devtools \
-    supervisor
+    supervisor && \
+    rm -rf /var/lib/apt/lists/*
+# 增加 node
+RUN echo "🔧 安装 Node.js..." && \
+    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
+    apt-get install -y nodejs && \
+    echo "✅ Node.js 安装完成" && \
+    node --version && \
+    npm --version
 
 # 安装 PHP 扩展 (仅必需的)
 RUN docker-php-ext-install \
@@ -80,13 +87,6 @@ RUN usermod -a -G www-data php && \
     chown -R php:php /var/www/html/storage /var/www/html/bootstrap/cache
 
 
-# 增加 node
-RUN echo "🔧 安装 Node.js..." && \
-    curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
-    apt-get install -y nodejs && \
-    echo "✅ Node.js 安装完成" && \
-    node --version && \
-    npm --version
 
 USER php
 
