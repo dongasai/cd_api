@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
-class SetLocale
+class SetUserInfo
 {
     /**
      * Handle an incoming request.
@@ -17,10 +17,20 @@ class SetLocale
      */
     public function handle(Request $request, Closure $next): Response
     {
-        // 优先从用户获取，其次是 session，最后是默认
-        $locale = Auth::check()
-            ? Auth::user()->locale
-            : session('locale', config('locale.default', config('app.locale')));
+        if (Auth::check()) {
+            $user = Auth::user();
+
+            $locale = $user->locale;
+            $currency = $user->currency ?? 'USD';
+
+            session([
+                'locale' => $locale,
+                'currency' => $currency,
+            ]);
+        } else {
+            $locale = session('locale', config('locale.default', config('app.locale')));
+            $currency = session('currency', 'USD');
+        }
 
         $availableLocales = array_keys(config('locale.available', []));
 

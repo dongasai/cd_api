@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Channels\Tables;
 
+use App\Filament\Resources\Channels\Actions\ReplicateChannelAction;
 use App\Filament\Resources\Channels\Actions\TestChannelAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -70,21 +71,6 @@ class ChannelsTable
                         'warning' => 'maintenance',
                     ]),
 
-                TextColumn::make('health_status')
-                    ->label('健康')
-                    ->badge()
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
-                        'healthy' => '健康',
-                        'unhealthy' => '不健康',
-                        'unknown' => '未知',
-                        default => $state,
-                    })
-                    ->colors([
-                        'success' => 'healthy',
-                        'danger' => 'unhealthy',
-                        'gray' => 'unknown',
-                    ]),
-
                 TextColumn::make('groups.name')
                     ->label('分组')
                     ->badge()
@@ -141,18 +127,11 @@ class ChannelsTable
                         'disabled' => '禁用',
                         'maintenance' => '维护中',
                     ]),
-
-                SelectFilter::make('health_status')
-                    ->label('健康状态')
-                    ->options([
-                        'healthy' => '健康',
-                        'unhealthy' => '不健康',
-                        'unknown' => '未知',
-                    ]),
             ], layout: FiltersLayout::AboveContent)
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                ReplicateChannelAction::make(),
                 TestChannelAction::make(),
                 DeleteAction::make(),
             ])
@@ -161,6 +140,6 @@ class ChannelsTable
                     DeleteBulkAction::make(),
                 ]),
             ])
-            ->defaultSort('priority', 'asc');
+            ->defaultSort('id', 'desc');
     }
 }

@@ -36,7 +36,6 @@ class Channel extends Model
         'weight',
         'priority',
         'status',
-        'health_status',
         'failure_count',
         'success_count',
         'last_check_at',
@@ -128,14 +127,6 @@ class Channel extends Model
     public function isActive(): bool
     {
         return $this->status === 'active';
-    }
-
-    /**
-     * 检查渠道是否健康
-     */
-    public function isHealthy(): bool
-    {
-        return $this->health_status === 'healthy';
     }
 
     /**

@@ -5,15 +5,14 @@ namespace App\Filament\Resources\CodingAccounts\Tables;
 use App\Models\CodingAccount;
 use App\Services\CodingStatus\CodingStatusDriverManager;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Model;
 
 class CodingAccountsTable
 {
@@ -93,16 +92,16 @@ class CodingAccountsTable
                     ->label('驱动类型')
                     ->options(function () {
                         $manager = app(CodingStatusDriverManager::class);
+
                         return $manager->getDriverOptions();
                     }),
-            ])
+            ], layout: FiltersLayout::AboveContent)
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
                 DeleteAction::make(),
             ])
             ->toolbarActions([
-                CreateAction::make(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

@@ -3,7 +3,9 @@
 namespace App\Services\Provider;
 
 use App\Models\Channel;
+use App\Services\Provider\Driver\AnthropicProvider;
 use App\Services\Provider\Driver\OpenAICompatibleProvider;
+use App\Services\Provider\Driver\OpenAIProvider;
 use App\Services\Provider\Driver\ProviderInterface;
 use App\Services\Provider\Exceptions\ProviderException;
 
@@ -105,7 +107,11 @@ class ProviderManager
             'client_headers' => $clientHeaders,
         ];
 
-        return new OpenAICompatibleProvider($config);
+        return match ($providerName) {
+            'openai' => new OpenAIProvider($config),
+            'anthropic' => new AnthropicProvider($config),
+            default => new OpenAICompatibleProvider($config),
+        };
     }
 
     /**

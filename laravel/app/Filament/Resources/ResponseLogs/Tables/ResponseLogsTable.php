@@ -7,6 +7,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -63,7 +64,7 @@ class ResponseLogsTable
                     ->label('内容长度')
                     ->numeric()
                     ->sortable()
-                    ->formatStateUsing(fn ($state) => number_format($state) . ' B'),
+                    ->formatStateUsing(fn ($state) => number_format($state).' B'),
 
                 TextColumn::make('upstream_latency_ms')
                     ->label('上游延迟(ms)')
@@ -125,7 +126,7 @@ class ResponseLogsTable
                                 fn (Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date),
                             );
                     }),
-            ])
+            ], layout: FiltersLayout::AboveContent)
             ->recordActions([
                 ViewAction::make(),
             ])

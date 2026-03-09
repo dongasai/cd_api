@@ -92,11 +92,10 @@ abstract class AbstractProvider implements ProviderInterface
      */
     protected string $circuitState = 'closed';
 
-    /**
-     * 构造函数
-     *
-     * @param  array  $config  供应商配置
-     */
+    protected array $forwardHeaders = [];
+
+    protected array $clientHeaders = [];
+
     public function __construct(array $config = [])
     {
         $this->config = $config;
@@ -109,6 +108,8 @@ abstract class AbstractProvider implements ProviderInterface
         $this->retryMultiplier = $config['retry_multiplier'] ?? 2.0;
         $this->circuitFailureThreshold = $config['circuit_failure_threshold'] ?? 5;
         $this->circuitResetTimeout = $config['circuit_reset_timeout'] ?? 60;
+        $this->forwardHeaders = $config['forward_headers'] ?? [];
+        $this->clientHeaders = $config['client_headers'] ?? [];
     }
 
     /**
@@ -136,10 +137,77 @@ abstract class AbstractProvider implements ProviderInterface
      */
     abstract public function getEndpoint(ProviderRequest $request): string;
 
-    /**
-     * 获取请求头
-     */
     abstract public function getHeaders(): array;
+
+    protected function buildForwardedHeaders(): array
+    {
+        if (empty($this->forwardHeaders) || empty($this->clientHeaders)) {
+            return [];
+        }
+
+        $result = [];
+        $clientHeadersFlat = $this->flattenHeaders($this->clientHeaders);
+
+        foreach ($this->forwardHeaders as $pattern) {
+            $pattern = strtolower(trim($pattern));
+            if (empty($pattern)) {
+                continue;
+            }
+
+            foreach ($clientHeadersFlat as $headerName => $headerValue) {
+                $headerNameLower = strtolower($headerName);
+
+                if ($this->matchHeaderPattern($pattern, $headerNameLower)) {
+                    $result[$headerName] = $headerValue;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    protected function flattenHeaders(array $headers): array
+    {
+        $flat = [];
+        foreach ($headers as $key => $value) {
+            if (is_array($value)) {
+                $flat[$key] = reset($value);
+            } else {
+                $flat[$key] = $value;
+            }
+        }
+
+        return $flat;
+    }
+
+    protected function matchHeaderPattern(string $pattern, string $headerName): bool
+    {
+        if (str_ends_with($pattern, '*')) {
+            $prefix = substr($pattern, 0, -1);
+
+            return str_starts_with($headerName, $prefix);
+        }
+
+        if (str_starts_with($pattern, '*')) {
+            $suffix = substr($pattern, 1);
+
+            return str_ends_with($headerName, $suffix);
+        }
+
+        return $pattern === $headerName;
+    }
+
+    protected function mergeForwardedHeaders(array $headers): array
+    {
+        $forwardedHeaders = $this->buildForwardedHeaders();
+        foreach ($forwardedHeaders as $key => $value) {
+            if (! isset($headers[$key])) {
+                $headers[$key] = $value;
+            }
+        }
+
+        return $headers;
+    }
 
     /**
      * 发送同步请求

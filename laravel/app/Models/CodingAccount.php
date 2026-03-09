@@ -62,6 +62,7 @@ class CodingAccount extends Model
         'sync_error',
         'sync_error_count',
         'expires_at',
+        'disabled_at',
     ];
 
     /**
@@ -78,6 +79,7 @@ class CodingAccount extends Model
             'config' => 'array',
             'last_sync_at' => 'datetime',
             'expires_at' => 'datetime',
+            'disabled_at' => 'datetime',
         ];
     }
 
@@ -232,5 +234,59 @@ class CodingAccount extends Model
             self::PLATFORM_CURSOR => 'heroicon-o-cursor-arrow-rays',
             default => 'heroicon-o-cog',
         };
+    }
+
+    /**
+     * 获取自动重新开启小时数
+     */
+    public function getAutoReopenHours(): int
+    {
+        $config = $this->getQuotaConfig();
+
+        return (int) ($config['auto_reopen_hours'] ?? 0);
+    }
+
+    /**
+     * 检查是否应该自动重新开启
+     */
+    public function shouldAutoReopen(): bool
+    {
+        $hours = $this->getAutoReopenHours();
+
+        if ($hours <= 0) {
+            return false;
+        }
+
+        if (! in_array($this->status, [self::STATUS_EXHAUSTED, self::STATUS_SUSPENDED], true)) {
+            return false;
+        }
+
+        if ($this->disabled_at === null) {
+            return false;
+        }
+
+        return $this->disabled_at->addHours($hours)->isPast();
+    }
+
+    /**
+     * 标记为禁用状态
+     */
+    public function markAsDisabled(string $status): void
+    {
+        $this->update([
+            'status' => $status,
+            'disabled_at' => now(),
+        ]);
+    }
+
+    /**
+     * 重新开启账户
+     */
+    public function reopen(): void
+    {
+        $this->update([
+            'status' => self::STATUS_ACTIVE,
+            'disabled_at' => null,
+        ]);
     }
 }

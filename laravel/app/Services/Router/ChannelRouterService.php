@@ -2,6 +2,7 @@
 
 namespace App\Services\Router;
 
+use App\Models\ApiKey;
 use App\Models\Channel;
 use App\Models\ChannelGroup;
 use Illuminate\Support\Facades\Cache;
@@ -37,7 +38,7 @@ class ChannelRouterService
      * 为指定模型选择渠道
      *
      * @param  string  $model  模型名称
-     * @param  array  $context  上下文信息（可包含负载均衡算法等）
+     * @param  array  $context  上下文信息（可包含负载均衡算法、API Key 等）
      * @return Channel 选中的渠道
      *
      * @throws \RuntimeException 当没有可用渠道时
@@ -45,6 +46,10 @@ class ChannelRouterService
     public function selectChannel(string $model, array $context = []): Channel
     {
         $channels = $this->getAvailableChannels($model);
+
+        // 应用 API Key 的渠道限制
+        $apiKey = $context['api_key'] ?? null;
+        $channels = $this->applyApiKeyChannelRestrictions($channels, $apiKey);
 
         if ($channels->isEmpty()) {
             throw new \RuntimeException("No available channel for model: {$model}");
@@ -57,6 +62,7 @@ class ChannelRouterService
             'channel_id' => $channel->id,
             'channel_name' => $channel->name,
             'provider' => $channel->provider,
+            'api_key_id' => $apiKey?->id,
         ]);
 
         return $channel;
@@ -81,11 +87,42 @@ class ChannelRouterService
 
             return Channel::whereIn('id', $channelIds)
                 ->where('status', 'active')
-                ->where('health_status', 'healthy')
                 ->orderBy('priority', 'desc')
                 ->orderBy('weight', 'desc')
                 ->get();
         });
+    }
+
+    /**
+     * 应用 API Key 的渠道限制
+     *
+     * @param  \Illuminate\Database\Eloquent\Collection  $channels  渠道集合
+     * @param  ApiKey|null  $apiKey  API Key 实例
+     * @return \Illuminate\Database\Eloquent\Collection 过滤后的渠道集合
+     */
+    protected function applyApiKeyChannelRestrictions(\Illuminate\Database\Eloquent\Collection $channels, ?ApiKey $apiKey): \Illuminate\Database\Eloquent\Collection
+    {
+        if (! $apiKey) {
+            return $channels;
+        }
+
+        // 应用黑名单限制
+        if ($apiKey->hasChannelBlacklist()) {
+            $notAllowedChannels = $apiKey->getNotAllowedChannelIds();
+            $channels = $channels->reject(function ($channel) use ($notAllowedChannels) {
+                return in_array($channel->id, $notAllowedChannels, true);
+            });
+        }
+
+        // 应用白名单限制
+        if ($apiKey->hasChannelWhitelist()) {
+            $allowedChannels = $apiKey->getAllowedChannelIds();
+            $channels = $channels->filter(function ($channel) use ($allowedChannels) {
+                return in_array($channel->id, $allowedChannels, true);
+            });
+        }
+
+        return $channels;
     }
 
     /**
@@ -168,9 +205,10 @@ class ChannelRouterService
      *
      * @param  Channel  $failedChannel  失败的渠道
      * @param  string  $model  模型名称
+     * @param  ApiKey|null  $apiKey  API Key 实例
      * @return Channel|null 备选渠道，无可用渠道时返回 null
      */
-    public function getFallbackChannel(Channel $failedChannel, string $model): ?Channel
+    public function getFallbackChannel(Channel $failedChannel, string $model, ?ApiKey $apiKey = null): ?Channel
     {
         if (! $this->config['enable_failover']) {
             return null;
@@ -178,7 +216,36 @@ class ChannelRouterService
 
         $channels = $this->getAvailableChannels($model);
 
+        // 应用 API Key 的渠道限制
+        $channels = $this->applyApiKeyChannelRestrictions($channels, $apiKey);
+
         return $channels->where('id', '!=', $failedChannel->id)->first();
+    }
+
+    /**
+     * 获取故障转移渠道（用于重试）
+     *
+     * 排除已失败的渠道列表，获取备选渠道
+     *
+     * @param  string  $model  模型名称
+     * @param  array  $failedChannelIds  已失败的渠道 ID 列表
+     * @param  ApiKey|null  $apiKey  API Key 实例
+     * @return Channel|null 备选渠道，无可用渠道时返回 null
+     */
+    public function getFallbackChannelForRetry(string $model, array $failedChannelIds, ?ApiKey $apiKey = null): ?Channel
+    {
+        if (! $this->config['enable_failover']) {
+            return null;
+        }
+
+        $channels = $this->getAvailableChannels($model);
+
+        // 应用 API Key 的渠道限制
+        $channels = $this->applyApiKeyChannelRestrictions($channels, $apiKey);
+
+        return $channels->reject(function ($channel) use ($failedChannelIds) {
+            return in_array($channel->id, $failedChannelIds, true);
+        })->first();
     }
 
     /**
@@ -197,7 +264,6 @@ class ChannelRouterService
 
         return $group->channels()
             ->where('status', 'active')
-            ->where('health_status', 'healthy')
             ->orderByPivot('priority', 'desc')
             ->get();
     }
@@ -214,7 +280,6 @@ class ChannelRouterService
             $query->where('name', $tagName);
         })
             ->where('status', 'active')
-            ->where('health_status', 'healthy')
             ->get();
     }
 
@@ -246,8 +311,6 @@ class ChannelRouterService
     /**
      * 标记渠道失败
      *
-     * 记录失败信息并检查渠道健康状态
-     *
      * @param  Channel  $channel  失败的渠道
      * @param  string  $reason  失败原因
      */
@@ -264,14 +327,10 @@ class ChannelRouterService
             'reason' => $reason,
             'failure_count' => $channel->failure_count,
         ]);
-
-        $this->checkChannelHealth($channel);
     }
 
     /**
      * 标记渠道成功
-     *
-     * 更新成功计数和健康状态
      *
      * @param  Channel  $channel  成功的渠道
      */
@@ -281,37 +340,6 @@ class ChannelRouterService
         $channel->update([
             'last_success_at' => now(),
         ]);
-
-        if ($channel->health_status !== 'healthy') {
-            $channel->update(['health_status' => 'healthy']);
-        }
-    }
-
-    /**
-     * 检查渠道健康状态
-     *
-     * 根据失败率自动标记不健康的渠道
-     *
-     * @param  Channel  $channel  要检查的渠道
-     */
-    protected function checkChannelHealth(Channel $channel): void
-    {
-        $totalRequests = $channel->success_count + $channel->failure_count;
-        if ($totalRequests < 10) {
-            return;
-        }
-
-        $failureRate = $channel->failure_count / $totalRequests;
-
-        if ($failureRate > 0.5) {
-            $channel->update(['health_status' => 'unhealthy']);
-
-            Log::error('Channel marked as unhealthy', [
-                'channel_id' => $channel->id,
-                'channel_name' => $channel->name,
-                'failure_rate' => $failureRate,
-            ]);
-        }
     }
 
     /**
@@ -326,7 +354,6 @@ class ChannelRouterService
             'id' => $channel->id,
             'name' => $channel->name,
             'status' => $channel->status,
-            'health_status' => $channel->health_status,
             'total_requests' => $channel->total_requests,
             'success_count' => $channel->success_count,
             'failure_count' => $channel->failure_count,

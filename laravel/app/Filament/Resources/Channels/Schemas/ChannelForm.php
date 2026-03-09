@@ -263,31 +263,6 @@ class ChannelForm
 
                         Tab::make('统计信息')
                             ->schema([
-                                Section::make('健康状态')
-                                    ->schema([
-                                        Grid::make(2)
-                                            ->schema([
-                                                Select::make('health_status')
-                                                    ->label('健康状态')
-                                                    ->options([
-                                                        'healthy' => '健康',
-                                                        'unhealthy' => '不健康',
-                                                        'unknown' => '未知',
-                                                    ])
-                                                    ->default('unknown'),
-
-                                                TextInput::make('failure_count')
-                                                    ->label('连续失败次数')
-                                                    ->numeric()
-                                                    ->disabled(),
-
-                                                TextInput::make('success_count')
-                                                    ->label('连续成功次数')
-                                                    ->numeric()
-                                                    ->disabled(),
-                                            ]),
-                                    ]),
-
                                 Section::make('统计数据')
                                     ->schema([
                                         Grid::make(4)
@@ -309,6 +284,22 @@ class ChannelForm
 
                                                 TextInput::make('avg_latency_ms')
                                                     ->label('平均延迟(ms)')
+                                                    ->numeric()
+                                                    ->disabled(),
+                                            ]),
+                                    ]),
+
+                                Section::make('请求统计')
+                                    ->schema([
+                                        Grid::make(2)
+                                            ->schema([
+                                                TextInput::make('failure_count')
+                                                    ->label('失败次数')
+                                                    ->numeric()
+                                                    ->disabled(),
+
+                                                TextInput::make('success_count')
+                                                    ->label('成功次数')
                                                     ->numeric()
                                                     ->disabled(),
                                             ]),

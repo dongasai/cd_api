@@ -20,18 +20,18 @@ class SlidingRequestCodingStatusDriver implements CodingStatusDriver
 
     public function getName(): string
     {
-        return 'SlidingRequestCodingStatus';
+        return '滑动窗口请求计费';
     }
 
     public function getDescription(): string
     {
-        return 'Sliding Window Request Billing - Counts requests in past N hours/days';
+        return '统计过去N小时/天内的请求次数';
     }
 
     public function getSupportedMetrics(): array
     {
         return [
-            'requests' => 'Request Count',
+            'requests' => '请求次数',
         ];
     }
 
@@ -270,7 +270,7 @@ class SlidingRequestCodingStatusDriver implements CodingStatusDriver
     {
         return [
             'valid' => true,
-            'message' => 'Sliding window driver does not require external credentials',
+            'message' => '滑动窗口驱动不需要外部凭证',
         ];
     }
 
@@ -279,26 +279,26 @@ class SlidingRequestCodingStatusDriver implements CodingStatusDriver
         return [
             [
                 'name' => 'limits.requests',
-                'label' => 'Request Limit',
+                'label' => '请求次数限制',
                 'type' => 'number',
                 'min' => 0,
                 'default' => 1200,
             ],
             [
                 'name' => 'window_type',
-                'label' => 'Window Type',
+                'label' => '窗口类型',
                 'type' => 'select',
                 'options' => [
-                    '5h' => '5 Hours',
-                    '1d' => '1 Day',
-                    '7d' => '7 Days',
-                    '30d' => '30 Days',
+                    '5h' => '5小时',
+                    '1d' => '1天',
+                    '7d' => '7天',
+                    '30d' => '30天',
                 ],
                 'default' => '5h',
             ],
             [
                 'name' => 'thresholds',
-                'label' => 'Thresholds',
+                'label' => '阈值配置',
                 'type' => 'key_value',
                 'default' => [
                     'warning' => 0.80,

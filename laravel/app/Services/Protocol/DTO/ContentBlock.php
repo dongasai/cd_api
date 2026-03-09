@@ -8,34 +8,28 @@ namespace App\Services\Protocol\DTO;
 class ContentBlock
 {
     public function __construct(
-        // 内容类型: text, image, image_url, audio, tool_use, tool_result
         public string $type,
 
-        // 文本内容 (type=text)
         public ?string $text = null,
 
-        // 图片来源 (type=image)
         public ?array $source = null,
 
-        // 图片URL (type=image_url)
         public ?string $imageUrl = null,
 
-        // 图片详情 (OpenAI)
         public ?string $detail = null,
 
-        // 音频数据
         public ?string $audioData = null,
         public ?string $audioFormat = null,
 
-        // 工具调用 (type=tool_use)
         public ?string $toolId = null,
         public ?string $toolName = null,
         public ?array $toolInput = null,
 
-        // 工具结果 (type=tool_result)
         public ?string $toolResultId = null,
         public ?string $toolResultContent = null,
         public ?bool $toolResultIsError = null,
+
+        public ?string $thinking = null,
     ) {}
 
     /**
@@ -93,6 +87,10 @@ class ContentBlock
                     ? json_encode($block['content'])
                     : $block['content'],
                 toolResultIsError: $block['is_error'] ?? false,
+            ),
+            'thinking' => new self(
+                type: 'thinking',
+                thinking: $block['thinking'] ?? '',
             ),
             default => new self(type: $type, text: $block['text'] ?? null),
         };
@@ -158,6 +156,10 @@ class ContentBlock
                 'content' => $this->toolResultContent,
                 'is_error' => $this->toolResultIsError,
             ],
+            'thinking' => [
+                'type' => 'thinking',
+                'thinking' => $this->thinking ?? '',
+            ],
             default => [
                 'type' => $this->type,
                 'text' => $this->text,
@@ -184,6 +186,7 @@ class ContentBlock
             'tool_result_id' => $this->toolResultId,
             'tool_result_content' => $this->toolResultContent,
             'tool_result_is_error' => $this->toolResultIsError,
+            'thinking' => $this->thinking,
         ];
     }
 }

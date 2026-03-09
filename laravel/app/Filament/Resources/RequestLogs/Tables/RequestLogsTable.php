@@ -7,6 +7,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -58,7 +59,7 @@ class RequestLogsTable
                     ->label('内容长度')
                     ->numeric()
                     ->sortable()
-                    ->formatStateUsing(fn ($state) => number_format($state) . ' B'),
+                    ->formatStateUsing(fn ($state) => number_format($state).' B'),
 
                 IconColumn::make('has_sensitive')
                     ->label('含敏感信息')
@@ -89,7 +90,7 @@ class RequestLogsTable
                                 fn (Builder $query, $date): Builder => $query->whereDate('created_at', '<=', $date),
                             );
                     }),
-            ])
+            ], layout: FiltersLayout::AboveContent)
             ->recordActions([
                 ViewAction::make(),
             ])

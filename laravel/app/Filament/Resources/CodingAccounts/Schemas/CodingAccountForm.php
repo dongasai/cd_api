@@ -123,6 +123,14 @@ class CodingAccountForm
                             ->maxValue(31)
                             ->default(1)
                             ->helperText('每月重置日期(1-31)'),
+
+                        TextInput::make('quota_config.auto_reopen_hours')
+                            ->label('自动重新开启时间')
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(720)
+                            ->default(0)
+                            ->helperText('渠道被禁用后，多少小时后自动重新开启 (0表示不自动开启)'),
                     ])
                     ->columns(1),
 

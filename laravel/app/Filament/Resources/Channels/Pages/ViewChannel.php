@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Channels\Pages;
 
 use App\Filament\Resources\Channels\ChannelResource;
 use Filament\Actions\EditAction;
-use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Grid;
@@ -59,10 +58,6 @@ class ViewChannel extends ViewRecord
                                         'maintenance' => 'warning',
                                         default => 'gray',
                                     }),
-                                IconEntry::make('health_status')
-                                    ->label('健康状态')
-                                    ->boolean()
-                                    ->formatStateUsing(fn (string $state): bool => $state === 'healthy'),
                                 TextEntry::make('weight')
                                     ->label('权重'),
                                 TextEntry::make('priority')

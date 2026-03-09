@@ -51,10 +51,12 @@ class OpenAIProvider extends AbstractProvider
      */
     public function getHeaders(): array
     {
-        return [
+        $headers = [
             'Authorization' => 'Bearer '.$this->apiKey,
             'Content-Type' => 'application/json',
         ];
+
+        return $this->mergeForwardedHeaders($headers);
     }
 
     /**

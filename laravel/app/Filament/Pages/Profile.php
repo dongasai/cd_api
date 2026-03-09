@@ -2,12 +2,12 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\User;
 use Filament\Auth\Pages\EditProfile as BaseEditProfile;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Illuminate\Support\Facades\Auth;
 
 class Profile extends BaseEditProfile
 {
@@ -38,14 +38,22 @@ class Profile extends BaseEditProfile
                             ->label('语言')
                             ->options($availableLocales)
                             ->required(),
+
+                        Select::make('currency')
+                            ->label('货币')
+                            ->options(User::SUPPORTED_CURRENCIES)
+                            ->required()
+                            ->default('USD'),
                     ]),
             ]);
     }
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $user = Auth::user();
-        session(['locale' => $data['locale']]);
+        session([
+            'locale' => $data['locale'],
+            'currency' => $data['currency'] ?? 'USD',
+        ]);
         app()->setLocale($data['locale']);
 
         return $data;

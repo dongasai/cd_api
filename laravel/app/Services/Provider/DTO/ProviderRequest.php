@@ -16,7 +16,7 @@ class ProviderRequest
         public ?int $maxTokens = null,
         public bool $stream = false,
         public array $parameters = [],
-        public ?string $systemPrompt = null,
+        public string|array|null $systemPrompt = null,
         public ?float $topP = null,
         public ?array $stop = null,
         public ?array $tools = null,
@@ -95,12 +95,25 @@ class ProviderRequest
     {
         $request = $this->toArray();
 
-        // OpenAI 格式将 system 提示放在 messages 数组的开头
         if ($this->systemPrompt !== null) {
-            array_unshift($request['messages'], [
-                'role' => 'system',
-                'content' => $this->systemPrompt,
-            ]);
+            $systemContent = $this->systemPrompt;
+            if (is_array($systemContent)) {
+                $text = '';
+                foreach ($systemContent as $block) {
+                    if (is_string($block)) {
+                        $text .= $block;
+                    } elseif (isset($block['text'])) {
+                        $text .= $block['text'];
+                    }
+                }
+                $systemContent = $text;
+            }
+            if ($systemContent !== '') {
+                array_unshift($request['messages'], [
+                    'role' => 'system',
+                    'content' => $systemContent,
+                ]);
+            }
             unset($request['system']);
         }
 
@@ -112,15 +125,64 @@ class ProviderRequest
      */
     public function toAnthropicFormat(): array
     {
+        $systemContent = null;
+        $filteredMessages = [];
+
+        foreach ($this->messages as $message) {
+            if (isset($message['role']) && $message['role'] === 'system') {
+                $content = $message['content'] ?? '';
+                if (is_array($content)) {
+                    $text = '';
+                    foreach ($content as $block) {
+                        if (is_string($block)) {
+                            $text .= $block;
+                        } elseif (isset($block['text'])) {
+                            $text .= $block['text'];
+                        }
+                    }
+                    $content = $text;
+                }
+                $systemContent = ($systemContent ? $systemContent."\n\n" : '').$content;
+            } else {
+                $content = $message['content'] ?? '';
+                if (is_array($content)) {
+                    $filteredContent = [];
+                    foreach ($content as $block) {
+                        $type = $block['type'] ?? 'text';
+                        if ($type !== 'thinking') {
+                            $filteredContent[] = $block;
+                        }
+                    }
+                    $message['content'] = $filteredContent;
+                }
+                $filteredMessages[] = $message;
+            }
+        }
+
+        if ($this->systemPrompt !== null) {
+            if (is_array($this->systemPrompt)) {
+                $text = '';
+                foreach ($this->systemPrompt as $block) {
+                    if (is_string($block)) {
+                        $text .= $block;
+                    } elseif (isset($block['text'])) {
+                        $text .= $block['text'];
+                    }
+                }
+                $systemContent = $text;
+            } else {
+                $systemContent = $this->systemPrompt;
+            }
+        }
+
         $request = [
             'model' => $this->model,
             'max_tokens' => $this->maxTokens ?? 4096,
-            'messages' => $this->messages,
+            'messages' => $filteredMessages,
         ];
 
-        // Anthropic 格式使用独立的 system 字段
-        if ($this->systemPrompt !== null) {
-            $request['system'] = $this->systemPrompt;
+        if ($systemContent !== null && $systemContent !== '') {
+            $request['system'] = $systemContent;
         }
         if ($this->temperature !== null) {
             $request['temperature'] = $this->temperature;

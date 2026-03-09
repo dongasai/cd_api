@@ -16,7 +16,7 @@ class PromptCodingStatusDriver extends AbstractCodingStatusDriver
      */
     public function getName(): string
     {
-        return 'PromptCodingStatus';
+        return 'Prompt次数计费';
     }
 
     /**

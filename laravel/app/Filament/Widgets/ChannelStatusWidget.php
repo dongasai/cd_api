@@ -22,7 +22,7 @@ class ChannelStatusWidget extends BaseWidget
     protected function getTableQuery(): Builder
     {
         return Channel::query()
-            ->select(['id', 'name', 'provider', 'status', 'health_status', 'success_rate', 'avg_latency_ms', 'total_requests'])
+            ->select(['id', 'name', 'provider', 'status', 'success_rate', 'avg_latency_ms', 'total_requests'])
             ->orderByDesc('total_requests')
             ->limit(10);
     }
@@ -52,22 +52,6 @@ class ChannelStatusWidget extends BaseWidget
                     'active' => 'success',
                     'disabled' => 'danger',
                     'maintenance' => 'warning',
-                    default => 'gray',
-                }),
-
-            TextColumn::make('health_status')
-                ->label('健康状态')
-                ->badge()
-                ->formatStateUsing(fn (string $state): string => match ($state) {
-                    'healthy' => '健康',
-                    'unhealthy' => '不健康',
-                    'unknown' => '未知',
-                    default => $state,
-                })
-                ->color(fn (string $state): string => match ($state) {
-                    'healthy' => 'success',
-                    'unhealthy' => 'danger',
-                    'unknown' => 'gray',
                     default => 'gray',
                 }),
 

@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\ChannelTags\Tables;
 
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -44,9 +43,6 @@ class ChannelTagsTable
                     ->dateTime('Y-m-d H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->headerActions([
-                CreateAction::make(),
             ])
             ->recordActions([
                 EditAction::make(),

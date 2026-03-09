@@ -12,6 +12,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
@@ -111,7 +112,7 @@ class ApiKeysTable
                         'revoked' => '已撤销',
                         'expired' => '已过期',
                     ]),
-            ])
+            ], layout: FiltersLayout::AboveContent)
             ->recordUrl(fn (ApiKey $record): string => route('filament.admin.resources.api-keys.view', $record))
             ->recordActions([
                 ViewAction::make(),

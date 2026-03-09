@@ -35,6 +35,11 @@ class ModelListForm
                                     ->maxLength(100)
                                     ->placeholder('如: GPT-4, Claude 3 Opus'),
 
+                                TextInput::make('common_name')
+                                    ->label('通用名字')
+                                    ->maxLength(100)
+                                    ->placeholder('如: gpt-4-turbo'),
+
                                 Select::make('provider')
                                     ->label('提供商')
                                     ->options([
@@ -50,6 +55,11 @@ class ModelListForm
                                         'other' => '其他',
                                     ])
                                     ->searchable(),
+
+                                TextInput::make('hugging_face_id')
+                                    ->label('Hugging Face ID')
+                                    ->maxLength(100)
+                                    ->placeholder('如: meta-llama/Llama-2-7b-chat-hf'),
 
                                 TextInput::make('context_length')
                                     ->label('上下文长度')
@@ -83,6 +93,33 @@ class ModelListForm
                             ->columns(4)
                             ->helperText('选择该模型支持的能力')
                             ->columnSpanFull(),
+                    ]),
+
+                Section::make('价格配置')
+                    ->schema([
+                        Grid::make(3)
+                            ->schema([
+                                TextInput::make('pricing_prompt')
+                                    ->label('输入价格')
+                                    ->numeric()
+                                    ->step(0.000001)
+                                    ->placeholder('每百万token价格')
+                                    ->helperText('输入价格 (每百万token)'),
+
+                                TextInput::make('pricing_completion')
+                                    ->label('输出价格')
+                                    ->numeric()
+                                    ->step(0.000001)
+                                    ->placeholder('每百万token价格')
+                                    ->helperText('输出价格 (每百万token)'),
+
+                                TextInput::make('pricing_input_cache_read')
+                                    ->label('缓存读取价格')
+                                    ->numeric()
+                                    ->step(0.000001)
+                                    ->placeholder('每百万token价格')
+                                    ->helperText('缓存读取价格 (每百万token)'),
+                            ]),
                     ]),
 
                 Section::make('扩展配置')

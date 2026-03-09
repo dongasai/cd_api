@@ -53,11 +53,13 @@ class AnthropicProvider extends AbstractProvider
      */
     public function getHeaders(): array
     {
-        return [
+        $headers = [
             'x-api-key' => $this->apiKey,
             'anthropic-version' => $this->apiVersion,
             'Content-Type' => 'application/json',
         ];
+
+        return $this->mergeForwardedHeaders($headers);
     }
 
     /**

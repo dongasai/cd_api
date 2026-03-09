@@ -2,9 +2,12 @@
 
 namespace App\Services\CodingStatus;
 
+use App\Enums\OperationSource;
+use App\Enums\OperationType;
 use App\Models\Channel;
 use App\Models\CodingAccount;
 use App\Models\CodingStatusLog;
+use App\Services\OperationLogService;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -16,9 +19,14 @@ class ChannelCodingStatusService
 {
     protected CodingStatusDriverManager $driverManager;
 
-    public function __construct(CodingStatusDriverManager $driverManager)
-    {
+    protected OperationLogService $operationLogService;
+
+    public function __construct(
+        CodingStatusDriverManager $driverManager,
+        OperationLogService $operationLogService
+    ) {
         $this->driverManager = $driverManager;
+        $this->operationLogService = $operationLogService;
     }
 
     /**
@@ -81,17 +89,40 @@ class ChannelCodingStatusService
     }
 
     /**
-     * 禁用渠道
+     * 禁用渠道（系统自动）
      */
     public function disableChannel(Channel $channel, CodingAccount $account, string $reason): void
     {
         $fromStatus = $channel->status;
+        $beforeData = [
+            'status' => $fromStatus,
+            'account_status' => $account->status,
+        ];
 
         // 更新渠道状态
         $channel->update(['status' => 'disabled']);
 
+        // 更新账户禁用时间
+        $account->markAsDisabled(CodingAccount::STATUS_EXHAUSTED);
+
+        $afterData = [
+            'status' => 'disabled',
+            'account_status' => CodingAccount::STATUS_EXHAUSTED,
+        ];
+
         // 记录状态变更日志
         $this->logStatusChange($account, $channel, $fromStatus, 'disabled', $reason, 'system');
+
+        // 记录操作日志
+        $this->operationLogService->logChannelOperation(
+            type: OperationType::CHANNEL_DISABLE,
+            channelId: $channel->id,
+            channelName: $channel->name,
+            reason: $reason,
+            beforeData: $beforeData,
+            afterData: $afterData,
+            source: OperationSource::SYSTEM
+        );
 
         Log::info('渠道已自动禁用', [
             'channel_id' => $channel->id,
@@ -102,17 +133,40 @@ class ChannelCodingStatusService
     }
 
     /**
-     * 启用渠道
+     * 启用渠道（系统自动）
      */
     public function enableChannel(Channel $channel, CodingAccount $account, string $reason): void
     {
         $fromStatus = $channel->status;
+        $beforeData = [
+            'status' => $fromStatus,
+            'account_status' => $account->status,
+        ];
 
         // 更新渠道状态
         $channel->update(['status' => 'active']);
 
+        // 清除账户禁用时间
+        $account->reopen();
+
+        $afterData = [
+            'status' => 'active',
+            'account_status' => CodingAccount::STATUS_ACTIVE,
+        ];
+
         // 记录状态变更日志
         $this->logStatusChange($account, $channel, $fromStatus, 'active', $reason, 'system');
+
+        // 记录操作日志
+        $this->operationLogService->logChannelOperation(
+            type: OperationType::CHANNEL_ENABLE,
+            channelId: $channel->id,
+            channelName: $channel->name,
+            reason: $reason,
+            beforeData: $beforeData,
+            afterData: $afterData,
+            source: OperationSource::SYSTEM
+        );
 
         Log::info('渠道已自动启用', [
             'channel_id' => $channel->id,
@@ -143,9 +197,17 @@ class ChannelCodingStatusService
         }
 
         $fromStatus = $channel->status;
+        $beforeData = [
+            'status' => $fromStatus,
+            'account_status' => $account->status,
+        ];
 
         // 更新渠道状态
         $channel->update(['status' => 'disabled']);
+
+        $afterData = [
+            'status' => 'disabled',
+        ];
 
         // 记录状态变更日志
         $this->logStatusChange(
@@ -156,6 +218,18 @@ class ChannelCodingStatusService
             $reason ?? '手动禁用',
             'manual',
             $userId
+        );
+
+        // 记录操作日志
+        $this->operationLogService->logChannelOperation(
+            type: OperationType::CHANNEL_DISABLE,
+            channelId: $channel->id,
+            channelName: $channel->name,
+            reason: $reason ?? '手动禁用',
+            beforeData: $beforeData,
+            afterData: $afterData,
+            source: OperationSource::ADMIN,
+            userId: $userId
         );
 
         return [
@@ -198,9 +272,17 @@ class ChannelCodingStatusService
         }
 
         $fromStatus = $channel->status;
+        $beforeData = [
+            'status' => $fromStatus,
+            'account_status' => $account->status,
+        ];
 
         // 更新渠道状态
         $channel->update(['status' => 'active']);
+
+        $afterData = [
+            'status' => 'active',
+        ];
 
         // 记录状态变更日志
         $this->logStatusChange(
@@ -211,6 +293,18 @@ class ChannelCodingStatusService
             $reason ?? '手动启用',
             'manual',
             $userId
+        );
+
+        // 记录操作日志
+        $this->operationLogService->logChannelOperation(
+            type: OperationType::CHANNEL_ENABLE,
+            channelId: $channel->id,
+            channelName: $channel->name,
+            reason: $reason ?? '手动启用',
+            beforeData: $beforeData,
+            afterData: $afterData,
+            source: OperationSource::ADMIN,
+            userId: $userId
         );
 
         return [

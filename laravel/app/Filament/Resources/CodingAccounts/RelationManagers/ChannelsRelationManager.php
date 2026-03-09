@@ -49,22 +49,6 @@ class ChannelsRelationManager extends RelationManager
                         default => $state,
                     }),
 
-                TextColumn::make('health_status')
-                    ->label('健康状态')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'healthy' => 'success',
-                        'unhealthy' => 'danger',
-                        'unknown' => 'gray',
-                        default => 'gray',
-                    })
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
-                        'healthy' => '健康',
-                        'unhealthy' => '不健康',
-                        'unknown' => '未知',
-                        default => $state,
-                    }),
-
                 TextColumn::make('provider')
                     ->label('提供商')
                     ->searchable(),

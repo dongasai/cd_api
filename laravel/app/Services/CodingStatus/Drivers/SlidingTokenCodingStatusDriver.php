@@ -20,20 +20,20 @@ class SlidingTokenCodingStatusDriver implements CodingStatusDriver
 
     public function getName(): string
     {
-        return 'SlidingTokenCodingStatus';
+        return '滑动窗口Token计费';
     }
 
     public function getDescription(): string
     {
-        return 'Sliding Window Token Billing - Counts tokens in past N hours/days';
+        return '统计过去N小时/天内的Token消耗';
     }
 
     public function getSupportedMetrics(): array
     {
         return [
-            'tokens_input' => 'Input Tokens',
-            'tokens_output' => 'Output Tokens',
-            'tokens_total' => 'Total Tokens',
+            'tokens_input' => '输入Token',
+            'tokens_output' => '输出Token',
+            'tokens_total' => '总Token',
         ];
     }
 
@@ -308,7 +308,7 @@ class SlidingTokenCodingStatusDriver implements CodingStatusDriver
     {
         return [
             'valid' => true,
-            'message' => 'Sliding window driver does not require external credentials',
+            'message' => '滑动窗口驱动不需要外部凭证',
         ];
     }
 
@@ -317,40 +317,40 @@ class SlidingTokenCodingStatusDriver implements CodingStatusDriver
         return [
             [
                 'name' => 'limits.tokens_input',
-                'label' => 'Input Token Limit',
+                'label' => '输入Token限制',
                 'type' => 'number',
                 'min' => 0,
                 'default' => 5000000,
             ],
             [
                 'name' => 'limits.tokens_output',
-                'label' => 'Output Token Limit',
+                'label' => '输出Token限制',
                 'type' => 'number',
                 'min' => 0,
                 'default' => 2500000,
             ],
             [
                 'name' => 'limits.tokens_total',
-                'label' => 'Total Token Limit',
+                'label' => '总Token限制',
                 'type' => 'number',
                 'min' => 0,
                 'default' => 7500000,
             ],
             [
                 'name' => 'window_type',
-                'label' => 'Window Type',
+                'label' => '窗口类型',
                 'type' => 'select',
                 'options' => [
-                    '5h' => '5 Hours',
-                    '1d' => '1 Day',
-                    '7d' => '7 Days',
-                    '30d' => '30 Days',
+                    '5h' => '5小时',
+                    '1d' => '1天',
+                    '7d' => '7天',
+                    '30d' => '30天',
                 ],
                 'default' => '7d',
             ],
             [
                 'name' => 'thresholds',
-                'label' => 'Thresholds',
+                'label' => '阈值配置',
                 'type' => 'key_value',
                 'default' => [
                     'warning' => 0.80,

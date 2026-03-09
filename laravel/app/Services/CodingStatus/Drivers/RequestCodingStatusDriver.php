@@ -16,7 +16,7 @@ class RequestCodingStatusDriver extends AbstractCodingStatusDriver
      */
     public function getName(): string
     {
-        return 'RequestCodingStatus';
+        return '请求次数计费';
     }
 
     /**

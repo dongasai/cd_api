@@ -28,10 +28,6 @@ class OpenAICompatibleProvider extends AbstractProvider
 
     protected array $supportedModels = [];
 
-    protected array $forwardHeaders = [];
-
-    protected array $clientHeaders = [];
-
     public function __construct(array $config = [])
     {
         parent::__construct($config);
@@ -40,8 +36,6 @@ class OpenAICompatibleProvider extends AbstractProvider
         $this->authHeader = $config['auth_header'] ?? 'Authorization';
         $this->authPrefix = $config['auth_prefix'] ?? 'Bearer';
         $this->supportedModels = $config['models'] ?? [];
-        $this->forwardHeaders = $config['forward_headers'] ?? [];
-        $this->clientHeaders = $config['client_headers'] ?? [];
     }
 
     public function getDefaultBaseUrl(): string
@@ -76,72 +70,7 @@ class OpenAICompatibleProvider extends AbstractProvider
             $headers[$key] = $value;
         }
 
-        $forwardedHeaders = $this->buildForwardedHeaders();
-        foreach ($forwardedHeaders as $key => $value) {
-            if (! isset($headers[$key])) {
-                $headers[$key] = $value;
-            }
-        }
-
-        return $headers;
-    }
-
-    protected function buildForwardedHeaders(): array
-    {
-        if (empty($this->forwardHeaders) || empty($this->clientHeaders)) {
-            return [];
-        }
-
-        $result = [];
-        $clientHeadersFlat = $this->flattenHeaders($this->clientHeaders);
-
-        foreach ($this->forwardHeaders as $pattern) {
-            $pattern = strtolower(trim($pattern));
-            if (empty($pattern)) {
-                continue;
-            }
-
-            foreach ($clientHeadersFlat as $headerName => $headerValue) {
-                $headerNameLower = strtolower($headerName);
-
-                if ($this->matchHeaderPattern($pattern, $headerNameLower)) {
-                    $result[$headerName] = $headerValue;
-                }
-            }
-        }
-
-        return $result;
-    }
-
-    protected function flattenHeaders(array $headers): array
-    {
-        $flat = [];
-        foreach ($headers as $key => $value) {
-            if (is_array($value)) {
-                $flat[$key] = reset($value);
-            } else {
-                $flat[$key] = $value;
-            }
-        }
-
-        return $flat;
-    }
-
-    protected function matchHeaderPattern(string $pattern, string $headerName): bool
-    {
-        if (str_ends_with($pattern, '*')) {
-            $prefix = substr($pattern, 0, -1);
-
-            return str_starts_with($headerName, $prefix);
-        }
-
-        if (str_starts_with($pattern, '*')) {
-            $suffix = substr($pattern, 1);
-
-            return str_ends_with($headerName, $suffix);
-        }
-
-        return $pattern === $headerName;
+        return $this->mergeForwardedHeaders($headers);
     }
 
     public function buildRequestBody(ProviderRequest $request): array

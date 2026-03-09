@@ -3,10 +3,10 @@
 namespace App\Console\Commands;
 
 use App\Models\Channel;
-use App\Services\Provider\DTO\ProviderRequest;
 use App\Services\Provider\Driver\AnthropicProvider;
 use App\Services\Provider\Driver\OpenAICompatibleProvider;
 use App\Services\Provider\Driver\OpenAIProvider;
+use App\Services\Provider\DTO\ProviderRequest;
 use App\Services\Provider\Exceptions\ProviderException;
 use Illuminate\Console\Command;
 
@@ -33,18 +33,20 @@ class TestChannel extends Command
 
         $channelIdOrName = $this->argument('channel');
 
-        if (!$channelIdOrName) {
+        if (! $channelIdOrName) {
             $channelIdOrName = $this->askForChannel();
-            if (!$channelIdOrName) {
+            if (! $channelIdOrName) {
                 $this->error('请指定要测试的渠道');
+
                 return self::FAILURE;
             }
         }
 
         $channel = $this->findChannel($channelIdOrName);
 
-        if (!$channel) {
+        if (! $channel) {
             $this->error("渠道不存在: {$channelIdOrName}");
+
             return self::FAILURE;
         }
 
@@ -57,6 +59,7 @@ class TestChannel extends Command
 
         if ($channels->isEmpty()) {
             $this->warn('没有找到启用的渠道');
+
             return null;
         }
 
@@ -70,6 +73,7 @@ class TestChannel extends Command
         }
 
         preg_match('/\[(\d+)\]/', $selected, $matches);
+
         return $matches[1] ?? null;
     }
 
@@ -89,6 +93,7 @@ class TestChannel extends Command
 
         if ($channels->isEmpty()) {
             $this->warn('没有找到启用的渠道');
+
             return self::SUCCESS;
         }
 
@@ -122,14 +127,29 @@ class TestChannel extends Command
         }
 
         if (empty($channel->api_key)) {
-            $this->error("  ✗ 渠道未配置 API Key");
+            $this->error('  ✗ 渠道未配置 API Key');
+
             return self::FAILURE;
         }
 
-        $model = $this->option('model') ?? $channel->getDefaultModelName() ?? $this->getDefaultModelForProvider($channel->provider);
+        $model = $this->option('model') ?? $channel->getDefaultModelName();
 
-        if (!$model) {
-            $this->error("  ✗ 未找到可用的模型");
+        // 如果没有指定模型且没有默认模型，尝试获取第一个启用的模型
+        if (! $model) {
+            $models = $channel->getModelsArray();
+            if (! empty($models)) {
+                $model = array_key_first($models);
+            }
+        }
+
+        // 最后才使用 provider 的默认模型
+        if (! $model) {
+            $model = $this->getDefaultModelForProvider($channel->provider);
+        }
+
+        if (! $model) {
+            $this->error('  ✗ 未找到可用的模型');
+
             return self::FAILURE;
         }
 
@@ -156,7 +176,7 @@ class TestChannel extends Command
             $latency = round((microtime(true) - $startTime) * 1000, 2);
 
             if ($verbose) {
-                $this->info("  ✓ 连接成功");
+                $this->info('  ✓ 连接成功');
                 $this->info("  延迟: {$latency}ms");
 
                 if ($response->content) {
@@ -172,7 +192,6 @@ class TestChannel extends Command
             }
 
             $channel->update([
-                'health_status' => 'healthy',
                 'last_check_at' => now(),
                 'last_success_at' => now(),
                 'success_count' => ($channel->success_count ?? 0) + 1,
@@ -195,18 +214,17 @@ class TestChannel extends Command
         $errorMessage = $e->getMessage();
 
         if ($verbose) {
-            $this->error("  ✗ 连接失败");
+            $this->error('  ✗ 连接失败');
             $this->error("  错误: {$errorMessage}");
 
-            if ($e->getContext()) {
-                $this->error("  详情: " . json_encode($e->getContext(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            if ($e->getRawError()) {
+                $this->error('  详情: '.json_encode($e->getRawError(), JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
             }
         } else {
             $this->error("  ✗ [{$channel->id}] {$channel->name} - {$errorMessage}");
         }
 
         $channel->update([
-            'health_status' => 'unhealthy',
             'last_check_at' => now(),
             'last_failure_at' => now(),
             'failure_count' => ($channel->failure_count ?? 0) + 1,
@@ -228,6 +246,7 @@ class TestChannel extends Command
 
         if (isset($this->providerMap[$provider])) {
             $class = $this->providerMap[$provider];
+
             return new $class($config);
         }
 

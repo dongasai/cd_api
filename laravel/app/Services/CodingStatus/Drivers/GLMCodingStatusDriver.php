@@ -23,7 +23,7 @@ class GLMCodingStatusDriver extends AbstractCodingStatusDriver
      */
     public function getName(): string
     {
-        return 'GLMCodingStatus';
+        return '智谱GLM官方API';
     }
 
     /**
@@ -349,7 +349,7 @@ class GLMCodingStatusDriver extends AbstractCodingStatusDriver
     {
         // 优先从缓存获取
         $cached = $this->account->quota_cached ?? [];
-        if (!empty($cached['usage'])) {
+        if (! empty($cached['usage'])) {
             return $cached['usage'];
         }
 
@@ -377,7 +377,7 @@ class GLMCodingStatusDriver extends AbstractCodingStatusDriver
         }
 
         // 验证API Key格式 (智谱GLM的API Key通常以特定前缀开头)
-        if (!str_starts_with($apiKey, 'sk-') && !str_starts_with($apiKey, 'eyJ')) {
+        if (! str_starts_with($apiKey, 'sk-') && ! str_starts_with($apiKey, 'eyJ')) {
             return [
                 'valid' => false,
                 'message' => 'API Key 格式不正确',

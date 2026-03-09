@@ -3,7 +3,6 @@
 namespace App\Filament\Resources\ModelLists\Tables;
 
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -36,6 +35,18 @@ class ModelListsTable
                     ->searchable()
                     ->default('-'),
 
+                TextColumn::make('common_name')
+                    ->label('通用名字')
+                    ->searchable()
+                    ->default('-')
+                    ->toggleable(),
+
+                TextColumn::make('hugging_face_id')
+                    ->label('Hugging Face ID')
+                    ->searchable()
+                    ->default('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('capabilities')
                     ->label('能力')
                     ->formatStateUsing(function ($state): string {
@@ -65,6 +76,24 @@ class ModelListsTable
                     ->formatStateUsing(fn ($state) => $state ? number_format($state) : '-')
                     ->sortable(),
 
+                TextColumn::make('pricing_prompt')
+                    ->label('输入价格')
+                    ->money('USD', divideBy: 1000000)
+                    ->default('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('pricing_completion')
+                    ->label('输出价格')
+                    ->money('USD', divideBy: 1000000)
+                    ->default('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
+                TextColumn::make('pricing_input_cache_read')
+                    ->label('缓存价格')
+                    ->money('USD', divideBy: 1000000)
+                    ->default('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
+
                 IconColumn::make('is_enabled')
                     ->label('状态')
                     ->boolean()
@@ -84,9 +113,6 @@ class ModelListsTable
                     ->dateTime('Y-m-d H:i')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->headerActions([
-                CreateAction::make(),
             ])
             ->recordActions([
                 EditAction::make(),

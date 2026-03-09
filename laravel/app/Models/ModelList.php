@@ -13,9 +13,14 @@ class ModelList extends Model
         'model_name',
         'display_name',
         'provider',
+        'hugging_face_id',
+        'common_name',
         'description',
         'capabilities',
         'context_length',
+        'pricing_prompt',
+        'pricing_completion',
+        'pricing_input_cache_read',
         'is_enabled',
         'config',
     ];
@@ -27,6 +32,9 @@ class ModelList extends Model
             'config' => 'array',
             'is_enabled' => 'boolean',
             'context_length' => 'integer',
+            'pricing_prompt' => 'decimal:6',
+            'pricing_completion' => 'decimal:6',
+            'pricing_input_cache_read' => 'decimal:6',
         ];
     }
 

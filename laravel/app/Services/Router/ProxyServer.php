@@ -2,10 +2,12 @@
 
 namespace App\Services\Router;
 
+use App\Models\ApiKey;
 use App\Models\AuditLog;
 use App\Models\Channel;
 use App\Models\RequestLog;
 use App\Models\ResponseLog;
+use App\Services\ChannelAffinity\ChannelAffinityService;
 use App\Services\CodingStatus\ChannelCodingStatusService;
 use App\Services\Protocol\DTO\StandardRequest;
 use App\Services\Protocol\DTO\StandardResponse;
@@ -27,6 +29,8 @@ use Illuminate\Support\Str;
  * - 渠道选择与路由
  * - 流式/非流式响应处理
  * - 日志记录与审计
+ * - 自动重试与故障转移
+ * - 渠道亲和性路由
  */
 class ProxyServer
 {
@@ -51,6 +55,11 @@ class ProxyServer
     protected ChannelCodingStatusService $codingStatusService;
 
     /**
+     * 渠道亲和性服务
+     */
+    protected ChannelAffinityService $affinityService;
+
+    /**
      * 当前请求 ID
      */
     protected ?string $requestId = null;
@@ -71,24 +80,54 @@ class ProxyServer
     protected ?Channel $selectedChannel = null;
 
     /**
+     * 当前分组名称
+     */
+    protected ?string $currentGroup = null;
+
+    /**
+     * 已失败的渠道列表（用于故障转移）
+     */
+    protected array $failedChannels = [];
+
+    /**
+     * 最大重试次数
+     */
+    protected int $maxRetries;
+
+    /**
+     * 可重试的 HTTP 状态码
+     */
+    protected array $retryableStatusCodes = [429, 500, 502, 503, 504];
+
+    /**
+     * 是否启用故障转移
+     */
+    protected bool $enableFailover;
+
+    /**
      * 构造函数
      *
      * @param  ProtocolConverter  $protocolConverter  协议转换器
      * @param  ProviderManager  $providerManager  供应商管理器
      * @param  ChannelRouterService  $channelRouter  渠道路由服务
      * @param  ChannelCodingStatusService  $codingStatusService  编码状态服务
+     * @param  ChannelAffinityService  $affinityService  渠道亲和性服务
      */
     public function __construct(
         ProtocolConverter $protocolConverter,
         ProviderManager $providerManager,
         ChannelRouterService $channelRouter,
-        ChannelCodingStatusService $codingStatusService
+        ChannelCodingStatusService $codingStatusService,
+        ChannelAffinityService $affinityService
     ) {
         $this->protocolConverter = $protocolConverter;
         $this->providerManager = $providerManager;
         $this->channelRouter = $channelRouter;
         $this->codingStatusService = $codingStatusService;
+        $this->affinityService = $affinityService;
         $this->startTime = microtime(true);
+        $this->maxRetries = config('router.max_retry', 3);
+        $this->enableFailover = config('router.enable_failover', true);
     }
 
     /**
@@ -104,52 +143,169 @@ class ProxyServer
     {
         $this->requestId = $request->attributes->get('request_id', Str::uuid()->toString());
         $this->startTime = microtime(true);
+        $this->failedChannels = [];
+        $this->selectedChannel = null;
 
         $rawRequest = $request->all();
         $isStream = $rawRequest['stream'] ?? false;
 
         $requestLog = $this->createRequestLog($request, $rawRequest, $protocol);
 
-        try {
-            // 标准化请求
-            $standardRequest = $this->protocolConverter->normalizeRequest($rawRequest, $protocol);
+        $lastException = null;
+        $attempt = 0;
 
-            $this->updateRequestLogModel($requestLog, $standardRequest);
+        // 获取 API Key
+        $apiKey = $request->attributes->get('api_key');
 
-            // 验证模型是否在允许的列表中
-            $this->validateModel($standardRequest->model, $request);
+        while ($attempt <= $this->maxRetries) {
+            try {
+                // 标准化请求
+                $standardRequest = $this->protocolConverter->normalizeRequest($rawRequest, $protocol);
 
-            // 应用 Key 级别的模型映射
-            $apiKey = $request->attributes->get('api_key');
-            if ($apiKey && method_exists($apiKey, 'resolveModel')) {
-                $standardRequest->model = $apiKey->resolveModel($standardRequest->model);
+                $this->updateRequestLogModel($requestLog, $standardRequest);
+
+                // 验证模型是否在允许的列表中
+                $this->validateModel($standardRequest->model, $request);
+
+                // 应用 Key 级别的模型映射
+                if ($apiKey && method_exists($apiKey, 'resolveModel')) {
+                    $standardRequest->model = $apiKey->resolveModel($standardRequest->model);
+                }
+
+                // 选择渠道（首次或故障转移时）
+                if ($this->selectedChannel === null || $attempt > 0) {
+                    $this->selectedChannel = $this->selectChannelWithFallback($standardRequest->model, $apiKey);
+                }
+
+                if ($this->selectedChannel === null) {
+                    throw new \RuntimeException('No available channel for model: '.$standardRequest->model);
+                }
+
+                // 解析实际模型名称
+                $actualModel = $this->channelRouter->resolveModel($standardRequest->model, $this->selectedChannel);
+
+                // 获取渠道协议
+                $channelProtocol = $this->getChannelProtocol($this->selectedChannel);
+
+                // 构建供应商请求
+                $providerRequest = $this->buildProviderRequest($standardRequest, $this->selectedChannel, $channelProtocol, $actualModel);
+
+                $provider = $this->providerManager->getForChannel($this->selectedChannel, $request->headers->all());
+
+                // 根据是否流式请求分别处理
+                if ($isStream) {
+                    return $this->handleStreamRequest($request, $standardRequest, $providerRequest, $provider, $protocol, $channelProtocol, $requestLog);
+                }
+
+                return $this->handleNonStreamRequest($request, $standardRequest, $providerRequest, $provider, $protocol, $channelProtocol, $requestLog);
+            } catch (\Exception $e) {
+                $lastException = $e;
+                $statusCode = $this->getStatusCode($e);
+
+                // 检查是否应该重试
+                if (! $this->shouldRetry($e, $attempt)) {
+                    break;
+                }
+
+                // 标记当前渠道失败
+                if ($this->selectedChannel) {
+                    $this->failedChannels[] = $this->selectedChannel->id;
+                    $this->channelRouter->markChannelFailed($this->selectedChannel, $e->getMessage());
+                    Log::warning('Channel failed, will retry', [
+                        'request_id' => $this->requestId,
+                        'channel_id' => $this->selectedChannel->id,
+                        'attempt' => $attempt + 1,
+                        'max_retries' => $this->maxRetries,
+                        'error' => $e->getMessage(),
+                    ]);
+                    $this->selectedChannel = null;
+                }
+
+                $attempt++;
+
+                // 添加指数退避延迟
+                if ($attempt <= $this->maxRetries) {
+                    usleep(min(100000 * pow(2, $attempt - 1), 1000000)); // 最大延迟 1 秒
+                }
             }
-
-            // 选择渠道
-            $this->selectedChannel = $this->channelRouter->selectChannel($standardRequest->model);
-
-            // 解析实际模型名称
-            $actualModel = $this->channelRouter->resolveModel($standardRequest->model, $this->selectedChannel);
-
-            // 获取渠道协议
-            $channelProtocol = $this->getChannelProtocol($this->selectedChannel);
-
-            // 构建供应商请求
-            $providerRequest = $this->buildProviderRequest($standardRequest, $this->selectedChannel, $channelProtocol, $actualModel);
-
-            $provider = $this->providerManager->getForChannel($this->selectedChannel, $request->headers->all());
-
-            // 根据是否流式请求分别处理
-            if ($isStream) {
-                return $this->handleStreamRequest($request, $standardRequest, $providerRequest, $provider, $protocol, $channelProtocol, $requestLog);
-            }
-
-            return $this->handleNonStreamRequest($request, $standardRequest, $providerRequest, $provider, $protocol, $channelProtocol, $requestLog);
-        } catch (\Exception $e) {
-            $this->handleError($e, $request, $requestLog);
-
-            throw $e;
         }
+
+        // 所有重试都失败了
+        $this->handleError($lastException, $request, $requestLog);
+
+        throw $lastException;
+    }
+
+    /**
+     * 选择渠道（支持故障转移）
+     *
+     * @param  string  $model  模型名称
+     * @param  ApiKey|null  $apiKey  API Key 实例
+     * @return Channel|null 选中的渠道
+     */
+    protected function selectChannelWithFallback(string $model, ?ApiKey $apiKey = null): ?Channel
+    {
+        if (empty($this->failedChannels)) {
+            $affinityResult = $this->affinityService->getPreferredChannel(
+                request(),
+                $model,
+                $this->currentGroup ?? null
+            );
+
+            if ($affinityResult->isHit && $affinityResult->channel) {
+                Log::info('Using affinity channel', [
+                    'request_id' => $this->requestId,
+                    'channel_id' => $affinityResult->channel->id,
+                    'rule_id' => $affinityResult->rule?->id,
+                    'key_hash' => $affinityResult->keyHash,
+                ]);
+
+                return $affinityResult->channel;
+            }
+
+            return $this->channelRouter->selectChannel($model, ['api_key' => $apiKey]);
+        }
+
+        if ($this->enableFailover) {
+            $fallbackChannel = $this->channelRouter->getFallbackChannelForRetry($model, $this->failedChannels, $apiKey);
+            if ($fallbackChannel) {
+                Log::info('Using fallback channel', [
+                    'request_id' => $this->requestId,
+                    'channel_id' => $fallbackChannel->id,
+                    'failed_channels' => $this->failedChannels,
+                ]);
+
+                return $fallbackChannel;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 检查是否应该重试
+     *
+     * @param  \Exception  $e  异常
+     * @param  int  $attempt  当前尝试次数
+     * @return bool 是否应该重试
+     */
+    protected function shouldRetry(\Exception $e, int $attempt): bool
+    {
+        if ($attempt >= $this->maxRetries) {
+            return false;
+        }
+
+        if ($this->affinityService->shouldSkipRetry(request())) {
+            return false;
+        }
+
+        $statusCode = $this->getStatusCode($e);
+
+        if ($statusCode >= 400 && $statusCode < 500 && $statusCode !== 429) {
+            return false;
+        }
+
+        return in_array($statusCode, $this->retryableStatusCodes, true) || $statusCode >= 500;
     }
 
     /**
@@ -186,6 +342,13 @@ class ProxyServer
         $this->createResponseLog($requestLog, $response, $providerResponse, $latencyMs, $auditLog?->id);
 
         $this->recordUsage($standardRequest, $standardResponse);
+
+        $this->affinityService->recordAffinity(
+            $httpRequest,
+            $this->selectedChannel,
+            $standardRequest->model,
+            $this->currentGroup
+        );
 
         return $response;
     }
@@ -264,6 +427,13 @@ class ProxyServer
         $this->createResponseLog($requestLog, ['stream' => true, 'content' => $fullContent], null, $latencyMs, $auditLog?->id, true, $usage, $finishReason);
 
         $this->recordUsage($standardRequest, $standardResponse);
+
+        $this->affinityService->recordAffinity(
+            $httpRequest,
+            $this->selectedChannel,
+            $standardRequest->model,
+            $this->currentGroup
+        );
     }
 
     /**
@@ -343,6 +513,8 @@ class ProxyServer
         $usage = $standardResponse->usage;
         $cost = $this->calculateCost($standardRequest->model, $usage);
 
+        $affinityInfo = $this->affinityService->getAffinityInfo($httpRequest);
+
         return AuditLog::create([
             'user_id' => $user?->id,
             'username' => $user?->name,
@@ -368,6 +540,7 @@ class ProxyServer
             'finish_reason' => $standardResponse->finishReason,
             'client_ip' => $httpRequest->ip(),
             'user_agent' => $httpRequest->userAgent(),
+            'channel_affinity' => $affinityInfo,
             'created_at' => now(),
         ]);
     }
@@ -717,7 +890,7 @@ class ProxyServer
      * @param  int  $maxLength  最大长度
      * @return string|null 截断后的请求体
      */
-    protected function truncateBody(?string $body, int $maxLength = 10000): ?string
+    protected function truncateBody(?string $body, int $maxLength = 2097152): ?string
     {
         if (! $body) {
             return null;
