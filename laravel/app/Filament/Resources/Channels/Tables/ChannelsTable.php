@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Channels\Tables;
 
+use App\Filament\Resources\Channels\Actions\TestChannelAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -152,6 +153,7 @@ class ChannelsTable
             ->recordActions([
                 ViewAction::make(),
                 EditAction::make(),
+                TestChannelAction::make(),
                 DeleteAction::make(),
             ])
             ->toolbarActions([
