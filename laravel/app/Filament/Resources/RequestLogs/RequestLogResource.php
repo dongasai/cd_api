@@ -6,9 +6,9 @@ use App\Filament\Resources\RequestLogs\Tables\RequestLogsTable;
 use App\Models\RequestLog;
 use BackedEnum;
 use Filament\Resources\Resource;
-use UnitEnum;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class RequestLogResource extends Resource
 {

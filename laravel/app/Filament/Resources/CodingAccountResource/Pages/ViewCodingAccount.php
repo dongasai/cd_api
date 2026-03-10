@@ -6,9 +6,9 @@ use App\Filament\Resources\CodingAccountResource;
 use App\Services\CodingStatus\CodingStatusDriverManager;
 use Filament\Actions;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Resources\Pages\ViewRecord;
 
 class ViewCodingAccount extends ViewRecord
 {
@@ -66,6 +66,7 @@ class ViewCodingAccount extends ViewRecord
                                 if (is_array($state)) {
                                     return json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
                                 }
+
                                 return $state;
                             })
                             ->prose()
@@ -78,6 +79,7 @@ class ViewCodingAccount extends ViewRecord
                                 if (is_array($state)) {
                                     return json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
                                 }
+
                                 return $state ?? '无缓存数据';
                             })
                             ->prose()
@@ -139,7 +141,7 @@ class ViewCodingAccount extends ViewRecord
                         $this->notify('success', '配额同步成功');
                         $this->redirect($this->getResource()::getUrl('view', ['record' => $this->record]));
                     } catch (\Exception $e) {
-                        $this->notify('danger', '同步失败: ' . $e->getMessage());
+                        $this->notify('danger', '同步失败: '.$e->getMessage());
                     }
                 }),
 

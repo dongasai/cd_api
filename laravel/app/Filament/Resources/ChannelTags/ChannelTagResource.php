@@ -7,9 +7,9 @@ use App\Filament\Resources\ChannelTags\Tables\ChannelTagsTable;
 use App\Models\ChannelTag;
 use BackedEnum;
 use Filament\Resources\Resource;
-use UnitEnum;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class ChannelTagResource extends Resource
 {

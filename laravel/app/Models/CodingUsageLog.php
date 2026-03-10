@@ -14,8 +14,11 @@ class CodingUsageLog extends Model
      * 状态常量
      */
     public const STATUS_SUCCESS = 'success';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_THROTTLED = 'throttled';
+
     public const STATUS_REJECTED = 'rejected';
 
     /**

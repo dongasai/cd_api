@@ -2,8 +2,8 @@
 
 namespace Tests\Unit\Provider;
 
-use App\Services\Provider\DTO\ProviderRequest;
 use App\Services\Provider\Driver\OpenAICompatibleProvider;
+use App\Services\Provider\DTO\ProviderRequest;
 use PHPUnit\Framework\TestCase;
 
 class OpenAICompatibleProviderTest extends TestCase

@@ -31,6 +31,7 @@ class ResetPeriodQuota extends Command
     protected $description = '检查并执行周期配额重置';
 
     protected CodingStatusDriverManager $driverManager;
+
     protected ChannelCodingStatusService $channelService;
 
     public function __construct(
@@ -84,7 +85,7 @@ class ResetPeriodQuota extends Command
                     // 如果账户之前是耗尽状态，尝试恢复
                     if ($account->status === CodingAccount::STATUS_EXHAUSTED) {
                         $account->update(['status' => CodingAccount::STATUS_ACTIVE]);
-                        $this->info("  账户状态已恢复为活跃");
+                        $this->info('  账户状态已恢复为活跃');
 
                         // 触发关联渠道的自动启用
                         $enabledChannels = $this->enableRelatedChannels($account);
@@ -146,7 +147,7 @@ class ResetPeriodQuota extends Command
         $enabledCount = 0;
 
         foreach ($account->channels as $channel) {
-            if ($channel->allowsAutoEnable() && !$channel->isActive()) {
+            if ($channel->allowsAutoEnable() && ! $channel->isActive()) {
                 $result = $this->channelService->manualEnableChannel(
                     $channel,
                     null,

@@ -14,8 +14,11 @@ class ResponseLog extends Model
      * 响应类型常量
      */
     public const RESPONSE_TYPE_CHAT = 'chat';
+
     public const RESPONSE_TYPE_COMPLETION = 'completion';
+
     public const RESPONSE_TYPE_EMBEDDING = 'embedding';
+
     public const RESPONSE_TYPE_ERROR = 'error';
 
     public $timestamps = false;

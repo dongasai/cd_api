@@ -7,9 +7,9 @@ use App\Filament\Resources\ChannelGroups\Tables\ChannelGroupsTable;
 use App\Models\ChannelGroup;
 use BackedEnum;
 use Filament\Resources\Resource;
-use UnitEnum;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class ChannelGroupResource extends Resource
 {

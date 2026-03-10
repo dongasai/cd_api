@@ -2,9 +2,9 @@
 
 namespace Tests\Unit\Provider;
 
+use App\Services\Provider\Driver\AnthropicProvider;
 use App\Services\Provider\DTO\ProviderRequest;
 use App\Services\Provider\DTO\ProviderResponse;
-use App\Services\Provider\Driver\AnthropicProvider;
 use PHPUnit\Framework\TestCase;
 
 class AnthropicProviderTest extends TestCase

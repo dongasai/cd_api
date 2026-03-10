@@ -279,6 +279,13 @@ abstract class AbstractProvider implements ProviderInterface
                 ->withOptions(['stream' => true])
                 ->post($url, $body);
 
+            // Debug: 输出请求信息
+            Log::debug('Provider stream request', [
+                'url' => $url,
+                'headers' => $this->getHeaders(),
+                'body' => $body,
+            ]);
+
             // 检查响应状态码
             if (! $response->ok()) {
                 $this->recordFailure();
@@ -328,6 +335,13 @@ abstract class AbstractProvider implements ProviderInterface
         $body = $this->buildRequestBody($request);
         $endpoint = $this->getEndpoint($request);
         $url = rtrim($this->baseUrl, '/').'/'.ltrim($endpoint, '/');
+
+        // Debug: 输出实际请求信息
+        Log::debug('Provider request', [
+            'url' => $url,
+            'headers' => $this->getHeaders(),
+            'body' => $body,
+        ]);
 
         $response = Http::withHeaders($this->getHeaders())
             ->timeout($this->timeout)

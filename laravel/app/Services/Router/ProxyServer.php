@@ -205,8 +205,8 @@ class ProxyServer
                 // 构建供应商请求
                 $providerRequest = $this->buildProviderRequest($standardRequest, $this->selectedChannel, $channelProtocol, $actualModel);
 
-                // 更新请求日志，记录发往渠道的请求参数
-                $this->updateRequestLogForChannel($requestLog, $providerRequest, $this->selectedChannel, $actualModel, $channelProtocol);
+                // 更新请求日志，记录渠道信息
+                $this->updateRequestLogForChannel($requestLog, $this->selectedChannel, $actualModel);
 
                 $provider = $this->providerManager->getForChannel($this->selectedChannel, $request->headers->all());
 
@@ -516,18 +516,12 @@ class ProxyServer
      * @param  string  $actualModel  实际模型名称
      * @param  string  $channelProtocol  渠道协议
      */
-    protected function updateRequestLogForChannel(RequestLog $log, ProviderRequest $providerRequest, Channel $channel, string $actualModel, string $channelProtocol): void
+    protected function updateRequestLogForChannel(RequestLog $log, Channel $channel, string $actualModel): void
     {
-        // 根据协议获取请求体
-        $toRequestBody = $channelProtocol === 'anthropic'
-            ? $providerRequest->toAnthropicFormat()
-            : $providerRequest->toOpenAIFormat();
-
         $log->update([
             'channel_id' => $channel->id,
             'channel_name' => $channel->name,
             'upstream_model' => $actualModel,
-            'to_request_body' => $this->truncateBody(json_encode($toRequestBody, JSON_UNESCAPED_UNICODE)),
         ]);
     }
 
@@ -958,7 +952,7 @@ class ProxyServer
      */
     protected function filterSensitiveHeaders(array $headers): array
     {
-        $sensitiveKeys = ['authorization', 'x-api-key', 'cookie', 'set-cookie'];
+        $sensitiveKeys = [];
 
         return array_filter(
             $headers,

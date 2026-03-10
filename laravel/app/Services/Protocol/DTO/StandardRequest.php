@@ -119,7 +119,7 @@ class StandardRequest
             additionalParams: self::extractAdditionalParams($request, [
                 'model', 'messages', 'system', 'temperature', 'top_p', 'top_k',
                 'max_tokens', 'stop_sequences', 'stream', 'tools', 'tool_choice',
-                'metadata',
+                'metadata', 'thinking', 'output_config', 'beta',
             ]),
             user: $request['metadata']['user_id'] ?? null,
             hasImages: self::hasAnthropicImageContent($request['messages'] ?? []),
@@ -209,7 +209,8 @@ class StandardRequest
             $request['metadata']['user_id'] = $this->user;
         }
 
-        return $request;
+        // 合并额外参数（保留原始请求中的特有参数如 thinking, output_config, beta 等）
+        return array_merge($this->additionalParams, $request);
     }
 
     /**
@@ -545,16 +546,55 @@ class StandardRequest
 
         return array_map(function ($tool) {
             if (isset($tool['input_schema'])) {
+                // 修复 input_schema 中无效的 additionalProperties
+                $tool['input_schema'] = self::fixInputSchema($tool['input_schema']);
+
                 return $tool;
             }
 
             // OpenAI 格式转换
+            $inputSchema = $tool['function']['parameters'];
+            $inputSchema = self::fixInputSchema($inputSchema);
+
             return [
                 'name' => $tool['function']['name'],
                 'description' => $tool['function']['description'] ?? '',
-                'input_schema' => $tool['function']['parameters'],
+                'input_schema' => $inputSchema,
             ];
         }, $this->tools);
+    }
+
+    /**
+     * 修复 input_schema 中无效的 additionalProperties
+     *
+     * JSON Schema 规范要求 additionalProperties 应该是 boolean 或 object
+     * 但有些客户端可能传入空数组 []，需要修复
+     */
+    private static function fixInputSchema(array $schema): array
+    {
+        if (isset($schema['additionalProperties'])) {
+            $ap = $schema['additionalProperties'];
+            // 如果是空数组，转换为 false
+            if (is_array($ap) && empty($ap)) {
+                $schema['additionalProperties'] = false;
+            }
+        }
+
+        // 递归处理嵌套的 properties
+        if (isset($schema['properties']) && is_array($schema['properties'])) {
+            foreach ($schema['properties'] as $key => $property) {
+                if (is_array($property)) {
+                    $schema['properties'][$key] = self::fixInputSchema($property);
+                }
+            }
+        }
+
+        // 处理 items（数组类型的元素）
+        if (isset($schema['items']) && is_array($schema['items'])) {
+            $schema['items'] = self::fixInputSchema($schema['items']);
+        }
+
+        return $schema;
     }
 
     /**

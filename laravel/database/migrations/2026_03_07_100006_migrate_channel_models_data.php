@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -29,7 +28,7 @@ return new class extends Migration
             }
 
             // 如果没有 models 也没有 default_model，但有 model_mappings，使用 mappings 的 keys
-            if (empty($models) && !empty($modelMappings)) {
+            if (empty($models) && ! empty($modelMappings)) {
                 $models = array_combine(
                     array_keys($modelMappings),
                     array_keys($modelMappings)
@@ -47,7 +46,7 @@ return new class extends Migration
                     ->where('model_name', $modelName)
                     ->exists();
 
-                if (!$exists) {
+                if (! $exists) {
                     DB::table('channel_models')->insert([
                         'channel_id' => $channel->id,
                         'model_name' => $modelName,
@@ -64,7 +63,7 @@ return new class extends Migration
 
             // 处理只有 model_mappings 中没有在 models 中的映射
             foreach ($modelMappings as $modelName => $mappedModel) {
-                if (!isset($models[$modelName])) {
+                if (! isset($models[$modelName])) {
                     $isDefault = ($modelName === $defaultModel);
 
                     $exists = DB::table('channel_models')
@@ -72,7 +71,7 @@ return new class extends Migration
                         ->where('model_name', $modelName)
                         ->exists();
 
-                    if (!$exists) {
+                    if (! $exists) {
                         DB::table('channel_models')->insert([
                             'channel_id' => $channel->id,
                             'model_name' => $modelName,

@@ -32,7 +32,7 @@ class CheckCodingQuota
         // 渠道信息可能在请求属性中，或者从路由参数获取
         $channel = $request->attributes->get('channel');
 
-        if (!$channel) {
+        if (! $channel) {
             // 如果没有渠道信息，尝试从路由参数获取
             $channelId = $request->route('channel_id');
             if ($channelId) {
@@ -41,12 +41,12 @@ class CheckCodingQuota
         }
 
         // 如果没有渠道信息，直接放行
-        if (!$channel) {
+        if (! $channel) {
             return $next($request);
         }
 
         // 检查渠道是否绑定Coding账户
-        if (!$channel->hasCodingAccount()) {
+        if (! $channel->hasCodingAccount()) {
             return $next($request);
         }
 
@@ -56,7 +56,7 @@ class CheckCodingQuota
         // 检查配额
         $checkResult = $this->codingStatusService->checkRequestAllowed($channel, $context);
 
-        if (!$checkResult['allowed']) {
+        if (! $checkResult['allowed']) {
             // 配额不足，返回429错误
             return response()->json([
                 'error' => [
@@ -88,7 +88,7 @@ class CheckCodingQuota
 
         // 尝试估算Token数量
         $messages = $request->input('messages', []);
-        if (!empty($messages)) {
+        if (! empty($messages)) {
             $estimatedTokens = $this->estimateTokens($messages);
             $context['tokens_input'] = $estimatedTokens['input'];
             $context['tokens_output'] = $estimatedTokens['output'];

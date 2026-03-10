@@ -141,24 +141,11 @@ class ProviderRequest
      */
     public function toAnthropicFormat(): array
     {
-        $systemContent = null;
         $filteredMessages = [];
 
         foreach ($this->messages as $message) {
             if (isset($message['role']) && $message['role'] === 'system') {
-                $content = $message['content'] ?? '';
-                if (is_array($content)) {
-                    $text = '';
-                    foreach ($content as $block) {
-                        if (is_string($block)) {
-                            $text .= $block;
-                        } elseif (isset($block['text'])) {
-                            $text .= $block['text'];
-                        }
-                    }
-                    $content = $text;
-                }
-                $systemContent = ($systemContent ? $systemContent."\n\n" : '').$content;
+                // system 消息应该放到 system 字段，不处理
             } else {
                 $content = $message['content'] ?? '';
                 if (is_array($content)) {
@@ -175,38 +162,20 @@ class ProviderRequest
             }
         }
 
-        if ($this->systemPrompt !== null) {
-            if (is_array($this->systemPrompt)) {
-                $text = '';
-                foreach ($this->systemPrompt as $block) {
-                    if (is_string($block)) {
-                        $text .= $block;
-                    } elseif (isset($block['text'])) {
-                        $text .= $block['text'];
-                    }
-                }
-                $systemContent = $text;
-            } else {
-                $systemContent = $this->systemPrompt;
-            }
-        }
-
-        // 只包含 Anthropic API 支持的参数，过滤掉不支持的参数
-        // 不支持的参数: reasoning_effort, stream_options, frequency_penalty, presence_penalty, logit_bias, n 等
-        // 注意: max_tokens 是必需参数，但如果客户端没有提供，让上游 API 自己决定默认值
-        $request = [
+        // 构建基础请求，保留 parameters 中的未知参数（如 thinking, output_config, beta 等）
+        $request = array_merge($this->parameters, [
             'model' => $this->model,
             'messages' => $filteredMessages,
-        ];
+        ]);
 
         // max_tokens 对于 Anthropic API 是必需的，但如果为 null 则不设置
-        // 让上游 API 使用其默认值
         if ($this->maxTokens !== null) {
             $request['max_tokens'] = $this->maxTokens;
         }
 
-        if ($systemContent !== null && $systemContent !== '') {
-            $request['system'] = $systemContent;
+        // system 字段：保持原始格式（数组或字符串），支持 cache_control
+        if ($this->systemPrompt !== null) {
+            $request['system'] = $this->systemPrompt;
         }
         if ($this->temperature !== null) {
             $request['temperature'] = $this->temperature;
@@ -221,7 +190,7 @@ class ProviderRequest
             $request['stream'] = true;
         }
         if ($this->tools !== null) {
-            $request['tools'] = $this->tools;
+            $request['tools'] = $this->fixToolsForAnthropic($this->tools);
         }
         if ($this->toolChoice !== null) {
             $request['tool_choice'] = $this->toolChoice;
@@ -247,5 +216,52 @@ class ProviderRequest
     public function hasTools(): bool
     {
         return $this->tools !== null && count($this->tools) > 0;
+    }
+
+    /**
+     * 修复工具定义以兼容 Anthropic API
+     *
+     * JSON Schema 规范要求 additionalProperties 应该是 boolean 或 object
+     * 但有些客户端可能传入空数组 []，需要修复
+     */
+    private function fixToolsForAnthropic(array $tools): array
+    {
+        return array_map(function ($tool) {
+            if (isset($tool['input_schema'])) {
+                $tool['input_schema'] = $this->fixInputSchema($tool['input_schema']);
+            }
+
+            return $tool;
+        }, $tools);
+    }
+
+    /**
+     * 修复 input_schema 中无效的 additionalProperties
+     */
+    private function fixInputSchema(array $schema): array
+    {
+        if (isset($schema['additionalProperties'])) {
+            $ap = $schema['additionalProperties'];
+            // 如果是空数组，转换为 false
+            if (is_array($ap) && empty($ap)) {
+                $schema['additionalProperties'] = false;
+            }
+        }
+
+        // 递归处理嵌套的 properties
+        if (isset($schema['properties']) && is_array($schema['properties'])) {
+            foreach ($schema['properties'] as $key => $property) {
+                if (is_array($property)) {
+                    $schema['properties'][$key] = $this->fixInputSchema($property);
+                }
+            }
+        }
+
+        // 处理 items（数组类型的元素）
+        if (isset($schema['items']) && is_array($schema['items'])) {
+            $schema['items'] = $this->fixInputSchema($schema['items']);
+        }
+
+        return $schema;
     }
 }

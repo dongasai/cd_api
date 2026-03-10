@@ -13,8 +13,11 @@ class ModelMultiplier extends Model
      * 分类常量
      */
     public const CATEGORY_BASIC = 'basic';
+
     public const CATEGORY_STANDARD = 'standard';
+
     public const CATEGORY_ADVANCED = 'advanced';
+
     public const CATEGORY_REASONING = 'reasoning';
 
     /**
@@ -84,7 +87,7 @@ class ModelMultiplier extends Model
         // 将通配符转换为正则表达式
         $pattern = preg_quote($pattern, '#');
         $pattern = str_replace('\*', '.*', $pattern);
-        $pattern = '#^' . $pattern . '$#';
+        $pattern = '#^'.$pattern.'$#';
 
         return preg_match($pattern, $model) === 1;
     }

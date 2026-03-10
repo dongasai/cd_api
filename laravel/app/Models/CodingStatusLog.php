@@ -14,8 +14,11 @@ class CodingStatusLog extends Model
      * 触发方式常量
      */
     public const TRIGGERED_BY_SYSTEM = 'system';
+
     public const TRIGGERED_BY_MANUAL = 'manual';
+
     public const TRIGGERED_BY_API = 'api';
+
     public const TRIGGERED_BY_SYNC = 'sync';
 
     /**
