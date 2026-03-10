@@ -8,8 +8,9 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 
 /**
- * 重放客户端真实请求
- * php artisan request:replay 981
+ * 重放客户端真实请求,使用真实Http重新请求到本系统
+ * 
+ * php artisan request:replay 1004
  */
 class ReplayRequest extends Command
 {
@@ -84,15 +85,6 @@ class ReplayRequest extends Command
 
     protected function getRequestBody(RequestLog $log): array
     {
-        // 优先使用 to_request_body (转换后的请求体，走系统转发流程)
-        if (! empty($log->to_request_body)) {
-            if (is_string($log->to_request_body)) {
-                return json_decode($log->to_request_body, true) ?? [];
-            }
-
-            return $log->to_request_body;
-        }
-
         // 使用原始请求体
         if (! empty($log->body_text)) {
             return json_decode($log->body_text, true) ?? [];
@@ -118,12 +110,6 @@ class ReplayRequest extends Command
             $this->error('无法确定请求模型');
 
             return self::FAILURE;
-        }
-
-        // 保持原始请求体不变，不篡改任何数据
-        // 仅更新模型为上游模型（如果存在）
-        if ($log->upstream_model) {
-            $body['model'] = $log->upstream_model;
         }
 
         $this->newLine();
@@ -167,7 +153,6 @@ class ReplayRequest extends Command
         $this->info("URL: {$url}");
 
         $response = Http::withHeaders($headers)
-            ->withBody(json_encode($body), 'application/json')
             ->timeout((int) $this->option('timeout'))
             ->connectTimeout(30)
             ->post($url, $body);
