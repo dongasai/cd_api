@@ -42,14 +42,22 @@ class StandardToolCall
 
     /**
      * 从 Anthropic 格式创建
+     * 支持两种格式:
+     * - 原始 Anthropic 格式: {id, name, input}
+     * - ContentBlock::toArray() 格式: {tool_id, tool_name, tool_input}
      */
     public static function fromAnthropic(array $block): self
     {
+        // 支持两种字段名格式
+        $id = $block['id'] ?? $block['tool_id'] ?? '';
+        $name = $block['name'] ?? $block['tool_name'] ?? '';
+        $input = $block['input'] ?? $block['tool_input'] ?? [];
+
         return new self(
-            id: $block['id'] ?? '',
+            id: $id,
             type: 'function',
-            name: $block['name'] ?? '',
-            arguments: $block['input'] ?? [],
+            name: $name,
+            arguments: $input,
             index: $block['index'] ?? null,
         );
     }
@@ -76,13 +84,21 @@ class StandardToolCall
      */
     public function toAnthropic(): array
     {
+        // 处理 arguments 字段
+        $input = $this->arguments;
+        if (is_string($input)) {
+            $decoded = json_decode($input, true);
+            if ($decoded !== null) {
+                $input = $decoded;
+            }
+            // 如果 json_decode 失败，保持原始字符串
+        }
+
         return [
             'type' => 'tool_use',
             'id' => $this->id,
             'name' => $this->name,
-            'input' => is_string($this->arguments)
-                ? json_decode($this->arguments, true) ?? []
-                : $this->arguments,
+            'input' => $input,
         ];
     }
 

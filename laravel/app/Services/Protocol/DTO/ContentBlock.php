@@ -15,7 +15,6 @@ class ContentBlock
         public ?array $source = null,
 
         public ?string $imageUrl = null,
-
         public ?string $detail = null,
 
         public ?string $audioData = null,
@@ -30,6 +29,9 @@ class ContentBlock
         public ?bool $toolResultIsError = null,
 
         public ?string $thinking = null,
+
+        // Anthropic 特有字段，部分上游 API 不支持
+        public ?array $cacheControl = null,
     ) {}
 
     /**
@@ -64,21 +66,25 @@ class ContentBlock
     public static function fromAnthropic(array $block): self
     {
         $type = $block['type'] ?? 'text';
+        $cacheControl = $block['cache_control'] ?? null;
 
         return match ($type) {
             'text' => new self(
                 type: 'text',
                 text: $block['text'] ?? '',
+                cacheControl: $cacheControl,
             ),
             'image' => new self(
                 type: 'image',
                 source: $block['source'] ?? null,
+                cacheControl: $cacheControl,
             ),
             'tool_use' => new self(
                 type: 'tool_use',
                 toolId: $block['id'] ?? null,
                 toolName: $block['name'] ?? null,
                 toolInput: $block['input'] ?? null,
+                cacheControl: $cacheControl,
             ),
             'tool_result' => new self(
                 type: 'tool_result',
@@ -87,12 +93,14 @@ class ContentBlock
                     ? json_encode($block['content'])
                     : $block['content'],
                 toolResultIsError: $block['is_error'] ?? false,
+                cacheControl: $cacheControl,
             ),
             'thinking' => new self(
                 type: 'thinking',
                 thinking: $block['thinking'] ?? '',
+                cacheControl: $cacheControl,
             ),
-            default => new self(type: $type, text: $block['text'] ?? null),
+            default => new self(type: $type, text: $block['text'] ?? null, cacheControl: $cacheControl),
         };
     }
 
@@ -120,19 +128,37 @@ class ContentBlock
                     'format' => $this->audioFormat,
                 ], fn ($v) => $v !== null),
             ],
+            'tool_result' => [
+                'type' => 'text',
+                'text' => $this->toolResultContent ?? '',
+            ],
+            'tool_use' => [
+                'type' => 'text',
+                'text' => json_encode([
+                    'tool_call_id' => $this->toolId,
+                    'name' => $this->toolName,
+                    'arguments' => $this->toolInput,
+                ], JSON_UNESCAPED_UNICODE),
+            ],
+            'thinking' => [
+                'type' => 'text',
+                'text' => $this->thinking ?? '',
+            ],
             default => [
-                'type' => $this->type,
-                'text' => $this->text,
+                'type' => 'text',
+                'text' => $this->text ?? '',
             ],
         };
     }
 
     /**
      * 转换为 Anthropic 格式
+     *
+     * @param  bool  $includeCacheControl  是否包含 cache_control 字段（部分上游 API 不支持）
      */
-    public function toAnthropic(): array
+    public function toAnthropic(bool $includeCacheControl = false): array
     {
-        return match ($this->type) {
+        $result = match ($this->type) {
             'text' => [
                 'type' => 'text',
                 'text' => $this->text ?? '',
@@ -165,6 +191,13 @@ class ContentBlock
                 'text' => $this->text,
             ],
         };
+
+        // 只有明确要求时才包含 cache_control
+        if ($includeCacheControl && $this->cacheControl !== null) {
+            $result['cache_control'] = $this->cacheControl;
+        }
+
+        return $result;
     }
 
     /**

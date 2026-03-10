@@ -162,6 +162,14 @@ class OpenAiChatCompletionsDriver extends AbstractDriver
             );
         }
 
+        // 推理内容增量（DeepSeek、Kimi 等思考模型）
+        if (isset($delta['reasoning_content']) && $delta['reasoning_content'] !== '') {
+            return StandardStreamEvent::reasoningDelta(
+                id: $id,
+                reasoning: $delta['reasoning_content']
+            );
+        }
+
         // 内容增量
         if (isset($delta['content']) && $delta['content'] !== '') {
             return StandardStreamEvent::delta(
@@ -226,6 +234,10 @@ class OpenAiChatCompletionsDriver extends AbstractDriver
 
             case StandardStreamEvent::TYPE_CONTENT_DELTA:
                 $chunk['choices'][0]['delta']['content'] = $event->contentDelta;
+                break;
+
+            case StandardStreamEvent::TYPE_REASONING_DELTA:
+                $chunk['choices'][0]['delta']['reasoning_content'] = $event->reasoningDelta;
                 break;
 
             case StandardStreamEvent::TYPE_TOOL_USE:

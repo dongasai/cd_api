@@ -316,13 +316,70 @@ class StandardRequest
 
     /**
      * 解析 Anthropic 消息
+     * 注意: Anthropic 格式中 tool_result 是 user 消息的内容块
+     *       需要转换为 OpenAI 格式的独立 tool 消息
      */
     private static function parseAnthropicMessages(array $messages): array
     {
-        return array_map(
-            fn ($msg) => StandardMessage::fromAnthropic($msg),
-            $messages
+        $result = [];
+        foreach ($messages as $msg) {
+            $parsed = self::parseAnthropicMessage($msg);
+            foreach ($parsed as $message) {
+                $result[] = $message;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * 解析单条 Anthropic 消息
+     * 可能返回多条消息（当包含 tool_result 时）
+     */
+    private static function parseAnthropicMessage(array $msg): array
+    {
+        $role = $msg['role'] ?? 'user';
+        $content = $msg['content'] ?? null;
+
+        if (! is_array($content)) {
+            return [StandardMessage::fromAnthropic($msg)];
+        }
+
+        $toolResultBlocks = array_filter(
+            $content,
+            fn ($block) => ($block['type'] ?? '') === 'tool_result'
         );
+
+        if (empty($toolResultBlocks)) {
+            return [StandardMessage::fromAnthropic($msg)];
+        }
+
+        $messages = [];
+
+        $nonToolResultBlocks = array_filter(
+            $content,
+            fn ($block) => ($block['type'] ?? '') !== 'tool_result'
+        );
+
+        if (! empty($nonToolResultBlocks)) {
+            $userMsg = $msg;
+            $userMsg['content'] = array_values($nonToolResultBlocks);
+            $messages[] = StandardMessage::fromAnthropic($userMsg);
+        }
+
+        foreach ($toolResultBlocks as $block) {
+            $toolContent = $block['content'] ?? '';
+            if (is_array($toolContent)) {
+                $toolContent = json_encode($toolContent, JSON_UNESCAPED_UNICODE);
+            }
+            $messages[] = new StandardMessage(
+                role: 'tool',
+                content: $toolContent,
+                toolCallId: $block['tool_use_id'] ?? null,
+            );
+        }
+
+        return $messages;
     }
 
     /**

@@ -98,10 +98,11 @@ class StandardMessage
                 fn ($block) => $block->type === 'tool_use'
             );
             if (! empty($toolUseBlocks)) {
-                $toolCalls = array_map(
+                // 使用 array_values 重新索引，确保索引从 0 开始连续
+                $toolCalls = array_values(array_map(
                     fn ($block) => StandardToolCall::fromAnthropic($block->toArray()),
                     $toolUseBlocks
-                );
+                ));
             }
         }
 
@@ -126,18 +127,27 @@ class StandardMessage
             $result['content'] = $this->content;
             $result['tool_call_id'] = $this->toolCallId;
         } elseif ($this->contentBlocks !== null) {
-            // 多模态内容
-            $result['content'] = array_map(
-                fn ($block) => $block->toOpenAI(),
-                $this->contentBlocks
+            // 多模态内容 - 过滤掉 tool_use 和 tool_result 块
+            $nonToolBlocks = array_filter(
+                $this->contentBlocks,
+                fn ($block) => ! in_array($block->type, ['tool_use', 'tool_result'])
             );
+            if (! empty($nonToolBlocks)) {
+                $result['content'] = array_map(
+                    fn ($block) => $block->toOpenAI(),
+                    $nonToolBlocks
+                );
+            } else {
+                // 如果只有 tool_use/tool_result 块，content 设为 null
+                $result['content'] = null;
+            }
         } else {
             // 纯文本
             $result['content'] = $this->content ?: null;
         }
 
-        // 处理工具调用
-        if ($this->toolCalls !== null) {
+        // 处理工具调用 (只有非空时才添加)
+        if ($this->toolCalls !== null && count($this->toolCalls) > 0) {
             $result['tool_calls'] = array_map(
                 fn ($tc) => $tc->toOpenAI(),
                 $this->toolCalls

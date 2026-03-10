@@ -36,6 +36,9 @@ class StandardResponse
 
         // 原始响应 (用于调试)
         public ?array $rawResponse = null,
+
+        // 推理内容（DeepSeek、Kimi 等思考模型的思考过程）
+        public ?string $reasoningContent = null,
     ) {
         if ($this->created === 0) {
             $this->created = time();
@@ -56,10 +59,10 @@ class StandardResponse
 
         $message = $choice['message'] ?? [];
         $content = $message['content'] ?? '';
-        if (empty($content) && isset($message['reasoning_content'])) {
-            $content = $message['reasoning_content'];
-        }
         $finishReason = $choice['finish_reason'] ?? null;
+
+        // 提取推理内容（DeepSeek、Kimi 等思考模型）
+        $reasoningContent = $message['reasoning_content'] ?? null;
 
         // 处理工具调用
         $toolCalls = null;
@@ -86,6 +89,7 @@ class StandardResponse
             usage: $usage,
             created: $created,
             rawResponse: $response,
+            reasoningContent: $reasoningContent,
         );
     }
 
@@ -239,6 +243,11 @@ class StandardResponse
             'role' => 'assistant',
             'content' => $this->content ?: null,
         ];
+
+        // 添加推理内容（DeepSeek、Kimi 等思考模型）
+        if ($this->reasoningContent !== null) {
+            $message['reasoning_content'] = $this->reasoningContent;
+        }
 
         if ($this->toolCalls !== null) {
             $message['tool_calls'] = array_map(

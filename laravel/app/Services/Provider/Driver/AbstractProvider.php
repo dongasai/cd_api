@@ -279,6 +279,12 @@ abstract class AbstractProvider implements ProviderInterface
                 ->withOptions(['stream' => true])
                 ->post($url, $body);
 
+            // 检查响应状态码
+            if (! $response->ok()) {
+                $this->recordFailure();
+                throw $this->createErrorFromResponse($response);
+            }
+
             $this->recordSuccess();
 
             $buffer = '';
@@ -345,14 +351,39 @@ abstract class AbstractProvider implements ProviderInterface
         $statusCode = $response->status();
         $body = $response->json();
 
-        $this->lastErrorMessage = $body['error']['message'] ?? $response->body();
+        // 尝试多种错误格式获取错误消息
+        // 1. OpenAI 格式: {"error":{"message":"..."}}
+        // 2. 硅基流动格式: {"code":20015,"message":"..."}
+        // 3. 其他格式: {"message":"..."}
+        $errorMessage = $body['error']['message']
+            ?? $body['message']
+            ?? $body['error']
+            ?? $response->body()
+            ?? "HTTP {$statusCode} error";
+
+        // 如果响应体为空，尝试从原始响应获取
+        if (empty($errorMessage) || $errorMessage === "HTTP {$statusCode} error") {
+            $rawBody = $response->toPsrResponse()?->getBody()?->getContents();
+            if ($rawBody) {
+                $errorMessage = $rawBody;
+            }
+        }
+
+        Log::error('Provider error response', [
+            'status' => $statusCode,
+            'body' => $body,
+            'raw_body' => $response->body(),
+            'error_message' => $errorMessage,
+        ]);
+
+        $this->lastErrorMessage = is_string($errorMessage) ? $errorMessage : json_encode($errorMessage);
 
         return match ($statusCode) {
             401 => ProviderException::authError($this->lastErrorMessage, $body),
             403 => ProviderException::authError($this->lastErrorMessage, $body),
             429 => ProviderException::rateLimit($this->lastErrorMessage, $body),
             400 => ProviderException::invalidRequest($this->lastErrorMessage, $body),
-            404 => ProviderException::modelNotFound('', $body),
+            404 => ProviderException::modelNotFound($this->lastErrorMessage, $body),
             default => ProviderException::serverError($this->lastErrorMessage, $statusCode, $body),
         };
     }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ChannelAffinityRules;
 
+use App\Filament\Resources\ChannelAffinityRules\Actions\ReplicateChannelAffinityRuleAction;
 use App\Filament\Resources\ChannelAffinityRules\Pages\CreateChannelAffinityRule;
 use App\Filament\Resources\ChannelAffinityRules\Pages\EditChannelAffinityRule;
 use App\Filament\Resources\ChannelAffinityRules\Pages\ListChannelAffinityRules;
@@ -199,6 +200,7 @@ class ChannelAffinityRuleResource extends Resource
             ], layout: FiltersLayout::AboveContent)
             ->recordActions([
                 EditAction::make(),
+                ReplicateChannelAffinityRuleAction::make(),
                 DeleteAction::make(),
             ])
             ->toolbarActions([

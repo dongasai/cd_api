@@ -6,7 +6,6 @@ use App\Models\AuditLog;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
@@ -30,31 +29,58 @@ class AuditLogsTable
                     ->copyable()
                     ->limit(20),
 
-                TextColumn::make('username')
-                    ->label('用户')
-                    ->searchable()
-                    ->placeholder('匿名'),
+                TextColumn::make('user_info')
+                    ->label('用户 / API密钥 / 渠道')
+                    ->html()
+                    ->searchable(['username', 'api_key_name', 'channel_name'])
+                    ->state(function (AuditLog $record): string {
+                        $lines = [];
 
-                TextColumn::make('api_key_name')
-                    ->label('API密钥')
-                    ->searchable()
-                    ->placeholder('无'),
+                        $lines[] = '<div class="space-y-1">';
 
-                TextColumn::make('channel_name')
-                    ->label('渠道')
-                    ->searchable()
-                    ->placeholder('无'),
+                        if ($record->username) {
+                            $lines[] = '<div><span class="text-gray-500">用户:</span> '.e($record->username).'</div>';
+                        }
 
-                TextColumn::make('request_type')
-                    ->label('请求类型')
-                    ->badge()
-                    ->formatStateUsing(fn (int $state): string => AuditLog::getRequestTypes()[$state] ?? '未知')
-                    ->colors([
-                        'success' => AuditLog::REQUEST_TYPE_CHAT,
-                        'info' => AuditLog::REQUEST_TYPE_COMPLETION,
-                        'warning' => AuditLog::REQUEST_TYPE_EMBEDDING,
-                        'gray' => AuditLog::REQUEST_TYPE_OTHER,
-                    ]),
+                        if ($record->api_key_name) {
+                            $lines[] = '<div><span class="text-gray-500">密钥:</span> '.e($record->api_key_name).'</div>';
+                        }
+
+                        if ($record->channel_name) {
+                            $lines[] = '<div><span class="text-gray-500">渠道:</span> '.e($record->channel_name).'</div>';
+                        }
+
+                        if (empty($record->username) && empty($record->api_key_name) && empty($record->channel_name)) {
+                            $lines[] = '<div class="text-gray-400">-</div>';
+                        }
+
+                        $lines[] = '</div>';
+
+                        return implode('', $lines);
+                    }),
+
+                TextColumn::make('request_type_stream')
+                    ->label('请求类型 / 流式')
+                    ->html()
+                    ->state(function (AuditLog $record): string {
+                        $typeLabel = AuditLog::getRequestTypes()[$record->request_type] ?? '未知';
+                        $typeColors = [
+                            AuditLog::REQUEST_TYPE_CHAT => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+                            AuditLog::REQUEST_TYPE_COMPLETION => 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+                            AuditLog::REQUEST_TYPE_EMBEDDING => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+                            AuditLog::REQUEST_TYPE_OTHER => 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+                        ];
+                        $typeColor = $typeColors[$record->request_type] ?? $typeColors[AuditLog::REQUEST_TYPE_OTHER];
+
+                        $streamBadge = $record->is_stream
+                            ? '<span class="inline-flex items-center rounded-md bg-primary-100 px-2 py-1 text-xs font-medium text-primary-700 dark:bg-primary-900 dark:text-primary-300 ml-1">流式</span>'
+                            : '<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400 ml-1">非流式</span>';
+
+                        return '<div class="flex items-center gap-1">'.
+                            '<span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium '.$typeColor.'">'.$typeLabel.'</span>'.
+                            $streamBadge.
+                            '</div>';
+                    }),
 
                 TextColumn::make('model')
                     ->label('模型')
@@ -69,6 +95,23 @@ class AuditLogsTable
                         'warning' => fn ($state) => $state >= 300 && $state < 400,
                         'danger' => fn ($state) => $state >= 400 || $state === null,
                     ]),
+
+                TextColumn::make('affinity')
+                    ->label('亲和性')
+                    ->html()
+                    ->state(function (AuditLog $record): string {
+                        $affinity = $record->channel_affinity;
+                        if (empty($affinity)) {
+                            return '<span class="text-gray-400">-</span>';
+                        }
+
+                        $isHit = $affinity['is_affinity_hit'] ?? false;
+                        if ($isHit) {
+                            return '<span class="inline-flex items-center rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-300">命中</span>';
+                        }
+
+                        return '<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">未命中</span>';
+                    }),
 
                 TextColumn::make('total_tokens')
                     ->label('Token数')
@@ -86,10 +129,6 @@ class AuditLogsTable
                     ->numeric()
                     ->sortable()
                     ->formatStateUsing(fn ($state) => number_format($state)),
-
-                IconColumn::make('is_stream')
-                    ->label('流式')
-                    ->boolean(),
 
                 TextColumn::make('client_ip')
                     ->label('客户端IP')

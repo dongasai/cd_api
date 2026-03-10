@@ -31,19 +31,35 @@ class ProviderRequest
      */
     public static function fromArray(array $data): self
     {
+        // 已知的参数键名
+        $knownKeys = [
+            'model', 'messages', 'temperature', 'max_tokens', 'maxTokens',
+            'stream', 'parameters', 'system', 'systemPrompt', 'top_p', 'topP',
+            'top_k', 'topK', 'stop', 'stop_sequences', 'tools', 'tool_choice',
+            'toolChoice', 'user', 'metadata',
+        ];
+
+        // 收集未知参数
+        $unknownParams = [];
+        foreach ($data as $key => $value) {
+            if (! in_array($key, $knownKeys)) {
+                $unknownParams[$key] = $value;
+            }
+        }
+
         return new self(
             model: $data['model'] ?? '',
             messages: $data['messages'] ?? [],
             temperature: $data['temperature'] ?? null,
             maxTokens: $data['max_tokens'] ?? $data['maxTokens'] ?? null,
             stream: $data['stream'] ?? false,
-            parameters: $data['parameters'] ?? [],
+            parameters: array_merge($data['parameters'] ?? [], $unknownParams),
             systemPrompt: $data['system'] ?? $data['systemPrompt'] ?? null,
             topP: $data['top_p'] ?? $data['topP'] ?? null,
-            stop: $data['stop'] ?? null,
+            stop: $data['stop'] ?? $data['stop_sequences'] ?? null,
             tools: $data['tools'] ?? null,
             toolChoice: $data['tool_choice'] ?? $data['toolChoice'] ?? null,
-            user: $data['user'] ?? null,
+            user: $data['user'] ?? ($data['metadata']['user_id'] ?? null),
         );
     }
 
@@ -175,11 +191,19 @@ class ProviderRequest
             }
         }
 
+        // 只包含 Anthropic API 支持的参数，过滤掉不支持的参数
+        // 不支持的参数: reasoning_effort, stream_options, frequency_penalty, presence_penalty, logit_bias, n 等
+        // 注意: max_tokens 是必需参数，但如果客户端没有提供，让上游 API 自己决定默认值
         $request = [
             'model' => $this->model,
-            'max_tokens' => $this->maxTokens ?? 4096,
             'messages' => $filteredMessages,
         ];
+
+        // max_tokens 对于 Anthropic API 是必需的，但如果为 null 则不设置
+        // 让上游 API 使用其默认值
+        if ($this->maxTokens !== null) {
+            $request['max_tokens'] = $this->maxTokens;
+        }
 
         if ($systemContent !== null && $systemContent !== '') {
             $request['system'] = $systemContent;
@@ -201,6 +225,9 @@ class ProviderRequest
         }
         if ($this->toolChoice !== null) {
             $request['tool_choice'] = $this->toolChoice;
+        }
+        if ($this->user !== null) {
+            $request['metadata']['user_id'] = $this->user;
         }
 
         return $request;

@@ -6,6 +6,9 @@ use App\Models\ApiKey;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
+/**
+ * php artisan  proxy:test
+ */
 class TestProxy extends Command
 {
     protected $signature = 'proxy:test

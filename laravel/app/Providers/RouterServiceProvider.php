@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\ChannelAffinity\ChannelAffinityService;
 use App\Services\Router\ChannelRouterService;
 use App\Services\Router\ProxyServer;
 use Illuminate\Support\ServiceProvider;
@@ -23,7 +24,8 @@ class RouterServiceProvider extends ServiceProvider
                 $app->make(\App\Services\Protocol\ProtocolConverter::class),
                 $app->make(\App\Services\Provider\ProviderManager::class),
                 $app->make(ChannelRouterService::class),
-                $app->make(\App\Services\CodingStatus\ChannelCodingStatusService::class)
+                $app->make(\App\Services\CodingStatus\ChannelCodingStatusService::class),
+                $app->make(ChannelAffinityService::class)
             );
         });
     }

@@ -50,6 +50,11 @@ class ProviderResponse
     public int $created = 0;
 
     /**
+     * 推理内容（DeepSeek、Kimi 等思考模型的思考过程）
+     */
+    public ?string $reasoningContent = null;
+
+    /**
      * 构造函数
      *
      * @param  string  $id  响应 ID
@@ -60,6 +65,7 @@ class ProviderResponse
      * @param  array|null  $rawResponse  原始响应
      * @param  array|null  $toolCalls  工具调用
      * @param  int  $created  创建时间戳
+     * @param  string|null  $reasoningContent  推理内容
      */
     public function __construct(
         string $id,
@@ -70,6 +76,7 @@ class ProviderResponse
         ?array $rawResponse = null,
         ?array $toolCalls = null,
         int $created = 0,
+        ?string $reasoningContent = null,
     ) {
         $this->id = $id;
         $this->model = $model;
@@ -79,6 +86,7 @@ class ProviderResponse
         $this->rawResponse = $rawResponse;
         $this->toolCalls = $toolCalls;
         $this->created = $created ?: time();
+        $this->reasoningContent = $reasoningContent;
     }
 
     /**
@@ -98,6 +106,9 @@ class ProviderResponse
         $message = $choice['message'] ?? [];
         $content = $message['content'] ?? '';
         $finishReason = $choice['finish_reason'] ?? null;
+
+        // 提取推理内容（DeepSeek、Kimi 等思考模型）
+        $reasoningContent = $message['reasoning_content'] ?? null;
 
         // 处理工具调用
         $toolCalls = null;
@@ -120,6 +131,7 @@ class ProviderResponse
             rawResponse: $response,
             toolCalls: $toolCalls,
             created: $created,
+            reasoningContent: $reasoningContent,
         );
     }
 
@@ -253,6 +265,11 @@ class ProviderResponse
             'role' => 'assistant',
             'content' => $this->content ?: null,
         ];
+
+        // 添加推理内容（DeepSeek、Kimi 等思考模型）
+        if ($this->reasoningContent !== null) {
+            $message['reasoning_content'] = $this->reasoningContent;
+        }
 
         if ($this->toolCalls !== null) {
             $message['tool_calls'] = $this->toolCalls;

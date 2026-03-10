@@ -15,15 +15,20 @@ class AuditLog extends Model
      * 请求类型常量
      */
     public const REQUEST_TYPE_CHAT = 1;
+
     public const REQUEST_TYPE_COMPLETION = 2;
+
     public const REQUEST_TYPE_EMBEDDING = 3;
+
     public const REQUEST_TYPE_OTHER = 4;
 
     /**
      * 计费来源常量
      */
     public const BILLING_SOURCE_WALLET = 'wallet';
+
     public const BILLING_SOURCE_QUOTA = 'quota';
+
     public const BILLING_SOURCE_TRIAL = 'trial';
 
     public $timestamps = false;
@@ -37,6 +42,7 @@ class AuditLog extends Model
         'channel_id',
         'channel_name',
         'request_id',
+        'run_unid',
         'request_type',
         'model',
         'actual_model',

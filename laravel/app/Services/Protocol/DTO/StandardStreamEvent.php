@@ -12,6 +12,8 @@ class StandardStreamEvent
 
     public const TYPE_CONTENT_DELTA = 'delta';   // 内容增量
 
+    public const TYPE_REASONING_DELTA = 'reasoning_delta'; // 推理内容增量
+
     public const TYPE_TOOL_USE = 'tool_use';     // 工具调用
 
     public const TYPE_FINISH = 'finish';         // 流结束
@@ -30,6 +32,9 @@ class StandardStreamEvent
 
         // 内容增量
         public ?string $contentDelta = null,
+
+        // 推理内容增量（DeepSeek、Kimi 等思考模型）
+        public ?string $reasoningDelta = null,
 
         // 角色信息 (start 事件)
         public ?string $role = null,
@@ -77,6 +82,18 @@ class StandardStreamEvent
             type: self::TYPE_CONTENT_DELTA,
             id: $id,
             contentDelta: $content,
+        );
+    }
+
+    /**
+     * 创建推理内容增量事件（DeepSeek、Kimi 等思考模型）
+     */
+    public static function reasoningDelta(string $id, string $reasoning): self
+    {
+        return new self(
+            type: self::TYPE_REASONING_DELTA,
+            id: $id,
+            reasoningDelta: $reasoning,
         );
     }
 
@@ -168,6 +185,9 @@ class StandardStreamEvent
         }
         if ($this->contentDelta !== null) {
             $result['content_delta'] = $this->contentDelta;
+        }
+        if ($this->reasoningDelta !== null) {
+            $result['reasoning_delta'] = $this->reasoningDelta;
         }
         if ($this->role !== null) {
             $result['role'] = $this->role;

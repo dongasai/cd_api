@@ -18,6 +18,8 @@ class ProviderStreamChunk
         public ?string $finishReason = null,
         public ?TokenUsage $usage = null,
         public ?array $toolCalls = null,
+        // 推理内容增量（DeepSeek、Kimi 等思考模型）
+        public ?string $reasoningDelta = null,
     ) {}
 
     /**
@@ -56,6 +58,7 @@ class ProviderStreamChunk
         $finishReason = null;
         $usage = null;
         $toolCalls = null;
+        $reasoningDelta = null;
 
         $choices = $parsed['choices'] ?? [];
         $choice = $choices[0] ?? [];
@@ -63,10 +66,8 @@ class ProviderStreamChunk
         // 提取内容增量
         if (isset($choice['delta'])) {
             $delta = $choice['delta']['content'] ?? '';
-            // 处理推理内容（DeepSeek 等模型特有）
-            if (empty($delta) && isset($choice['delta']['reasoning_content'])) {
-                $delta = $choice['delta']['reasoning_content'];
-            }
+            // 提取推理内容增量（DeepSeek、Kimi 等思考模型）
+            $reasoningDelta = $choice['delta']['reasoning_content'] ?? null;
             // 提取工具调用
             if (isset($choice['delta']['tool_calls'])) {
                 $toolCalls = $choice['delta']['tool_calls'];
@@ -90,6 +91,7 @@ class ProviderStreamChunk
             finishReason: $finishReason,
             usage: $usage,
             toolCalls: $toolCalls,
+            reasoningDelta: $reasoningDelta,
         );
     }
 
@@ -171,6 +173,17 @@ class ProviderStreamChunk
      */
     public function toOpenAIChunk(string $id, string $model): string
     {
+        $delta = [];
+
+        if ($this->delta) {
+            $delta['content'] = $this->delta;
+        }
+
+        // 添加推理内容增量（DeepSeek、Kimi 等思考模型）
+        if ($this->reasoningDelta !== null) {
+            $delta['reasoning_content'] = $this->reasoningDelta;
+        }
+
         $chunk = [
             'id' => $id ?: 'chatcmpl-'.uniqid(),
             'object' => 'chat.completion.chunk',
@@ -179,7 +192,7 @@ class ProviderStreamChunk
             'choices' => [
                 [
                     'index' => 0,
-                    'delta' => $this->delta ? ['content' => $this->delta] : [],
+                    'delta' => $delta,
                     'finish_reason' => $this->finishReason,
                 ],
             ],

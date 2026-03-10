@@ -105,6 +105,11 @@ class ProxyServer
     protected bool $enableFailover;
 
     /**
+     * 当前审计日志实例
+     */
+    protected ?AuditLog $auditLog = null;
+
+    /**
      * 构造函数
      *
      * @param  ProtocolConverter  $protocolConverter  协议转换器
@@ -145,9 +150,13 @@ class ProxyServer
         $this->startTime = microtime(true);
         $this->failedChannels = [];
         $this->selectedChannel = null;
+        $this->auditLog = null;
 
         $rawRequest = $request->all();
         $isStream = $rawRequest['stream'] ?? false;
+
+        // 请求开始时就创建审计日志（初始状态）
+        $this->createInitialAuditLog($request, $rawRequest['model'] ?? null);
 
         $requestLog = $this->createRequestLog($request, $rawRequest, $protocol);
 
@@ -175,6 +184,12 @@ class ProxyServer
                 // 选择渠道（首次或故障转移时）
                 if ($this->selectedChannel === null || $attempt > 0) {
                     $this->selectedChannel = $this->selectChannelWithFallback($standardRequest->model, $apiKey);
+                    // 选择渠道后立即更新审计日志
+                    $this->updateAuditLog([
+                        'channel_id' => $this->selectedChannel?->id,
+                        'channel_name' => $this->selectedChannel?->name,
+                        'model' => $standardRequest->model,
+                    ]);
                 }
 
                 if ($this->selectedChannel === null) {
@@ -189,6 +204,9 @@ class ProxyServer
 
                 // 构建供应商请求
                 $providerRequest = $this->buildProviderRequest($standardRequest, $this->selectedChannel, $channelProtocol, $actualModel);
+
+                // 更新请求日志，记录发往渠道的请求参数
+                $this->updateRequestLogForChannel($requestLog, $providerRequest, $this->selectedChannel, $actualModel, $channelProtocol);
 
                 $provider = $this->providerManager->getForChannel($this->selectedChannel, $request->headers->all());
 
@@ -448,6 +466,7 @@ class ProxyServer
     {
         return RequestLog::create([
             'request_id' => $this->requestId,
+            'run_unid' => defined('RUN_UNID') ? RUN_UNID : null,
             'method' => $request->method(),
             'path' => $request->path(),
             'query_string' => $request->getQueryString(),
@@ -489,6 +508,81 @@ class ProxyServer
     }
 
     /**
+     * 更新请求日志的渠道信息和发往渠道的请求参数
+     *
+     * @param  RequestLog  $log  请求日志
+     * @param  ProviderRequest  $providerRequest  供应商请求
+     * @param  Channel  $channel  渠道实例
+     * @param  string  $actualModel  实际模型名称
+     * @param  string  $channelProtocol  渠道协议
+     */
+    protected function updateRequestLogForChannel(RequestLog $log, ProviderRequest $providerRequest, Channel $channel, string $actualModel, string $channelProtocol): void
+    {
+        // 根据协议获取请求体
+        $toRequestBody = $channelProtocol === 'anthropic'
+            ? $providerRequest->toAnthropicFormat()
+            : $providerRequest->toOpenAIFormat();
+
+        $log->update([
+            'channel_id' => $channel->id,
+            'channel_name' => $channel->name,
+            'upstream_model' => $actualModel,
+            'to_request_body' => $this->truncateBody(json_encode($toRequestBody, JSON_UNESCAPED_UNICODE)),
+        ]);
+    }
+
+    /**
+     * 创建初始审计日志
+     *
+     * 在请求开始时立即创建，确保即使请求失败也有记录
+     *
+     * @param  Request  $httpRequest  HTTP 请求
+     * @param  string|null  $model  请求模型
+     */
+    protected function createInitialAuditLog(Request $httpRequest, ?string $model): void
+    {
+        $user = $httpRequest->user();
+        $apiKey = $httpRequest->attributes->get('api_key');
+
+        $this->auditLog = AuditLog::create([
+            'user_id' => $user?->id,
+            'username' => $user?->name,
+            'api_key_id' => $apiKey?->id,
+            'api_key_name' => $apiKey?->name,
+            'cached_key_prefix' => $apiKey?->key_prefix,
+            'request_id' => $this->requestId,
+            'run_unid' => defined('RUN_UNID') ? RUN_UNID : null,
+            'request_type' => AuditLog::REQUEST_TYPE_CHAT,
+            'model' => $model,
+            'status_code' => 0,
+            'latency_ms' => 0,
+            'first_token_ms' => 0,
+            'prompt_tokens' => 0,
+            'completion_tokens' => 0,
+            'total_tokens' => 0,
+            'cost' => 0,
+            'quota' => 0,
+            'billing_source' => AuditLog::BILLING_SOURCE_QUOTA,
+            'is_stream' => false,
+            'client_ip' => $httpRequest->ip(),
+            'user_agent' => $httpRequest->userAgent(),
+            'created_at' => now(),
+        ]);
+    }
+
+    /**
+     * 更新审计日志
+     *
+     * @param  array  $data  要更新的数据
+     */
+    protected function updateAuditLog(array $data): void
+    {
+        if ($this->auditLog) {
+            $this->auditLog->update($data);
+        }
+    }
+
+    /**
      * 创建审计日志
      *
      * @param  Request  $httpRequest  HTTP 请求
@@ -515,16 +609,10 @@ class ProxyServer
 
         $affinityInfo = $this->affinityService->getAffinityInfo($httpRequest);
 
-        return AuditLog::create([
-            'user_id' => $user?->id,
-            'username' => $user?->name,
-            'api_key_id' => $apiKey?->id,
-            'api_key_name' => $apiKey?->name,
-            'cached_key_prefix' => $apiKey?->key_prefix,
+        // 更新已存在的审计日志
+        $this->updateAuditLog([
             'channel_id' => $this->selectedChannel?->id,
             'channel_name' => $this->selectedChannel?->name,
-            'request_id' => $this->requestId,
-            'request_type' => AuditLog::REQUEST_TYPE_CHAT,
             'model' => $standardRequest->model,
             'actual_model' => $standardResponse->model ?? $standardRequest->model,
             'prompt_tokens' => $usage?->promptTokens ?? 0,
@@ -538,11 +626,10 @@ class ProxyServer
             'first_token_ms' => $this->firstTokenMs ?? 0,
             'is_stream' => $isStream,
             'finish_reason' => $standardResponse->finishReason,
-            'client_ip' => $httpRequest->ip(),
-            'user_agent' => $httpRequest->userAgent(),
             'channel_affinity' => $affinityInfo,
-            'created_at' => now(),
         ]);
+
+        return $this->auditLog;
     }
 
     /**
@@ -593,7 +680,7 @@ class ProxyServer
     /**
      * 处理错误
      *
-     * 记录错误日志并创建审计记录
+     * 记录错误日志并更新审计记录
      *
      * @param  \Exception  $e  异常实例
      * @param  Request  $request  HTTP 请求
@@ -603,26 +690,14 @@ class ProxyServer
     {
         $latencyMs = $this->calculateLatency();
 
-        $user = $request->user();
-        $apiKey = $request->attributes->get('api_key');
-
-        AuditLog::create([
-            'user_id' => $user?->id,
-            'username' => $user?->name,
-            'api_key_id' => $apiKey?->id,
-            'api_key_name' => $apiKey?->name,
-            'cached_key_prefix' => $apiKey?->key_prefix,
+        // 更新审计日志记录错误信息
+        $this->updateAuditLog([
             'channel_id' => $this->selectedChannel?->id,
             'channel_name' => $this->selectedChannel?->name,
-            'request_id' => $this->requestId,
-            'request_type' => AuditLog::REQUEST_TYPE_CHAT,
             'status_code' => $this->getStatusCode($e),
             'latency_ms' => $latencyMs,
             'error_type' => get_class($e),
             'error_message' => $e->getMessage(),
-            'client_ip' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-            'created_at' => now(),
         ]);
 
         Log::error('Proxy request failed', [
@@ -762,11 +837,22 @@ class ProxyServer
                 }
             }
 
+            // 确定事件类型
+            $eventType = 'delta';
+            if ($chunk->finishReason) {
+                $eventType = 'finish';
+            } elseif ($toolCall) {
+                $eventType = 'tool_use';
+            } elseif ($chunk->reasoningDelta) {
+                $eventType = 'reasoning_delta';
+            }
+
             return new \App\Services\Protocol\DTO\StandardStreamEvent(
-                type: $chunk->finishReason ? 'finish' : ($toolCall ? 'tool_use' : 'delta'),
+                type: $eventType,
                 id: $chunk->id ?: uniqid(),
                 model: $chunk->model,
                 contentDelta: $chunk->delta,
+                reasoningDelta: $chunk->reasoningDelta,
                 finishReason: $chunk->finishReason,
                 toolCall: $toolCall,
                 usage: $chunk->usage ? new \App\Services\Protocol\DTO\StandardUsage(
