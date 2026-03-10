@@ -1,368 +1,119 @@
-<laravel-boost-guidelines>
-=== foundation rules ===
+# CdApi 项目规则
 
-# Laravel Boost Guidelines
+## 项目概述
 
-The Laravel Boost guidelines are specifically curated by Laravel maintainers for this application. These guidelines should be followed closely to ensure the best experience when building Laravel applications.
+CdApi 是一个AI大模型API代理工具,基于 Laravel 12 + Filament 4 构建。
+本系统是一个大模型Api转发代理工具,客户端将请求发送到本系统后转到到渠道上游.
 
-## Foundational Context
+### 核心功能特性
 
-This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
+- **Key 级别模型映射**: 每个 API Key 可配置独立的模型别名映射,支持使用统一别名(如 `cd-coding-latest`)映射到不同的实际模型,实现 Key 级别的模型路由控制
 
-- php - 8.3.6
-- filament/filament (FILAMENT) - v4
-- laravel/framework (LARAVEL) - v12
-- laravel/prompts (PROMPTS) - v0
-- livewire/livewire (LIVEWIRE) - v3
-- laravel/boost (BOOST) - v2
-- laravel/breeze (BREEZE) - v2
-- laravel/mcp (MCP) - v0
-- laravel/pail (PAIL) - v1
-- laravel/pint (PINT) - v1
-- laravel/sail (SAIL) - v1
-- phpunit/phpunit (PHPUNIT) - v11
+## 技术栈
 
-## Conventions
+- **框架**: Laravel 12 (位于 `laravel/` 目录)
+- **后台面板**: Filament 4
+- **PHP版本**: 8.2+
+- **数据库**: SQLite (默认)
 
-- You must follow all existing code conventions used in this application. When creating or editing a file, check sibling files for the correct structure, approach, and naming.
-- Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
-- Check for existing components to reuse before writing a new one.
+## 开发规范
 
-## Verification Scripts
+### 目录结构
 
-- Do not create verification scripts or tinker when tests cover that functionality and prove they work. Unit and feature tests are more important.
+- Laravel 应用位于 `laravel/` 子目录
+- 设计文档存放在 `docs/` 目录
+- 所有代码开发工作在 `laravel/` 目录下进行
 
-## Application Structure & Architecture
+### Filament 开发规则
 
-- Stick to existing directory structure; don't create new base folders without approval.
-- Do not change the application's dependencies without approval.
+- **重要**: Filament 4 不需要编写视图文件,所有UI通过PHP代码配置
+- 使用 Filament Artisan 命令创建资源、页面等组件
+- 遵循 Filament 的最佳实践和命名规范
 
-## Frontend Bundling
+### 前端资源
 
-- If the user doesn't see a frontend change reflected in the UI, it could mean they need to run `npm run build`, `npm run dev`, or `composer run dev`. Ask them.
+- **禁止使用 CDN 资源**
+- **不使用 Vite 进行资源构建**
+- Filament 已包含所需的前端资源
 
-## Documentation Files
+### 数据库操作
 
-- You must only create documentation files if explicitly requested by the user.
-
-## Replies
-
-- Be concise in your explanations - focus on what's important rather than explaining obvious details.
-
-=== boost rules ===
-
-# Laravel Boost
-
-- Laravel Boost is an MCP server that comes with powerful tools designed specifically for this application. Use them.
-
-## Artisan
-
-- Use the `list-artisan-commands` tool when you need to call an Artisan command to double-check the available parameters.
-
-## URLs
-
-- Whenever you share a project URL with the user, you should use the `get-absolute-url` tool to ensure you're using the correct scheme, domain/IP, and port.
-
-## Tinker / Debugging
-
-- You should use the `tinker` tool when you need to execute PHP to debug code or query Eloquent models directly.
-- Use the `database-query` tool when you only need to read from the database.
-- Use the `database-schema` tool to inspect table structure before writing migrations or models.
-
-## Reading Browser Logs With the `browser-logs` Tool
-
-- You can read browser logs, errors, and exceptions using the `browser-logs` tool from Boost.
-- Only recent browser logs will be useful - ignore old logs.
+- 使用 Eloquent ORM 和模型关系
 
 
-=== php rules ===
+### 核心表
+- request_logs 请求日志
+- audit_logs 审计日志
+- response_logs 返回日志
+- channel_request_logs 渠道请求日志
 
-# PHP
+### 代码风格
 
-- Always use curly braces for control structures, even for single-line bodies.
+- 运行代码格式化: `vendor/bin/pint --dirty --format agent`
+- 遵循 Laravel 和 PHP 最佳实践
+- 使用 PHP 8+ 特性如构造器属性提升
+- 要有中文注释
 
-## Constructors
+## 测试规范
 
-- Use PHP 8 constructor property promotion in `__construct()`.
-    - `public function __construct(public GitHub $github) { }`
-- Do not allow empty `__construct()` methods with zero parameters unless the constructor is private.
+### 运行测试
 
-## Type Declarations
+```bash
+# 运行所有测试
+cd laravel && php artisan test --compact
 
-- Always use explicit return type declarations for methods and functions.
-- Use appropriate PHP type hints for method parameters.
+# 运行特定测试文件
+cd laravel && php artisan test --compact tests/Feature/ExampleTest.php
 
-<!-- Explicit Return Types and Method Params -->
-```php
-protected function isAccessible(User $user, ?string $path = null): bool
-{
-    ...
-}
+# 运行特定测试方法
+cd laravel && php artisan test --compact --filter=testName
 ```
 
-## Enums
 
-- Typically, keys in an Enum should be TitleCase. For example: `FavoritePerson`, `BestLake`, `Monthly`.
+## 调试工具
 
-## Comments
+- 使用 Laravel Tinker 进行调试: `cd laravel && php artisan tinker`
+- 使用 Laravel Boost MCP 工具进行数据库查询和调试
 
-- Prefer PHPDoc blocks over inline comments. Never use comments within the code itself unless the logic is exceptionally complex.
+## 工作流程
 
-## PHPDoc Blocks
+1. **开发前**: 确保在 `laravel/` 目录下工作
+2. **编写代码**: 遵循 Laravel 和 Filament 规范
+3. **编写测试**: 为新功能编写完整的测试
+4. **代码格式化**: 运行 Pint 格式化代码
+5. **运行测试**: 确保所有测试通过
+6. **提交代码**: 不要提交敏感信息和配置
 
-- Add useful array shape type definitions when appropriate.
+## API 测试命令
 
-=== laravel/core rules ===
+> **注意**: 服务器已启动，不需要重新启动。修改代码后 Laravel 会自动生效。
 
-# Do Things the Laravel Way
+### 测试 chat/completions 接口
 
-- Use `php artisan make:` commands to create new files (i.e. migrations, controllers, models, etc.). You can list available Artisan commands using the `list-artisan-commands` tool.
-- If you're creating a generic PHP class, use `php artisan make:class`.
-- Pass `--no-interaction` to all Artisan commands to ensure they work without user input. You should also pass the correct `--options` to ensure correct behavior.
+```bash
+# 测试 Step-3.5-Flash 模型 (50秒超时)
+curl -s --max-time 50 -X POST http://192.168.4.107:32126/api/openai/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk-GVvku4fqCVnLVkvzEBj107iqNA2l8a9YpkDu7Agt54bferCX" \
+  -d '{
+    "model": "Step-3.5-Flash",
+    "messages": [
+      {"role": "system", "content": "你是一个有用的助手"},
+      {"role": "user", "content": "介绍自己"}
+    ]
+  }'
+```
 
-## Database
+### 测试模型列表接口
 
-- Always use proper Eloquent relationship methods with return type hints. Prefer relationship methods over raw queries or manual joins.
-- Use Eloquent models and relationships before suggesting raw database queries.
-- Avoid `DB::`; prefer `Model::query()`. Generate code that leverages Laravel's ORM capabilities rather than bypassing them.
-- Generate code that prevents N+1 query problems by using eager loading.
-- Use Laravel's query builder for very complex database operations.
+```bash
+curl -s http://192.168.4.107:32126/api/openai/v1/models \
+  -H "Authorization: Bearer sk-GVvku4fqCVnLVkvzEBj107iqNA2l8a9YpkDu7Agt54bferCX"
+```
 
-### Model Creation
+## 注意事项
 
-- When creating new models, create useful factories and seeders for them too. Ask the user if they need any other things, using `list-artisan-commands` to check the available options to `php artisan make:model`.
-
-### APIs & Eloquent Resources
-
-- For APIs, default to using Eloquent API Resources and API versioning unless existing API routes do not, then you should follow existing application convention.
-
-## Controllers & Validation
-
-- Always create Form Request classes for validation rather than inline validation in controllers. Include both validation rules and custom error messages.
-- Check sibling Form Requests to see if the application uses array or string based validation rules.
-
-## Authentication & Authorization
-
-- Use Laravel's built-in authentication and authorization features (gates, policies, Sanctum, etc.).
-
-## URL Generation
-
-- When generating links to other pages, prefer named routes and the `route()` function.
-
-## Queues
-
-- Use queued jobs for time-consuming operations with the `ShouldQueue` interface.
-
-## Configuration
-
-- Use environment variables only in configuration files - never use the `env()` function directly outside of config files. Always use `config('app.name')`, not `env('APP_NAME')`.
-
-## Testing
-
-- When creating models for tests, use the factories for the models. Check if the factory has custom states that can be used before manually setting up the model.
-- Faker: Use methods such as `$this->faker->word()` or `fake()->randomDigit()`. Follow existing conventions whether to use `$this->faker` or `fake()`.
-- When creating tests, make use of `php artisan make:test [options] {name}` to create a feature test, and pass `--unit` to create a unit test. Most tests should be feature tests.
-
-## Vite Error
-
-- If you receive an "Illuminate\Foundation\ViteException: Unable to locate file in Vite manifest" error, you can run `npm run build` or ask the user to run `npm run dev` or `composer run dev`.
-
-=== laravel/v12 rules ===
-
-# Laravel 12
-
-- Since Laravel 11, Laravel has a new streamlined file structure which this project uses.
-
-## Laravel 12 Structure
-
-- In Laravel 12, middleware are no longer registered in `app/Http/Kernel.php`.
-- Middleware are configured declaratively in `bootstrap/app.php` using `Application::configure()->withMiddleware()`.
-- `bootstrap/app.php` is the file to register middleware, exceptions, and routing files.
-- `bootstrap/providers.php` contains application specific service providers.
-- The `app\Console\Kernel.php` file no longer exists; use `bootstrap/app.php` or `routes/console.php` for console configuration.
-- Console commands in `app/Console/Commands/` are automatically available and do not require manual registration.
-
-## Database
-
-- When modifying a column, the migration must include all of the attributes that were previously defined on the column. Otherwise, they will be dropped and lost.
-- Laravel 12 allows limiting eagerly loaded records natively, without external packages: `$query->latest()->limit(10);`.
-
-### Models
-
-- Casts can and likely should be set in a `casts()` method on a model rather than the `$casts` property. Follow existing conventions from other models.
-
-=== pint/core rules ===
-
-# Laravel Pint Code Formatter
-
-- If you have modified any PHP files, you must run `vendor/bin/pint --dirty --format agent` before finalizing changes to ensure your code matches the project's expected style.
-- Do not run `vendor/bin/pint --test --format agent`, simply run `vendor/bin/pint --format agent` to fix any formatting issues.
-
-=== phpunit/core rules ===
-
-# PHPUnit
-
-- This application uses PHPUnit for testing. All tests must be written as PHPUnit classes. Use `php artisan make:test --phpunit {name}` to create a new test.
-- If you see a test using "Pest", convert it to PHPUnit.
-- Every time a test has been updated, run that singular test.
-- When the tests relating to your feature are passing, ask the user if they would like to also run the entire test suite to make sure everything is still passing.
-- Tests should cover all happy paths, failure paths, and edge cases.
-- You must not remove any tests or test files from the tests directory without approval. These are not temporary or helper files; these are core to the application.
-
-## Running Tests
-
-- Run the minimal number of tests, using an appropriate filter, before finalizing.
-- To run all tests: `php artisan test --compact`.
-- To run all tests in a file: `php artisan test --compact tests/Feature/ExampleTest.php`.
-- To filter on a particular test name: `php artisan test --compact --filter=testName` (recommended after making a change to a related file).
-
-=== filament/filament rules ===
-
-## Filament
-
-- Filament is used by this application. Follow the existing conventions for how and where it is implemented.
-- Filament is a Server-Driven UI (SDUI) framework for Laravel that lets you define user interfaces in PHP using structured configuration objects. Built on Livewire, Alpine.js, and Tailwind CSS.
-
-### Artisan
-
-- Always use Filament-specific Artisan commands to create files. Find available commands with the `list-artisan-commands` tool, or run `php artisan --help`.
-- Always inspect required options before running a command, and always pass `--no-interaction`.
-
-### Patterns
-
-Always use static `make()` methods to initialize components. Most configuration methods accept a `Closure` for dynamic values.
-
-Use `Get $get` to read other form field values for conditional logic:
-
-<code-snippet name="Conditional form field visibility" lang="php">
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use Filament\Schemas\Components\Utilities\Get;
-
-Select::make('type')
-    ->options(CompanyType::class)
-    ->required()
-    ->live(),
-
-TextInput::make('company_name')
-    ->required()
-    ->visible(fn (Get $get): bool => $get('type') === 'business'),
-
-</code-snippet>
-
-Use `state()` with a `Closure` to compute derived column values:
-
-<code-snippet name="Computed table column value" lang="php">
-use Filament\Tables\Columns\TextColumn;
-
-TextColumn::make('full_name')
-    ->state(fn (User $record): string => "{$record->first_name} {$record->last_name}"),
-
-</code-snippet>
-
-Actions encapsulate a button with an optional modal form and logic:
-
-<code-snippet name="Action with modal form" lang="php">
-use Filament\Actions\Action;
-use Filament\Forms\Components\TextInput;
-
-Action::make('updateEmail')
-    ->schema([
-        TextInput::make('email')
-            ->email()
-            ->required(),
-    ])
-    ->action(fn (array $data, User $record) => $record->update($data))
-
-</code-snippet>
-
-### Testing
-
-Always authenticate before testing panel functionality. Filament uses Livewire, so use `Livewire::test()` or `livewire()` (available when `pestphp/pest-plugin-livewire` is in `composer.json`):
-
-<code-snippet name="Table test" lang="php">
-use function Pest\Livewire\livewire;
-
-livewire(ListUsers::class)
-    ->assertCanSeeTableRecords($users)
-    ->searchTable($users->first()->name)
-    ->assertCanSeeTableRecords($users->take(1))
-    ->assertCanNotSeeTableRecords($users->skip(1));
-
-</code-snippet>
-
-<code-snippet name="Create resource test" lang="php">
-use function Pest\Laravel\assertDatabaseHas;
-use function Pest\Livewire\livewire;
-
-livewire(CreateUser::class)
-    ->fillForm([
-        'name' => 'Test',
-        'email' => 'test@example.com',
-    ])
-    ->call('create')
-    ->assertNotified()
-    ->assertRedirect();
-
-assertDatabaseHas(User::class, [
-    'name' => 'Test',
-    'email' => 'test@example.com',
-]);
-
-</code-snippet>
-
-<code-snippet name="Testing validation" lang="php">
-use function Pest\Livewire\livewire;
-
-livewire(CreateUser::class)
-    ->fillForm([
-        'name' => null,
-        'email' => 'invalid-email',
-    ])
-    ->call('create')
-    ->assertHasFormErrors([
-        'name' => 'required',
-        'email' => 'email',
-    ])
-    ->assertNotNotified();
-
-</code-snippet>
-
-<code-snippet name="Calling actions in pages" lang="php">
-use Filament\Actions\DeleteAction;
-use function Pest\Livewire\livewire;
-
-livewire(EditUser::class, ['record' => $user->id])
-    ->callAction(DeleteAction::class)
-    ->assertNotified()
-    ->assertRedirect();
-
-</code-snippet>
-
-<code-snippet name="Calling actions in tables" lang="php">
-use Filament\Actions\Testing\TestAction;
-use function Pest\Livewire\livewire;
-
-livewire(ListUsers::class)
-    ->callAction(TestAction::make('promote')->table($user), [
-        'role' => 'admin',
-    ])
-    ->assertNotified();
-
-</code-snippet>
-
-### Correct Namespaces
-
-- Form fields (`TextInput`, `Select`, etc.): `Filament\Forms\Components\`
-- Infolist entries (`TextEntry`, `IconEntry`, etc.): `Filament\Infolists\Components\`
-- Layout components (`Grid`, `Section`, `Fieldset`, `Tabs`, `Wizard`, etc.): `Filament\Schemas\Components\`
-- Schema utilities (`Get`, `Set`, etc.): `Filament\Schemas\Components\Utilities\`
-- Actions (`DeleteAction`, `CreateAction`, etc.): `Filament\Actions\`. Never use `Filament\Tables\Actions\`, `Filament\Forms\Actions\`, or any other sub-namespace for actions.
-- Icons: `Filament\Support\Icons\Heroicon` enum (e.g., `Heroicon::PencilSquare`)
-
-### Common Mistakes
-
-- **Never assume public file visibility.** File visibility is `private` by default. Always use `->visibility('public')` when public access is needed.
-- **Never assume full-width layout.** `Grid`, `Section`, and `Fieldset` do not span all columns by default. Explicitly set column spans when needed.
-
-</laravel-boost-guidelines>
+- Filament 4 使用 Livewire 3,注意版本差异
+- 中间件在 `bootstrap/app.php` 中配置
+- 服务提供者在 `bootstrap/providers.php` 中注册
+- Console 命令放在 `app/Console/Commands/` 会自动注册

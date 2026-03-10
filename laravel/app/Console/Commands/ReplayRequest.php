@@ -8,6 +8,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 
 /**
+ * 重放客户端真实请求
  * php artisan request:replay 981
  */
 class ReplayRequest extends Command
@@ -119,8 +120,11 @@ class ReplayRequest extends Command
             return self::FAILURE;
         }
 
-        // 设置模型
-        $body['model'] = $model;
+        // 保持原始请求体不变，不篡改任何数据
+        // 仅更新模型为上游模型（如果存在）
+        if ($log->upstream_model) {
+            $body['model'] = $log->upstream_model;
+        }
 
         $this->newLine();
         $this->info('========== 发送真实请求 ==========');
