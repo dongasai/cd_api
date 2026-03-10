@@ -209,8 +209,11 @@ class StandardRequest
             $request['metadata']['user_id'] = $this->user;
         }
 
-        // 合并额外参数（保留原始请求中的特有参数如 thinking, output_config, beta 等）
-        return array_merge($this->additionalParams, $request);
+        // 合并额外参数，但过滤掉不支持的供应商特有参数
+        // thinking, output_config, beta 等是 Anthropic 特有参数，只在明确需要时保留
+        $allowedParams = $this->filterAllowedParams($this->additionalParams);
+
+        return array_merge($allowedParams, $request);
     }
 
     /**
@@ -708,5 +711,31 @@ class StandardRequest
         }
 
         return false;
+    }
+
+    /**
+     * 过滤允许的额外参数
+     *
+     * 过滤掉不支持的供应商特有参数，避免发送到上游 API
+     * thinking, output_config, beta 等是特定供应商的参数，需要谨慎处理
+     */
+    private function filterAllowedParams(array $params): array
+    {
+        // 定义允许的参数列表（通用参数）
+        $allowed = [
+            // 可以在这里添加需要保留的通用参数
+            // 默认过滤掉供应商特有参数
+        ];
+
+        // 如果没有指定允许的额外参数，过滤掉已知的供应商特有参数
+        $filtered = [];
+        foreach ($params as $key => $value) {
+            // 过滤掉可能不被上游支持的参数
+            if (! in_array($key, ['thinking', 'output_config', 'beta'])) {
+                $filtered[$key] = $value;
+            }
+        }
+
+        return $filtered;
     }
 }

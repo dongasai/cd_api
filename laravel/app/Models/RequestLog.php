@@ -25,7 +25,6 @@ class RequestLog extends Model
         'content_type',
         'content_length',
         'body_text',
-        'to_request_body',
         'body_binary',
         'model',
         'upstream_model',

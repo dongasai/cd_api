@@ -5,6 +5,7 @@ namespace App\Services\Router;
 use App\Models\ApiKey;
 use App\Models\AuditLog;
 use App\Models\Channel;
+use App\Models\ChannelRequestLog;
 use App\Models\RequestLog;
 use App\Models\ResponseLog;
 use App\Services\ChannelAffinity\ChannelAffinityService;
@@ -110,6 +111,11 @@ class ProxyServer
     protected ?AuditLog $auditLog = null;
 
     /**
+     * 当前渠道请求日志实例
+     */
+    protected ?ChannelRequestLog $channelRequestLog = null;
+
+    /**
      * 构造函数
      *
      * @param  ProtocolConverter  $protocolConverter  协议转换器
@@ -207,6 +213,9 @@ class ProxyServer
 
                 // 更新请求日志，记录渠道信息
                 $this->updateRequestLogForChannel($requestLog, $this->selectedChannel, $actualModel);
+
+                // 创建渠道请求日志（记录发送到渠道的请求）
+                $this->createInitialChannelRequestLog($requestLog, $this->selectedChannel, $providerRequest, $channelProtocol);
 
                 $provider = $this->providerManager->getForChannel($this->selectedChannel, $request->headers->all());
 
@@ -349,7 +358,13 @@ class ProxyServer
     ): array {
         $providerResponse = $provider->send($providerRequest);
 
+        // 从 Provider 获取实际请求信息并更新日志
+        $this->updateChannelRequestLogFromProvider($provider);
+
         $latencyMs = $this->calculateLatency();
+
+        // 更新渠道请求日志，记录响应信息
+        $this->updateChannelRequestLogForResponse($providerResponse, $latencyMs, true);
 
         $standardResponse = $this->normalizeProviderResponse($providerResponse, $targetProtocol);
 
@@ -394,16 +409,26 @@ class ProxyServer
     ): Generator {
         $stream = $provider->sendStream($providerRequest);
 
+        // 从 Provider 获取实际请求信息并更新日志
+        $this->updateChannelRequestLogFromProvider($provider);
+
         $fullContent = '';
         $usage = null;
         $finishReason = null;
         $firstTokenTime = null;
+        $ttfbMs = null;
 
         foreach ($stream as $chunk) {
-            // 记录首个 Token 时间
+            // 记录首个 Token 时间（TTFB）
             if ($firstTokenTime === null) {
                 $this->firstTokenMs = (int) ((microtime(true) - $this->startTime) * 1000);
                 $firstTokenTime = microtime(true);
+                $ttfbMs = $this->firstTokenMs;
+            }
+
+            // 记录首个响应块时间用于 TTFB
+            if ($this->channelRequestLog && $ttfbMs === null) {
+                $ttfbMs = (int) ((microtime(true) - $this->startTime) * 1000);
             }
 
             $standardEvent = $this->parseStreamChunk($chunk, $targetProtocol);
@@ -439,6 +464,9 @@ class ProxyServer
             usage: $usage,
             finishReason: $finishReason
         );
+
+        // 更新渠道请求日志，记录响应信息
+        $this->updateChannelRequestLogForResponse($standardResponse, $latencyMs, true, $ttfbMs);
 
         $auditLog = $this->createAuditLog($httpRequest, $standardRequest, $standardResponse, $latencyMs, null, true);
 
@@ -511,10 +539,8 @@ class ProxyServer
      * 更新请求日志的渠道信息和发往渠道的请求参数
      *
      * @param  RequestLog  $log  请求日志
-     * @param  ProviderRequest  $providerRequest  供应商请求
      * @param  Channel  $channel  渠道实例
      * @param  string  $actualModel  实际模型名称
-     * @param  string  $channelProtocol  渠道协议
      */
     protected function updateRequestLogForChannel(RequestLog $log, Channel $channel, string $actualModel): void
     {
@@ -522,6 +548,106 @@ class ProxyServer
             'channel_id' => $channel->id,
             'channel_name' => $channel->name,
             'upstream_model' => $actualModel,
+        ]);
+    }
+
+    /**
+     * 创建初始渠道请求日志
+     *
+     * 记录发送到渠道的请求信息
+     *
+     * @param  RequestLog  $requestLog  请求日志
+     * @param  Channel  $channel  渠道实例
+     * @param  ProviderRequest  $providerRequest  供应商请求
+     * @param  string  $channelProtocol  渠道协议
+     */
+    protected function createInitialChannelRequestLog(RequestLog $requestLog, Channel $channel, ProviderRequest $providerRequest, string $channelProtocol): void
+    {
+        $baseUrl = rtrim($channel->base_url, '/');
+        $path = $this->buildEndpointPath($channelProtocol);
+        $fullUrl = $baseUrl.$path;
+
+        $this->channelRequestLog = ChannelRequestLog::create([
+            'audit_log_id' => $this->auditLog?->id,
+            'request_log_id' => $requestLog->id,
+            'request_id' => $this->requestId,
+            'channel_id' => $channel->id,
+            'channel_name' => $channel->name,
+            'provider' => $channel->provider,
+            'method' => 'POST',
+            'path' => $path,
+            'base_url' => $baseUrl,
+            'full_url' => $fullUrl,
+            'request_headers' => $this->buildChannelRequestHeaders($channel),
+            'request_body' => $providerRequest->toArray(),
+            'request_size' => strlen(json_encode($providerRequest->toArray())),
+            'sent_at' => now(),
+        ]);
+    }
+
+    /**
+     * 从 Provider 更新渠道请求日志
+     *
+     * 获取 Provider 实际发送的请求信息并更新日志
+     *
+     * @param  mixed  $provider  供应商实例
+     */
+    protected function updateChannelRequestLogFromProvider($provider): void
+    {
+        if (! $this->channelRequestLog) {
+            return;
+        }
+
+        // 从 Provider 获取实际请求信息
+        $requestInfo = $provider->getLastRequestInfo();
+        if (! $requestInfo) {
+            return;
+        }
+
+        $this->channelRequestLog->update([
+            'path' => $requestInfo->path,
+            'full_url' => $requestInfo->url,
+            'request_headers' => $requestInfo->headers,
+            'request_body' => $requestInfo->body,
+            'request_size' => strlen(json_encode($requestInfo->body)),
+        ]);
+    }
+
+    /**
+     * 更新渠道请求日志的响应信息
+     *
+     * @param  ProviderResponse|StandardResponse  $response  供应商响应
+     * @param  int  $latencyMs  延迟毫秒数
+     * @param  bool  $isSuccess  是否成功
+     * @param  int|null  $ttfbMs  首字节时间
+     */
+    protected function updateChannelRequestLogForResponse(ProviderResponse|StandardResponse $response, int $latencyMs, bool $isSuccess, ?int $ttfbMs = null): void
+    {
+        if (! $this->channelRequestLog) {
+            return;
+        }
+
+        $responseData = $response instanceof ProviderResponse ? $response->rawResponse : [
+            'id' => $response->id,
+            'model' => $response->model,
+            'content' => $response->content,
+            'usage' => $response->usage,
+            'finish_reason' => $response->finishReason,
+        ];
+
+        $this->channelRequestLog->update([
+            'response_status' => 200,
+            'response_headers' => ['content-type' => 'application/json'],
+            'response_body' => $responseData,
+            'response_size' => strlen(json_encode($responseData)),
+            'latency_ms' => $latencyMs,
+            'ttfb_ms' => $ttfbMs,
+            'is_success' => $isSuccess,
+            'usage' => $response->usage ? [
+                'prompt_tokens' => $response->usage->promptTokens ?? 0,
+                'completion_tokens' => $response->usage->completionTokens ?? 0,
+                'total_tokens' => $response->usage->totalTokens ?? 0,
+            ] : null,
         ]);
     }
 
@@ -694,6 +820,17 @@ class ProxyServer
             'error_message' => $e->getMessage(),
         ]);
 
+        // 更新渠道请求日志记录错误信息
+        if ($this->channelRequestLog) {
+            $this->channelRequestLog->update([
+                'response_status' => $this->getStatusCode($e),
+                'is_success' => false,
+                'error_type' => get_class($e),
+                'error_message' => $e->getMessage(),
+                'latency_ms' => $latencyMs,
+            ]);
+        }
+
         Log::error('Proxy request failed', [
             'request_id' => $this->requestId,
             'error' => $e->getMessage(),
@@ -781,6 +918,38 @@ class ProxyServer
         }
 
         return $headers;
+    }
+
+    /**
+     * 构建渠道请求头（用于日志记录）
+     *
+     * @param  Channel  $channel  渠道实例
+     * @return array 请求头数组（已过滤敏感信息）
+     */
+    protected function buildChannelRequestHeaders(Channel $channel): array
+    {
+        $headers = $this->buildHeaders($channel);
+
+        // 过滤敏感的 API 密钥信息
+        return $this->filterSensitiveHeaders($headers);
+    }
+
+    /**
+     * 构建渠道端点路径
+     *
+     * 注意：此方法返回的路径应与 Provider::getEndpoint() 保持一致
+     * base_url 通常已包含 /v1 前缀，所以这里不应再添加
+     *
+     * @param  string  $protocol  协议类型
+     * @return string 端点路径
+     */
+    protected function buildEndpointPath(string $protocol): string
+    {
+        if ($protocol === 'anthropic') {
+            return '/messages';
+        }
+
+        return '/chat/completions';
     }
 
     /**

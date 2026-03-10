@@ -2,6 +2,7 @@
 
 namespace App\Services\Provider\Driver;
 
+use App\Services\Provider\DTO\ActualRequestInfo;
 use App\Services\Provider\DTO\ProviderRequest;
 use App\Services\Provider\DTO\ProviderResponse;
 use App\Services\Provider\DTO\ProviderStreamChunk;
@@ -41,6 +42,11 @@ abstract class AbstractProvider implements ProviderInterface
      * 最后一次错误消息
      */
     protected ?string $lastErrorMessage = null;
+
+    /**
+     * 最后一次实际请求信息
+     */
+    protected ?ActualRequestInfo $lastRequestInfo = null;
 
     /**
      * 请求超时时间（秒）
@@ -271,20 +277,29 @@ abstract class AbstractProvider implements ProviderInterface
         $body = $this->buildRequestBody($request);
         $endpoint = $this->getEndpoint($request);
         $url = rtrim($this->baseUrl, '/').'/'.ltrim($endpoint, '/');
+        $headers = $this->getHeaders();
+
+        // 存储实际请求信息
+        $this->lastRequestInfo = new ActualRequestInfo(
+            url: $url,
+            path: $endpoint,
+            headers: $headers,
+            body: $body,
+        );
+
+        // Debug: 输出请求信息
+        Log::debug('Provider stream request', [
+            'url' => $url,
+            'headers' => $headers,
+            'body' => $body,
+        ]);
 
         try {
-            $response = Http::withHeaders($this->getHeaders())
+            $response = Http::withHeaders($headers)
                 ->timeout($this->timeout)
                 ->connectTimeout($this->connectTimeout)
                 ->withOptions(['stream' => true])
                 ->post($url, $body);
-
-            // Debug: 输出请求信息
-            Log::debug('Provider stream request', [
-                'url' => $url,
-                'headers' => $this->getHeaders(),
-                'body' => $body,
-            ]);
 
             // 检查响应状态码
             if (! $response->ok()) {
@@ -335,15 +350,24 @@ abstract class AbstractProvider implements ProviderInterface
         $body = $this->buildRequestBody($request);
         $endpoint = $this->getEndpoint($request);
         $url = rtrim($this->baseUrl, '/').'/'.ltrim($endpoint, '/');
+        $headers = $this->getHeaders();
+
+        // 存储实际请求信息
+        $this->lastRequestInfo = new ActualRequestInfo(
+            url: $url,
+            path: $endpoint,
+            headers: $headers,
+            body: $body,
+        );
 
         // Debug: 输出实际请求信息
         Log::debug('Provider request', [
             'url' => $url,
-            'headers' => $this->getHeaders(),
+            'headers' => $headers,
             'body' => $body,
         ]);
 
-        $response = Http::withHeaders($this->getHeaders())
+        $response = Http::withHeaders($headers)
             ->timeout($this->timeout)
             ->connectTimeout($this->connectTimeout)
             ->post($url, $body);
@@ -478,6 +502,14 @@ abstract class AbstractProvider implements ProviderInterface
     public function getLastErrorMessage(): ?string
     {
         return $this->lastErrorMessage;
+    }
+
+    /**
+     * 获取最后一次实际请求信息
+     */
+    public function getLastRequestInfo(): ?ActualRequestInfo
+    {
+        return $this->lastRequestInfo;
     }
 
     /**

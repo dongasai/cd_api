@@ -2,6 +2,7 @@
 
 namespace App\Services\Provider\Driver;
 
+use App\Services\Provider\DTO\ActualRequestInfo;
 use App\Services\Provider\DTO\ProviderRequest;
 use App\Services\Provider\DTO\ProviderResponse;
 use App\Services\Provider\DTO\ProviderStreamChunk;
@@ -70,4 +71,11 @@ interface ProviderInterface
      * @return string|null 错误消息，无错误时返回 null
      */
     public function getLastErrorMessage(): ?string;
+
+    /**
+     * 获取最后一次实际请求信息
+     *
+     * @return ActualRequestInfo|null 实际请求信息，无请求时返回 null
+     */
+    public function getLastRequestInfo(): ?ActualRequestInfo;
 }

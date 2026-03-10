@@ -11,6 +11,7 @@ use Filament\Resources\Pages\ViewRecord;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Phiki\Grammar\Grammar;
 
 class ViewChannelRequestLog extends ViewRecord
 {
@@ -119,7 +120,7 @@ class ViewChannelRequestLog extends ViewRecord
                                 CodeEntry::make('request_body')
                                     ->label('')
                                     ->placeholder('无')
-                                    ->language('json')
+                                    ->grammar(Grammar::Json)
                                     ->columnSpanFull(),
                             ])
                             ->columnSpanFull()
@@ -140,7 +141,7 @@ class ViewChannelRequestLog extends ViewRecord
                                 CodeEntry::make('response_body')
                                     ->label('')
                                     ->placeholder('无')
-                                    ->language('json')
+                                    ->grammar(Grammar::Json)
                                     ->columnSpanFull(),
                             ])
                             ->columnSpanFull()
