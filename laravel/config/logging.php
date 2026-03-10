@@ -1,8 +1,11 @@
 <?php
 
+use Monolog\Handler\FilterHandler;
 use Monolog\Handler\NullHandler;
+use Monolog\Handler\RotatingFileHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
+use Monolog\Level;
 use Monolog\Processor\PsrLogMessageProcessor;
 
 return [
@@ -54,8 +57,21 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            'channels' => explode(',', (string) env('LOG_STACK', 'daily,error')),
             'ignore_exceptions' => false,
+        ],
+
+        'error' => [
+            'driver' => 'monolog',
+            'handler' => FilterHandler::class,
+            'handler_with' => [
+                'handler' => new RotatingFileHandler(
+                    storage_path('logs/laravel-error.log'),
+                    env('LOG_ERROR_DAYS', 14),
+                    Level::Error
+                ),
+                'minLevelOrList' => Level::Error,
+            ],
         ],
 
         'single' => [

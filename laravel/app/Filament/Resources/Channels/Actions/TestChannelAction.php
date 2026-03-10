@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Channels\Actions;
 
 use App\Models\Channel;
+use App\Models\ChannelRequestLog;
 use App\Services\Provider\DTO\ProviderRequest;
 use App\Services\Provider\ProviderManager;
 use Filament\Actions\Action;
@@ -14,6 +15,7 @@ use Filament\Schemas\Components\Text;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class TestChannelAction extends Action
 {
@@ -139,28 +141,77 @@ class TestChannelAction extends Action
             return;
         }
 
+        $startTime = microtime(true);
+        $requestId = 'test_'.Str::uuid()->toString();
+
+        $testMessages = [
+            ['role' => 'user', 'content' => 'Hi, please respond with "OK" to confirm you are working.'],
+        ];
+
+        $requestData = [
+            'model' => $modelName,
+            'messages' => $testMessages,
+            'max_tokens' => 50,
+            'temperature' => 0.7,
+        ];
+
+        $providerRequest = ProviderRequest::fromArray($requestData);
+        $providerManager = app(ProviderManager::class);
+        $provider = $providerManager->getForChannel($record);
+
+        $baseUrl = rtrim($record->base_url, '/');
+        $path = $this->buildEndpointPath($record->provider);
+        $fullUrl = $baseUrl.$path;
+
+        // 创建渠道请求日志
+        $channelRequestLog = ChannelRequestLog::create([
+            'request_id' => $requestId,
+            'channel_id' => $record->id,
+            'channel_name' => $record->name,
+            'provider' => $record->provider,
+            'method' => 'POST',
+            'path' => $path,
+            'base_url' => $baseUrl,
+            'full_url' => $fullUrl,
+            'request_headers' => $this->buildRequestHeaders($record),
+            'request_body' => $requestData,
+            'request_size' => strlen(json_encode($requestData)),
+            'sent_at' => now(),
+        ]);
+
         try {
-            $startTime = microtime(true);
-
-            $testMessages = [
-                ['role' => 'user', 'content' => 'Hi, please respond with "OK" to confirm you are working.'],
-            ];
-
-            $requestData = [
-                'model' => $modelName,
-                'messages' => $testMessages,
-                'max_tokens' => 50,
-                'temperature' => 0.7,
-            ];
-
-            $providerRequest = ProviderRequest::fromArray($requestData);
-            $providerManager = app(ProviderManager::class);
-            $provider = $providerManager->getForChannel($record);
             $response = $provider->send($providerRequest);
+
+            // 从 Provider 获取实际请求信息
+            $requestInfo = $provider->getLastRequestInfo();
+            if ($requestInfo) {
+                $channelRequestLog->update([
+                    'path' => $requestInfo->path,
+                    'full_url' => $requestInfo->url,
+                    'request_headers' => $requestInfo->headers,
+                    'request_body' => $requestInfo->body,
+                    'request_size' => strlen(json_encode($requestInfo->body)),
+                ]);
+            }
 
             $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
 
             $content = $response->content ?? '无内容';
+
+            // 更新渠道请求日志，记录响应信息
+            $channelRequestLog->update([
+                'response_status' => 200,
+                'response_headers' => ['content-type' => 'application/json'],
+                'response_body' => $response->rawResponse ?? ['content' => $content],
+                'response_size' => strlen(json_encode($response->rawResponse ?? ['content' => $content])),
+                'latency_ms' => $latencyMs,
+                'is_success' => true,
+                'usage' => $response->usage ? [
+                    'prompt_tokens' => $response->usage->promptTokens ?? 0,
+                    'completion_tokens' => $response->usage->completionTokens ?? 0,
+                    'total_tokens' => $response->usage->totalTokens ?? 0,
+                ] : null,
+            ]);
 
             Notification::make()
                 ->title('测试成功')
@@ -170,8 +221,19 @@ class TestChannelAction extends Action
                 ->send();
         } catch (\Exception $e) {
             $errorMessage = $e->getMessage();
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            // 更新渠道请求日志，记录错误信息
+            $channelRequestLog->update([
+                'response_status' => $this->getStatusCode($e),
+                'is_success' => false,
+                'error_type' => get_class($e),
+                'error_message' => $errorMessage,
+                'latency_ms' => $latencyMs,
+            ]);
 
             Log::error('Channel test failed', [
+                'request_id' => $requestId,
                 'channel_id' => $record->id,
                 'channel_name' => $record->name,
                 'provider' => $record->provider,
@@ -187,6 +249,53 @@ class TestChannelAction extends Action
                 ->duration(8000)
                 ->send();
         }
+    }
+
+    /**
+     * 构建端点路径
+     */
+    protected function buildEndpointPath(string $provider): string
+    {
+        if (in_array($provider, ['anthropic', 'claude'])) {
+            return '/messages';
+        }
+
+        return '/chat/completions';
+    }
+
+    /**
+     * 构建请求头（用于日志记录，已过滤敏感信息）
+     */
+    protected function buildRequestHeaders(Channel $channel): array
+    {
+        $headers = [
+            'Content-Type' => 'application/json',
+        ];
+
+        if (in_array($channel->provider, ['anthropic', 'claude'])) {
+            $headers['x-api-key'] = '***';
+            $headers['anthropic-version'] = '2023-06-01';
+        } else {
+            $headers['Authorization'] = 'Bearer ***';
+        }
+
+        return $headers;
+    }
+
+    /**
+     * 获取异常的 HTTP 状态码
+     */
+    protected function getStatusCode(\Exception $e): int
+    {
+        if (method_exists($e, 'getStatusCode')) {
+            return $e->getStatusCode();
+        }
+
+        if (method_exists($e, 'getCode') && $e->getCode() > 0) {
+            return $e->getCode();
+        }
+
+        return 500;
     }
 
     protected function checkConfig(Channel $record): ?string

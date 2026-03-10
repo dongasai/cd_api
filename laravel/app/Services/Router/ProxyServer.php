@@ -12,6 +12,7 @@ use App\Services\ChannelAffinity\ChannelAffinityService;
 use App\Services\CodingStatus\ChannelCodingStatusService;
 use App\Services\Protocol\DTO\StandardRequest;
 use App\Services\Protocol\DTO\StandardResponse;
+use App\Services\Protocol\DTO\StandardToolCall;
 use App\Services\Protocol\ProtocolConverter;
 use App\Services\Provider\DTO\ProviderRequest;
 use App\Services\Provider\DTO\ProviderResponse;
@@ -363,8 +364,8 @@ class ProxyServer
 
         $latencyMs = $this->calculateLatency();
 
-        // 更新渠道请求日志，记录响应信息
-        $this->updateChannelRequestLogForResponse($providerResponse, $latencyMs, true);
+        // 更新渠道请求日志，记录响应信息（非流式请求的 TTFB 等于总延迟）
+        $this->updateChannelRequestLogForResponse($providerResponse, $latencyMs, true, $latencyMs);
 
         $standardResponse = $this->normalizeProviderResponse($providerResponse, $targetProtocol);
 
@@ -417,6 +418,9 @@ class ProxyServer
         $finishReason = null;
         $firstTokenTime = null;
         $ttfbMs = null;
+        $toolCalls = [];
+        $reasoningContent = '';
+        Log::debug('handleStreamRequest  ', []);
 
         foreach ($stream as $chunk) {
             // 记录首个 Token 时间（TTFB）
@@ -433,12 +437,24 @@ class ProxyServer
 
             $standardEvent = $this->parseStreamChunk($chunk, $targetProtocol);
             if ($standardEvent === null) {
+                Log::info('standardEvent nullcontinue ', []);
+
                 continue;
             }
 
             // 累积内容
             if ($standardEvent->contentDelta) {
                 $fullContent .= $standardEvent->contentDelta;
+            }
+
+            // 累积推理内容
+            if ($standardEvent->reasoningDelta) {
+                $reasoningContent .= $standardEvent->reasoningDelta;
+            }
+
+            // 累积工具调用（流式响应中 tool_calls 是增量发送的）
+            if ($standardEvent->toolCall) {
+                $this->accumulateToolCall($toolCalls, $standardEvent->toolCall);
             }
 
             if ($standardEvent->usage) {
@@ -462,7 +478,9 @@ class ProxyServer
             content: $fullContent,
             model: $standardRequest->model,
             usage: $usage,
-            finishReason: $finishReason
+            finishReason: $finishReason,
+            toolCalls: ! empty($toolCalls) ? $toolCalls : null,
+            reasoningContent: $reasoningContent ?: null,
         );
 
         // 更新渠道请求日志，记录响应信息
@@ -480,6 +498,32 @@ class ProxyServer
             $standardRequest->model,
             $this->currentGroup
         );
+    }
+
+    /**
+     * 累积工具调用（流式响应中 tool_calls 是增量发送的）
+     *
+     * @param  array  $toolCalls  已累积的工具调用数组
+     * @param  StandardToolCall  $newCall  新的工具调用增量
+     */
+    protected function accumulateToolCall(array &$toolCalls, StandardToolCall $newCall): void
+    {
+        $index = $newCall->index ?? count($toolCalls);
+
+        if (! isset($toolCalls[$index])) {
+            $toolCalls[$index] = $newCall;
+        } else {
+            // 累积 arguments 字符串
+            $toolCalls[$index]->arguments .= $newCall->arguments;
+
+            // 更新其他字段（如果新块中有值）
+            if ($newCall->id) {
+                $toolCalls[$index]->id = $newCall->id;
+            }
+            if ($newCall->name) {
+                $toolCalls[$index]->name = $newCall->name;
+            }
+        }
     }
 
     /**
@@ -633,6 +677,10 @@ class ProxyServer
             'content' => $response->content,
             'usage' => $response->usage,
             'finish_reason' => $response->finishReason,
+            'tool_calls' => $response->toolCalls ? array_map(
+                fn ($tc) => $tc->toOpenAI(),
+                $response->toolCalls
+            ) : null,
         ];
 
         $this->channelRequestLog->update([

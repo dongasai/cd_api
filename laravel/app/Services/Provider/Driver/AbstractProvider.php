@@ -6,6 +6,7 @@ use App\Services\Provider\DTO\ActualRequestInfo;
 use App\Services\Provider\DTO\ProviderRequest;
 use App\Services\Provider\DTO\ProviderResponse;
 use App\Services\Provider\DTO\ProviderStreamChunk;
+use App\Services\Provider\DTO\TokenUsage;
 use App\Services\Provider\Exceptions\ProviderException;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
@@ -287,13 +288,6 @@ abstract class AbstractProvider implements ProviderInterface
             body: $body,
         );
 
-        // Debug: 输出请求信息
-        Log::debug('Provider stream request', [
-            'url' => $url,
-            'headers' => $headers,
-            'body' => $body,
-        ]);
-
         try {
             $response = Http::withHeaders($headers)
                 ->timeout($this->timeout)
@@ -311,6 +305,31 @@ abstract class AbstractProvider implements ProviderInterface
 
             $buffer = '';
             $stream = $response->toPsrResponse()->getBody();
+
+            // 检查响应是否为非流式 JSON（某些上游 API 可能忽略 stream 参数）
+            $contentType = $response->header('Content-Type') ?? '';
+            $isJsonResponse = str_contains($contentType, 'application/json') &&
+                              ! str_contains($contentType, 'text/event-stream');
+
+            // 如果是非流式 JSON 响应，直接读取完整内容并转换为流式块
+            if ($isJsonResponse) {
+                Log::warning('Upstream returned non-stream JSON response for stream request', [
+                    'content_type' => $contentType,
+                ]);
+
+                // 读取完整响应体
+                while (! $stream->eof()) {
+                    $buffer .= $stream->read(8192);
+                }
+
+                // 尝试解析为非流式响应并转换为流式块
+                $parsed = $this->parseNonStreamAsChunk($buffer);
+                if ($parsed !== null) {
+                    yield $parsed;
+                }
+
+                return;
+            }
 
             // 逐块读取流式响应
             while (! $stream->eof()) {
@@ -343,6 +362,66 @@ abstract class AbstractProvider implements ProviderInterface
     }
 
     /**
+     * 将非流式响应转换为流式块
+     *
+     * 用于处理上游 API 忽略 stream 参数返回非流式响应的情况
+     *
+     * @param  string  $rawResponse  原始 JSON 响应
+     */
+    protected function parseNonStreamAsChunk(string $rawResponse): ?ProviderStreamChunk
+    {
+        $data = json_decode($rawResponse, true);
+        if ($data === null) {
+            return null;
+        }
+
+        // 从非流式响应提取信息
+        $id = $data['id'] ?? null;
+        $model = $data['model'] ?? null;
+        $finishReason = null;
+        $content = '';
+        $usage = null;
+        $toolCalls = null;
+
+        // 提取 choices
+        $choices = $data['choices'] ?? [];
+        $choice = $choices[0] ?? [];
+
+        // 提取内容（非流式响应使用 message.content）
+        if (isset($choice['message'])) {
+            $content = $choice['message']['content'] ?? '';
+            if (isset($choice['message']['tool_calls'])) {
+                $toolCalls = $choice['message']['tool_calls'];
+            }
+        } elseif (isset($data['content'])) {
+            // 某些 API 直接返回 content 字段
+            $content = $data['content'];
+        }
+
+        if (isset($choice['finish_reason'])) {
+            $finishReason = $choice['finish_reason'];
+        } elseif (isset($data['finish_reason'])) {
+            $finishReason = $data['finish_reason'];
+        }
+
+        // 提取 usage
+        if (isset($data['usage'])) {
+            $usage = TokenUsage::fromOpenAI($data['usage']);
+        }
+
+        return new ProviderStreamChunk(
+            event: 'done',
+            data: $data,
+            delta: $content,
+            id: $id,
+            model: $model,
+            finishReason: $finishReason,
+            usage: $usage,
+            toolCalls: $toolCalls,
+        );
+    }
+
+    /**
      * 执行 HTTP 请求
      */
     protected function executeRequest(ProviderRequest $request): ProviderResponse
@@ -359,13 +438,6 @@ abstract class AbstractProvider implements ProviderInterface
             headers: $headers,
             body: $body,
         );
-
-        // Debug: 输出实际请求信息
-        Log::debug('Provider request', [
-            'url' => $url,
-            'headers' => $headers,
-            'body' => $body,
-        ]);
 
         $response = Http::withHeaders($headers)
             ->timeout($this->timeout)

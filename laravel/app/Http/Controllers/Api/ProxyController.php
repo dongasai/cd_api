@@ -125,7 +125,6 @@ class ProxyController extends Controller
         return response()->stream(function () use ($generator) {
             foreach ($generator as $chunk) {
                 echo $chunk;
-                echo "\n";
                 if (ob_get_level() > 0) {
                     ob_flush();
                 }

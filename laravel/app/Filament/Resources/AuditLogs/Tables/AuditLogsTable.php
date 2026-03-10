@@ -6,6 +6,10 @@ use App\Models\AuditLog;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
+use Filament\Support\Enums\FontWeight;
+use Filament\Tables\Columns\Layout\Panel;
+use Filament\Tables\Columns\Layout\Split;
+use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
@@ -19,125 +23,175 @@ class AuditLogsTable
     {
         return $table
             ->columns([
-                TextColumn::make('id')
-                    ->label('ID')
-                    ->sortable(),
+                Split::make([
+                    TextColumn::make('id')
+                        ->label('ID')
+                        ->weight(FontWeight::Bold)
+                        ->sortable()
+                        ->width('70px'),
 
-                TextColumn::make('request_id')
-                    ->label('请求ID')
-                    ->searchable()
-                    ->copyable()
-                    ->limit(20),
+                    TextColumn::make('created_at')
+                        ->label('时间')
+                        ->weight(FontWeight::Bold)
+                        ->dateTime('m-d H:i:s')
+                        ->sortable()
+                        ->width('120px'),
 
-                TextColumn::make('user_info')
-                    ->label('用户 / API密钥 / 渠道')
-                    ->html()
-                    ->searchable(['username', 'api_key_name', 'channel_name'])
-                    ->state(function (AuditLog $record): string {
-                        $lines = [];
+                    TextColumn::make('channel_name')
+                        ->label('渠道')
+                        ->searchable()
+                        ->limit(15)
+                        ->placeholder('-')
+                        ->width('120px'),
 
-                        $lines[] = '<div class="space-y-1">';
+                    TextColumn::make('total_tokens')
+                        ->label('令牌')
+                        ->numeric()
+                        ->sortable()
+                        ->formatStateUsing(fn ($state) => number_format($state))
+                        ->width('80px'),
 
-                        if ($record->username) {
-                            $lines[] = '<div><span class="text-gray-500">用户:</span> '.e($record->username).'</div>';
-                        }
+                    TextColumn::make('model')
+                        ->label('模型')
+                        ->searchable()
+                        ->limit(20)
+                        ->placeholder('-'),
 
-                        if ($record->api_key_name) {
-                            $lines[] = '<div><span class="text-gray-500">密钥:</span> '.e($record->api_key_name).'</div>';
-                        }
+                    TextColumn::make('latency_info')
+                        ->label('用时/首字')
+                        ->html()
+                        ->width('100px')
+                        ->state(function (AuditLog $record): string {
+                            $latency = number_format($record->latency_ms ?? 0);
+                            $firstToken = number_format($record->first_token_ms ?? 0);
 
-                        if ($record->channel_name) {
-                            $lines[] = '<div><span class="text-gray-500">渠道:</span> '.e($record->channel_name).'</div>';
-                        }
+                            return '<div class="text-sm">'.
+                                '<div><span class="text-gray-500">总:</span> '.$latency.'ms</div>'.
+                                '<div><span class="text-gray-500">首:</span> '.$firstToken.'ms</div>'.
+                                '</div>';
+                        }),
 
-                        if (empty($record->username) && empty($record->api_key_name) && empty($record->channel_name)) {
-                            $lines[] = '<div class="text-gray-400">-</div>';
-                        }
+                    TextColumn::make('prompt_tokens')
+                        ->label('输入')
+                        ->numeric()
+                        ->sortable()
+                        ->formatStateUsing(fn ($state) => number_format($state))
+                        ->width('70px'),
 
-                        $lines[] = '</div>';
+                    TextColumn::make('completion_tokens')
+                        ->label('输出')
+                        ->numeric()
+                        ->sortable()
+                        ->formatStateUsing(fn ($state) => number_format($state))
+                        ->width('70px'),
+                ]),
 
-                        return implode('', $lines);
-                    }),
+                Panel::make([
+                    Stack::make([
+                        TextColumn::make('channel_detail')
+                            ->label('渠道信息')
+                            ->html()
+                            ->state(function (AuditLog $record): string {
+                                $html = '<div class="grid grid-cols-3 gap-4">';
+                                $html .= '<div><span class="text-gray-500">渠道:</span> '.e($record->channel_name ?? '-').'</div>';
+                                $html .= '<div><span class="text-gray-500">用户:</span> '.e($record->username ?? '-').'</div>';
+                                $html .= '<div><span class="text-gray-500">密钥:</span> '.e($record->api_key_name ?? '-').'</div>';
+                                $html .= '</div>';
 
-                TextColumn::make('request_type_stream')
-                    ->label('请求类型 / 流式')
-                    ->html()
-                    ->state(function (AuditLog $record): string {
-                        $typeLabel = AuditLog::getRequestTypes()[$record->request_type] ?? '未知';
-                        $typeColors = [
-                            AuditLog::REQUEST_TYPE_CHAT => 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-                            AuditLog::REQUEST_TYPE_COMPLETION => 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-                            AuditLog::REQUEST_TYPE_EMBEDDING => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-                            AuditLog::REQUEST_TYPE_OTHER => 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
-                        ];
-                        $typeColor = $typeColors[$record->request_type] ?? $typeColors[AuditLog::REQUEST_TYPE_OTHER];
+                                return $html;
+                            }),
 
-                        $streamBadge = $record->is_stream
-                            ? '<span class="inline-flex items-center rounded-md bg-primary-100 px-2 py-1 text-xs font-medium text-primary-700 dark:bg-primary-900 dark:text-primary-300 ml-1">流式</span>'
-                            : '<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400 ml-1">非流式</span>';
+                        TextColumn::make('request_id')
+                            ->label('Request ID')
+                            ->copyable()
+                            ->state(fn (AuditLog $record): string => $record->request_id ?? '-'),
 
-                        return '<div class="flex items-center gap-1">'.
-                            '<span class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium '.$typeColor.'">'.$typeLabel.'</span>'.
-                            $streamBadge.
-                            '</div>';
-                    }),
+                        TextColumn::make('tokens_detail')
+                            ->label('Tokens详细')
+                            ->html()
+                            ->state(function (AuditLog $record): string {
+                                $html = '<div class="flex items-center gap-6">';
+                                $html .= '<div><span class="text-gray-500">输入:</span> '.number_format($record->prompt_tokens ?? 0).'</div>';
+                                $html .= '<div><span class="text-gray-500">缓存读:</span> '.number_format($record->cache_read_tokens ?? 0).'</div>';
+                                $html .= '<div><span class="text-gray-500">缓存写:</span> '.number_format($record->cache_write_tokens ?? 0).'</div>';
+                                $html .= '<div><span class="text-gray-500">输出:</span> '.number_format($record->completion_tokens ?? 0).'</div>';
+                                $html .= '</div>';
 
-                TextColumn::make('model')
-                    ->label('模型')
-                    ->searchable()
-                    ->limit(20),
+                                return $html;
+                            }),
 
-                TextColumn::make('status_code')
-                    ->label('状态码')
-                    ->badge()
-                    ->colors([
-                        'success' => fn ($state) => $state >= 200 && $state < 300,
-                        'warning' => fn ($state) => $state >= 300 && $state < 400,
-                        'danger' => fn ($state) => $state >= 400 || $state === null,
+                        TextColumn::make('request_path')
+                            ->label('请求路径')
+                            ->html()
+                            ->state(function (AuditLog $record): string {
+                                $path = $record->requestLog?->path ?? '-';
+                                $method = $record->requestLog?->method ?? 'POST';
+
+                                return '<code class="text-sm bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">'.$method.' '.$path.'</code>';
+                            }),
+
+                        TextColumn::make('model_transform')
+                            ->label('请求转换')
+                            ->html()
+                            ->state(function (AuditLog $record): string {
+                                $requestModel = $record->model ?? '-';
+                                $actualModel = $record->actual_model ?? '-';
+
+                                if ($requestModel === $actualModel) {
+                                    return '<span class="text-gray-500">无转换</span>';
+                                }
+
+                                return '<span class="text-primary-600">'.e($requestModel).'</span>'.
+                                    ' <span class="text-gray-400">→</span> '.
+                                    '<span class="text-success-600">'.e($actualModel).'</span>';
+                            }),
+
+                        TextColumn::make('extra_info')
+                            ->label('其他信息')
+                            ->html()
+                            ->state(function (AuditLog $record): string {
+                                $affinity = $record->channel_affinity;
+                                $affinityHtml = '<span class="text-gray-400">-</span>';
+                                if (! empty($affinity)) {
+                                    $isHit = $affinity['is_affinity_hit'] ?? false;
+                                    $affinityHtml = $isHit
+                                        ? '<span class="inline-flex items-center rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-800">命中</span>'
+                                        : '<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">未命中</span>';
+                                }
+
+                                $statusBadge = match (true) {
+                                    ($record->status_code >= 200 && $record->status_code < 300) => '<span class="inline-flex items-center rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-800">'.$record->status_code.'</span>',
+                                    ($record->status_code >= 400) => '<span class="inline-flex items-center rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-800">'.$record->status_code.'</span>',
+                                    default => '<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">'.$record->status_code.'</span>',
+                                };
+
+                                $streamBadge = $record->is_stream
+                                    ? '<span class="inline-flex items-center rounded-md bg-primary-100 px-2 py-1 text-xs font-medium text-primary-700">流式</span>'
+                                    : '<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">非流式</span>';
+
+                                $html = '<div class="flex items-center gap-4">';
+                                $html .= '<div><span class="text-gray-500">状态:</span> '.$statusBadge.'</div>';
+                                $html .= '<div><span class="text-gray-500">流式:</span> '.$streamBadge.'</div>';
+                                $html .= '<div><span class="text-gray-500">亲和性:</span> '.$affinityHtml.'</div>';
+                                $html .= '<div><span class="text-gray-500">成本:</span> $'.number_format($record->cost ?? 0, 6).'</div>';
+                                $html .= '</div>';
+
+                                return $html;
+                            }),
+
+                        TextColumn::make('error_detail')
+                            ->label('错误信息')
+                            ->html()
+                            ->visible(fn (?AuditLog $record): bool => $record && ! empty($record->error_message))
+                            ->state(function (AuditLog $record): string {
+                                $html = '<div class="text-danger-600 dark:text-danger-400">';
+                                $html .= '<span class="font-medium">错误:</span> '.e($record->error_type ?? '未知类型').' - '.e($record->error_message ?? '-');
+                                $html .= '</div>';
+
+                                return $html;
+                            }),
                     ]),
-
-                TextColumn::make('affinity')
-                    ->label('亲和性')
-                    ->html()
-                    ->state(function (AuditLog $record): string {
-                        $affinity = $record->channel_affinity;
-                        if (empty($affinity)) {
-                            return '<span class="text-gray-400">-</span>';
-                        }
-
-                        $isHit = $affinity['is_affinity_hit'] ?? false;
-                        if ($isHit) {
-                            return '<span class="inline-flex items-center rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-300">命中</span>';
-                        }
-
-                        return '<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">未命中</span>';
-                    }),
-
-                TextColumn::make('total_tokens')
-                    ->label('Token数')
-                    ->numeric()
-                    ->sortable()
-                    ->formatStateUsing(fn ($state) => number_format($state)),
-
-                TextColumn::make('cost')
-                    ->label('成本($)')
-                    ->numeric(decimalPlaces: 6)
-                    ->sortable(),
-
-                TextColumn::make('latency_ms')
-                    ->label('延迟(ms)')
-                    ->numeric()
-                    ->sortable()
-                    ->formatStateUsing(fn ($state) => number_format($state)),
-
-                TextColumn::make('client_ip')
-                    ->label('客户端IP')
-                    ->toggleable(isToggledHiddenByDefault: true),
-
-                TextColumn::make('created_at')
-                    ->label('创建时间')
-                    ->dateTime('Y-m-d H:i:s')
-                    ->sortable(),
+                ])->collapsible(),
             ])
             ->filters([
                 SelectFilter::make('request_type')
