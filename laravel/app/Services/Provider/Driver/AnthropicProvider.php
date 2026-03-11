@@ -67,9 +67,9 @@ class AnthropicProvider extends AbstractProvider
      */
     public function buildRequestBody(ProviderRequest $request): array
     {
-        // anthropic to anthropic 场景：直接返回原始请求，避免不必要的转换
-        // 原始请求已经是 Anthropic 格式，toAnthropicFormat() 的转换逻辑是针对 OpenAI -> Anthropic 的
-        return $request->toArray();
+        // 使用 toAnthropicFormat() 确保正确转换 tool 角色消息
+        // tool 角色会被转换为 user 角色的 tool_result content block
+        return $request->toAnthropicFormat();
     }
 
     /**

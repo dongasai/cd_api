@@ -141,7 +141,7 @@ class ProviderRequest
      */
     public function toAnthropicFormat(): array
     {
-        $filteredMessages = [];
+        $messages = [];
 
         foreach ($this->messages as $message) {
             $role = $message['role'] ?? 'user';
@@ -156,8 +156,8 @@ class ProviderRequest
                 $toolCallId = $message['tool_call_id'] ?? null;
                 $toolContent = $message['content'] ?? '';
 
-                // Anthropic 格式: tool_result 作为 user 消息的内容块
-                $filteredMessages[] = [
+                // Anthropic 格式：tool_result 作为 user 消息的内容块
+                $messages[] = [
                     'role' => 'user',
                     'content' => [
                         [
@@ -171,7 +171,44 @@ class ProviderRequest
                 continue;
             }
 
-            $filteredMessages[] = $message;
+            $messages[] = $message;
+        }
+
+        // 合并连续的 user 消息（Anthropic 要求 tool_result 和其他内容在同一个 user 消息中）
+        $filteredMessages = [];
+        $previousUserMessage = null;
+
+        foreach ($messages as $message) {
+            if ($message['role'] === 'user') {
+                if ($previousUserMessage !== null) {
+                    // 合并到前一个 user 消息
+                    $content = $message['content'] ?? [];
+                    if (is_array($content)) {
+                        $previousContent = $previousUserMessage['content'] ?? [];
+                        if (is_array($previousContent)) {
+                            $previousContent = array_merge($previousContent, $content);
+                        } else {
+                            $previousContent = $content;
+                        }
+                        $previousUserMessage['content'] = $previousContent;
+                    }
+                } else {
+                    // 第一个 user 消息，直接添加
+                    $previousUserMessage = $message;
+                }
+            } else {
+                // 非 user 消息，先保存之前的 user 消息，然后添加当前消息
+                if ($previousUserMessage !== null) {
+                    $filteredMessages[] = $previousUserMessage;
+                    $previousUserMessage = null;
+                }
+                $filteredMessages[] = $message;
+            }
+        }
+
+        // 添加最后一个 user 消息（如果有）
+        if ($previousUserMessage !== null) {
+            $filteredMessages[] = $previousUserMessage;
         }
 
         // 构建基础请求，保留 parameters 中的未知参数（如 thinking, output_config, beta 等）
@@ -202,7 +239,8 @@ class ProviderRequest
             $request['stream'] = true;
         }
         if ($this->tools !== null) {
-            $request['tools'] = $this->fixToolsForAnthropic($this->tools);
+            // 直接传递 tools，不做修改，保持原始格式
+            $request['tools'] = $this->tools;
         }
         if ($this->toolChoice !== null) {
             $request['tool_choice'] = $this->toolChoice;

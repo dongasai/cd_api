@@ -156,7 +156,7 @@ class ContentBlock
      *
      * @param  bool  $includeCacheControl  是否包含 cache_control 字段（部分上游 API 不支持）
      */
-    public function toAnthropic(bool $includeCacheControl = false): array
+    public function toAnthropic(bool $includeCacheControl = true): array
     {
         $result = match ($this->type) {
             'text' => [

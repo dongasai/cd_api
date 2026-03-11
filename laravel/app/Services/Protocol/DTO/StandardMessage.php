@@ -164,15 +164,41 @@ class StandardMessage
 
     /**
      * 转换为 Anthropic 格式
+     *
+     * @param  bool  $includeCacheControl  是否包含 cache_control 字段
      */
-    public function toAnthropic(): array
+    public function toAnthropic(bool $includeCacheControl = true): array
     {
+        // tool 角色需要转换为 user 角色的 tool_result content block
+        if ($this->role === 'tool') {
+            $contentBlock = [
+                'type' => 'tool_result',
+                'tool_use_id' => $this->toolCallId,
+                'content' => $this->content,
+            ];
+
+            // 如果有 contentBlocks，从中提取 cache_control 字段
+            if ($includeCacheControl && $this->contentBlocks !== null) {
+                foreach ($this->contentBlocks as $block) {
+                    if ($block->type === 'tool_result' && $block->cacheControl !== null) {
+                        $contentBlock['cache_control'] = $block->cacheControl;
+                        break;
+                    }
+                }
+            }
+
+            return [
+                'role' => 'user',
+                'content' => [$contentBlock],
+            ];
+        }
+
         $result = ['role' => $this->role];
 
         // 处理内容
         if ($this->contentBlocks !== null) {
             $result['content'] = array_map(
-                fn ($block) => $block->toAnthropic(),
+                fn ($block) => $block->toAnthropic($includeCacheControl),
                 $this->contentBlocks
             );
         } elseif ($this->toolCalls !== null) {

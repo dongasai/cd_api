@@ -104,6 +104,43 @@ class StandardRequest
         $tools = self::parseAnthropicTools($request['tools'] ?? null);
         $toolChoice = self::parseAnthropicToolChoice($request['tool_choice'] ?? null);
 
+        // 提取 metadata 中的其他字段（除了 user_id）
+        $metadata = $request['metadata'] ?? null;
+        $metadataExtra = null;
+        if ($metadata !== null) {
+            $metadataExtra = $metadata;
+            unset($metadataExtra['user_id']);
+            if (empty($metadataExtra)) {
+                $metadataExtra = null;
+            }
+        }
+
+        // 构建额外参数，保留 Anthropic 特有参数
+        $additionalParams = self::extractAdditionalParams($request, [
+            'model', 'messages', 'system', 'temperature', 'top_p', 'top_k',
+            'max_tokens', 'stop_sequences', 'stream', 'tools', 'tool_choice',
+            'metadata',
+        ]);
+
+        // 手动添加 thinking, output_config, beta 到 additionalParams
+        if (isset($request['thinking'])) {
+            $additionalParams['thinking'] = $request['thinking'];
+        }
+        if (isset($request['output_config'])) {
+            $additionalParams['output_config'] = $request['output_config'];
+        }
+        if (isset($request['beta'])) {
+            $additionalParams['beta'] = $request['beta'];
+        }
+        // 如果 metadata 有其他字段，也保留
+        if ($metadataExtra !== null) {
+            $additionalParams['metadata_extra'] = $metadataExtra;
+        }
+        // 保留原始 metadata 容器（用于 Anthropic to Anthropic 转发）
+        if ($metadata !== null) {
+            $additionalParams['metadata_container'] = $metadata;
+        }
+
         return new self(
             model: $request['model'] ?? '',
             messages: $messages,
@@ -116,11 +153,7 @@ class StandardRequest
             stream: $request['stream'] ?? false,
             tools: $tools,
             toolChoice: $toolChoice,
-            additionalParams: self::extractAdditionalParams($request, [
-                'model', 'messages', 'system', 'temperature', 'top_p', 'top_k',
-                'max_tokens', 'stop_sequences', 'stream', 'tools', 'tool_choice',
-                'metadata', 'thinking', 'output_config', 'beta',
-            ]),
+            additionalParams: $additionalParams,
             user: $request['metadata']['user_id'] ?? null,
             hasImages: self::hasAnthropicImageContent($request['messages'] ?? []),
             rawRequest: $request,
@@ -169,13 +202,15 @@ class StandardRequest
 
     /**
      * 转换为 Anthropic 格式
+     *
+     * @param  bool  $preserveCacheControl  是否保留 cache_control 字段（用于 Anthropic to Anthropic 转发）
      */
-    public function toAnthropic(): array
+    public function toAnthropic(bool $preserveCacheControl = true): array
     {
         $request = [
             'model' => $this->model,
             'max_tokens' => $this->maxTokens ?? 4096,
-            'messages' => $this->buildAnthropicMessages(),
+            'messages' => $this->buildAnthropicMessages($preserveCacheControl),
         ];
 
         // 系统提示
@@ -205,13 +240,28 @@ class StandardRequest
         if ($this->toolChoice !== null) {
             $request['tool_choice'] = $this->buildAnthropicToolChoice();
         }
-        if ($this->user !== null) {
+        // 先处理 metadata_container，恢复完整的 metadata（用于 Anthropic to Anthropic 转发）
+        $allowedParams = $this->additionalParams;
+        if (isset($allowedParams['metadata_container']) && is_array($allowedParams['metadata_container'])) {
+            $request['metadata'] = $allowedParams['metadata_container'];
+            unset($allowedParams['metadata_container']);
+        }
+
+        // 如果 metadata 不存在，使用 user 字段构建
+        if (! isset($request['metadata']) && $this->user !== null) {
             $request['metadata']['user_id'] = $this->user;
         }
 
-        // 合并额外参数，但过滤掉不支持的供应商特有参数
-        // thinking, output_config, beta 等是 Anthropic 特有参数，只在明确需要时保留
-        $allowedParams = $this->filterAllowedParams($this->additionalParams);
+        // 处理 metadata_extra，添加额外的 metadata 字段
+        if (isset($allowedParams['metadata_extra']) && is_array($allowedParams['metadata_extra'])) {
+            foreach ($allowedParams['metadata_extra'] as $key => $value) {
+                $request['metadata'][$key] = $value;
+            }
+            unset($allowedParams['metadata_extra']);
+        }
+
+        // 过滤参数，保留 Anthropic 特有参数
+        $allowedParams = $this->filterAllowedParams($allowedParams);
 
         return array_merge($allowedParams, $request);
     }
@@ -339,6 +389,9 @@ class StandardRequest
     /**
      * 解析单条 Anthropic 消息
      * 可能返回多条消息（当包含 tool_result 时）
+     *
+     * 注意：对于包含 tool_result 的消息，我们保持原始结构不变
+     * 不再拆分为多条消息，以保持 content blocks 的顺序
      */
     private static function parseAnthropicMessage(array $msg): array
     {
@@ -349,38 +402,62 @@ class StandardRequest
             return [StandardMessage::fromAnthropic($msg)];
         }
 
+        // 检查是否包含 tool_result
+        $hasToolResult = false;
+        foreach ($content as $block) {
+            if (($block['type'] ?? '') === 'tool_result') {
+                $hasToolResult = true;
+                break;
+            }
+        }
+
+        // 如果没有 tool_result，直接解析
+        if (! $hasToolResult) {
+            return [StandardMessage::fromAnthropic($msg)];
+        }
+
+        // 如果包含 tool_result，我们需要将整条消息作为一个特殊的 user 消息
+        // 保留所有 content blocks 的原始顺序
+        // 同时提取所有 tool_result 的信息以便后续处理
+
+        // 为了保持向后兼容，我们仍然需要分离出 tool 消息
+        // 但要记录原始消息的信息，以便在转换时恢复
+
+        $messages = [];
+
         $toolResultBlocks = array_filter(
             $content,
             fn ($block) => ($block['type'] ?? '') === 'tool_result'
         );
-
-        if (empty($toolResultBlocks)) {
-            return [StandardMessage::fromAnthropic($msg)];
-        }
-
-        $messages = [];
 
         $nonToolResultBlocks = array_filter(
             $content,
             fn ($block) => ($block['type'] ?? '') !== 'tool_result'
         );
 
-        if (! empty($nonToolResultBlocks)) {
-            $userMsg = $msg;
-            $userMsg['content'] = array_values($nonToolResultBlocks);
-            $messages[] = StandardMessage::fromAnthropic($userMsg);
-        }
-
+        // 先添加 tool 消息（保持原始顺序）
         foreach ($toolResultBlocks as $block) {
             $toolContent = $block['content'] ?? '';
             if (is_array($toolContent)) {
                 $toolContent = json_encode($toolContent, JSON_UNESCAPED_UNICODE);
             }
+
+            // 解析 tool_result 的 content blocks（可能包含 cache_control）
+            $contentBlocks = [ContentBlock::fromAnthropic($block)];
+
             $messages[] = new StandardMessage(
                 role: 'tool',
                 content: $toolContent,
+                contentBlocks: $contentBlocks,
                 toolCallId: $block['tool_use_id'] ?? null,
             );
+        }
+
+        // 再添加非 tool_result 的内容作为 user 消息
+        if (! empty($nonToolResultBlocks)) {
+            $userMsg = $msg;
+            $userMsg['content'] = array_values($nonToolResultBlocks);
+            $messages[] = StandardMessage::fromAnthropic($userMsg);
         }
 
         return $messages;
@@ -443,12 +520,14 @@ class StandardRequest
 
     /**
      * 构建 Anthropic 消息数组
+     *
+     * @param  bool  $preserveCacheControl  是否保留 cache_control 字段
      */
-    private function buildAnthropicMessages(): array
+    private function buildAnthropicMessages(bool $preserveCacheControl = true): array
     {
         // Anthropic 没有 system 消息在 messages 中
         return array_map(
-            fn ($msg) => $msg->toAnthropic(),
+            fn ($msg) => $msg->toAnthropic($preserveCacheControl),
             $this->messages
         );
     }
@@ -549,15 +628,13 @@ class StandardRequest
 
         return array_map(function ($tool) {
             if (isset($tool['input_schema'])) {
-                // 修复 input_schema 中无效的 additionalProperties
-                $tool['input_schema'] = self::fixInputSchema($tool['input_schema']);
-
+                // Anthropic 格式，直接返回，不做修改
+                // 注意：不再修复 additionalProperties，保持原始值
                 return $tool;
             }
 
             // OpenAI 格式转换
             $inputSchema = $tool['function']['parameters'];
-            $inputSchema = self::fixInputSchema($inputSchema);
 
             return [
                 'name' => $tool['function']['name'],
@@ -727,11 +804,12 @@ class StandardRequest
             // 默认过滤掉供应商特有参数
         ];
 
-        // 如果没有指定允许的额外参数，过滤掉已知的供应商特有参数
+        // 保留所有参数，包括 Anthropic 特有参数
+        // thinking, output_config, beta 等参数在 Anthropic to Anthropic 转发时需要保留
         $filtered = [];
         foreach ($params as $key => $value) {
-            // 过滤掉可能不被上游支持的参数
-            if (! in_array($key, ['thinking', 'output_config', 'beta'])) {
+            // 过滤掉内部使用的临时字段
+            if ($key !== 'metadata_extra' && $key !== 'metadata_container') {
                 $filtered[$key] = $value;
             }
         }

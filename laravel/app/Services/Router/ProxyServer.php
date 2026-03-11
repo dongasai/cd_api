@@ -215,10 +215,10 @@ class ProxyServer
                 // 更新请求日志，记录渠道信息
                 $this->updateRequestLogForChannel($requestLog, $this->selectedChannel, $actualModel);
 
-                // 创建渠道请求日志（记录发送到渠道的请求）
-                $this->createInitialChannelRequestLog($requestLog, $this->selectedChannel, $providerRequest, $channelProtocol);
-
                 $provider = $this->providerManager->getForChannel($this->selectedChannel, $request->headers->all());
+
+                // 创建渠道请求日志（记录发送到渠道的请求）
+                $this->createInitialChannelRequestLog($requestLog, $this->selectedChannel, $providerRequest, $channelProtocol, $provider);
 
                 // 根据是否流式请求分别处理
                 if ($isStream) {
@@ -607,12 +607,23 @@ class ProxyServer
      * @param  Channel  $channel  渠道实例
      * @param  ProviderRequest  $providerRequest  供应商请求
      * @param  string  $channelProtocol  渠道协议
+     * @param  mixed  $provider  供应商实例
      */
-    protected function createInitialChannelRequestLog(RequestLog $requestLog, Channel $channel, ProviderRequest $providerRequest, string $channelProtocol): void
+    protected function createInitialChannelRequestLog(RequestLog $requestLog, Channel $channel, ProviderRequest $providerRequest, string $channelProtocol, $provider): void
     {
         $baseUrl = rtrim($channel->base_url, '/');
         $path = $this->buildEndpointPath($channelProtocol);
         $fullUrl = $baseUrl.$path;
+
+        // 从 Provider 获取实际的请求头（包含穿透的 headers）
+        $headers = $this->getProviderHeaders($provider);
+
+        // 根据渠道协议使用正确的格式保存请求体
+        if ($channelProtocol === 'anthropic') {
+            $requestBody = $providerRequest->toAnthropicFormat();
+        } else {
+            $requestBody = $providerRequest->toOpenAIFormat();
+        }
 
         $this->channelRequestLog = ChannelRequestLog::create([
             'audit_log_id' => $this->auditLog?->id,
@@ -625,9 +636,9 @@ class ProxyServer
             'path' => $path,
             'base_url' => $baseUrl,
             'full_url' => $fullUrl,
-            'request_headers' => $this->buildChannelRequestHeaders($channel),
-            'request_body' => $providerRequest->toArray(),
-            'request_size' => strlen(json_encode($providerRequest->toArray())),
+            'request_headers' => $this->filterSensitiveHeaders($headers),
+            'request_body' => $requestBody,
+            'request_size' => strlen(json_encode($requestBody)),
             'sent_at' => now(),
         ]);
     }
@@ -946,6 +957,21 @@ class ProxyServer
         }
 
         return $baseUrl.'/v1/chat/completions';
+    }
+
+    /**
+     * 从 Provider 获取请求头
+     *
+     * @param  mixed  $provider  供应商实例
+     * @return array 请求头数组
+     */
+    protected function getProviderHeaders($provider): array
+    {
+        if (method_exists($provider, 'getHeaders')) {
+            return $provider->getHeaders();
+        }
+
+        return [];
     }
 
     /**
