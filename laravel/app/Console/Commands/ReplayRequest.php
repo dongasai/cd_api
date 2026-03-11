@@ -9,31 +9,58 @@ use Illuminate\Support\Facades\Http;
 
 /**
  * 重放客户端真实请求,使用真实Http重新请求到本系统
- * 
- * php artisan request:replay 1004
+ *
+ * 通过请求ID重放: php artisan request:replay --request-id=1004
+ * 通过审计ID重放: php artisan request:replay --audit-id=500
+ * 通过request_id重放: php artisan request:replay --request-id=req_abc123
  */
 class ReplayRequest extends Command
 {
     protected $signature = 'request:replay
-                            {request_id : 请求 ID}
+                            {--request-id= : 请求 ID 或 request_id}
+                            {--audit-id= : 审计 ID}
                             {--timeout=120 : 请求超时时间 (秒)}
                             {--dry-run : 仅显示请求信息，不实际发送}';
 
-    protected $description = '复现请求 - 根据请求 ID 重新发送真实请求';
+    protected $description = '复现请求 - 根据请求 ID 或审计 ID 重新发送真实请求';
 
     public function handle(): int
     {
-        $input = $this->argument('request_id');
+        $requestId = $this->option('request-id');
+        $auditId = $this->option('audit-id');
 
-        // 查找请求日志 - 支持数字 ID 或 request_id
-        $requestLog = is_numeric($input)
-            ? RequestLog::find((int) $input)
-            : RequestLog::where('request_id', $input)->first();
-
-        if (! $requestLog) {
-            $this->error("请求不存在：{$input}");
+        // 二选一验证
+        if (! $requestId && ! $auditId) {
+            $this->error('请提供 --request-id 或 --audit-id 参数之一');
 
             return self::FAILURE;
+        }
+
+        if ($requestId && $auditId) {
+            $this->error('--request-id 和 --audit-id 参数不能同时使用');
+
+            return self::FAILURE;
+        }
+
+        // 查找请求日志
+        if ($auditId) {
+            // 通过审计 ID 查找
+            $requestLog = RequestLog::where('audit_log_id', $auditId)->first();
+            if (! $requestLog) {
+                $this->error("审计记录不存在：{$auditId}");
+
+                return self::FAILURE;
+            }
+        } else {
+            // 支持数字 ID 或 request_id
+            $requestLog = is_numeric($requestId)
+                ? RequestLog::find((int) $requestId)
+                : RequestLog::where('request_id', $requestId)->first();
+            if (! $requestLog) {
+                $this->error("请求记录不存在：{$requestId}");
+
+                return self::FAILURE;
+            }
         }
 
         // 显示请求信息

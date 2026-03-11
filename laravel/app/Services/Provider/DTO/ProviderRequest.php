@@ -144,22 +144,34 @@ class ProviderRequest
         $filteredMessages = [];
 
         foreach ($this->messages as $message) {
-            if (isset($message['role']) && $message['role'] === 'system') {
-                // system 消息应该放到 system 字段，不处理
-            } else {
-                $content = $message['content'] ?? '';
-                if (is_array($content)) {
-                    $filteredContent = [];
-                    foreach ($content as $block) {
-                        $type = $block['type'] ?? 'text';
-                        if ($type !== 'thinking') {
-                            $filteredContent[] = $block;
-                        }
-                    }
-                    $message['content'] = $filteredContent;
-                }
-                $filteredMessages[] = $message;
+            $role = $message['role'] ?? 'user';
+
+            // system 消息应该放到 system 字段，不处理
+            if ($role === 'system') {
+                continue;
             }
+
+            // tool 消息需要转换为 user 消息中的 tool_result 内容块
+            if ($role === 'tool') {
+                $toolCallId = $message['tool_call_id'] ?? null;
+                $toolContent = $message['content'] ?? '';
+
+                // Anthropic 格式: tool_result 作为 user 消息的内容块
+                $filteredMessages[] = [
+                    'role' => 'user',
+                    'content' => [
+                        [
+                            'type' => 'tool_result',
+                            'tool_use_id' => $toolCallId,
+                            'content' => $toolContent,
+                        ],
+                    ],
+                ];
+
+                continue;
+            }
+
+            $filteredMessages[] = $message;
         }
 
         // 构建基础请求，保留 parameters 中的未知参数（如 thinking, output_config, beta 等）
