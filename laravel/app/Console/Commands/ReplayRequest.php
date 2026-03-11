@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Models\AuditLog;
+use App\Models\ChannelRequestLog;
 use App\Models\RequestLog;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
@@ -44,10 +46,26 @@ class ReplayRequest extends Command
 
         // 查找请求日志
         if ($auditId) {
-            // 通过审计 ID 查找
-            $requestLog = RequestLog::where('audit_log_id', $auditId)->first();
-            if (! $requestLog) {
+            // 从审计表查找
+            $auditLog = AuditLog::find($auditId);
+            if (! $auditLog) {
                 $this->error("审计记录不存在：{$auditId}");
+
+                return self::FAILURE;
+            }
+
+            // 通过审计表的关联查找请求日志
+            $requestLog = $auditLog->requestLog;
+            if (! $requestLog) {
+                // 尝试通过 channel_request_logs 关联查找
+                $channelRequestLog = ChannelRequestLog::where('audit_log_id', $auditId)->first();
+                if ($channelRequestLog) {
+                    $requestLog = $channelRequestLog->requestLog;
+                }
+            }
+
+            if (! $requestLog) {
+                $this->error("审计记录 {$auditId} 未找到关联的请求记录");
 
                 return self::FAILURE;
             }
