@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Models\ApiKey;
 use App\Models\AuditLog;
-use App\Models\ChannelRequestLog;
 use App\Models\RequestLog;
 use App\Services\Provider\DTO\ProviderRequest;
 use App\Services\Provider\ProviderManager;
@@ -20,7 +19,7 @@ use Illuminate\Support\Arr;
  * 2. 通过 ProviderManager 获取渠道驱动
  * 3. 直接使用原始请求体字符串发送请求
  *
- * php artisan request:replay-channel --request-id=1004
+ * php artisan request:replay-channel --request-id=1971
  * php artisan request:replay-channel --audit-id=500
  * php artisan request:replay-channel --request-id=req_abc123
  */
@@ -66,15 +65,8 @@ class ReplayRequestChannel extends Command
                 return self::FAILURE;
             }
 
-            // 通过审计表的关联查找请求日志
-            $requestLog = $auditLog->requestLog;
-            if (! $requestLog) {
-                // 尝试通过 channel_request_logs 关联查找
-                $channelRequestLog = ChannelRequestLog::where('audit_log_id', $auditId)->first();
-                if ($channelRequestLog) {
-                    $requestLog = $channelRequestLog->requestLog;
-                }
-            }
+            // 直接从 request_logs 表获取
+            $requestLog = RequestLog::where('audit_log_id', $auditId)->first();
 
             if (! $requestLog) {
                 $this->error("审计记录 {$auditId} 未找到关联的请求记录");

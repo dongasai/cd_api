@@ -117,6 +117,10 @@ class AnalyzeRequestDiff extends Command
         $requestBody = $this->parseBody($requestLog->body_text);
         $channelBody = $this->parseBody($channelLog->request_body);
 
+        // 原始 Body 逐行比对
+        $this->section('原始 Body 逐行比对');
+        $this->compareRawBodies($requestLog->body_text, $channelLog->request_body);
+
         // 比较 messages
         $this->section('Messages 对比');
         $this->compareMessages($requestBody['messages'] ?? [], $channelBody['messages'] ?? [], $diffLimit);
@@ -164,6 +168,143 @@ class AnalyzeRequestDiff extends Command
         $decoded = json_decode($body, true);
 
         return $decoded ?? [];
+    }
+
+    /**
+     * 比较原始 Body 字符串（逐行比对）
+     */
+    private function compareRawBodies(array|string|null $requestBody, array|string|null $channelBody): void
+    {
+        // 转换为字符串
+        $requestStr = is_array($requestBody)
+            ? json_encode($requestBody, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+            : (string) ($requestBody ?? '');
+        $channelStr = is_array($channelBody)
+            ? json_encode($channelBody, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+            : (string) ($channelBody ?? '');
+
+        // 基本信息
+        $requestLines = explode("\n", $requestStr);
+        $channelLines = explode("\n", $channelStr);
+        $requestLineCount = count($requestLines);
+        $channelLineCount = count($channelLines);
+        $requestCharCount = strlen($requestStr);
+        $channelCharCount = strlen($channelStr);
+
+        $this->info("Request Body: {$requestLineCount} 行, {$requestCharCount} 字符");
+        $this->info("Channel Body: {$channelLineCount} 行, {$channelCharCount} 字符");
+
+        // 完全相同
+        if ($requestStr === $channelStr) {
+            $this->info('✓ 原始 Body 完全一致');
+
+            return;
+        }
+
+        $this->newLine();
+        $this->warn('发现差异，逐行比对结果：');
+        $this->newLine();
+
+        // 逐行比对
+        $maxLines = max($requestLineCount, $channelLineCount);
+        $diffCount = 0;
+        $maxDiffDisplay = 100; // 最多显示 100 行差异
+        $contextLines = 2; // 差异前后显示的上下文行数
+
+        // 记录所有差异行的索引
+        $diffLineIndices = [];
+        for ($i = 0; $i < $maxLines; $i++) {
+            $reqLine = $requestLines[$i] ?? null;
+            $chanLine = $channelLines[$i] ?? null;
+
+            if ($reqLine !== $chanLine) {
+                $diffLineIndices[] = $i;
+            }
+        }
+
+        $totalDiffs = count($diffLineIndices);
+        $this->line("  <fg=cyan>共发现 {$totalDiffs} 行差异</>");
+        $this->newLine();
+
+        // 显示差异（带上下文）
+        $displayedDiffs = 0;
+        $lastDisplayedIndex = -1;
+
+        foreach ($diffLineIndices as $diffIndex) {
+            if ($displayedDiffs >= $maxDiffDisplay) {
+                $remaining = $totalDiffs - $displayedDiffs;
+                $this->line("  <fg=cyan>... 还有 {$remaining} 行差异未显示</>");
+                break;
+            }
+
+            // 检查是否需要分隔符（如果当前差异距离上一个显示的差异超过上下文范围）
+            if ($lastDisplayedIndex >= 0 && $diffIndex > $lastDisplayedIndex + $contextLines * 2 + 1) {
+                $this->line('  <fg=cyan>...</>');
+            }
+
+            // 显示上下文行（差异之前的行）
+            $contextStart = max($lastDisplayedIndex + 1, $diffIndex - $contextLines);
+            for ($i = $contextStart; $i < $diffIndex; $i++) {
+                $reqLine = $requestLines[$i] ?? '';
+                $this->printBodyLine($i + 1, $reqLine, 'context');
+            }
+
+            // 显示差异行
+            $reqLine = $requestLines[$diffIndex] ?? null;
+            $chanLine = $channelLines[$diffIndex] ?? null;
+
+            if ($reqLine !== null && $chanLine !== null) {
+                // 两边都有但内容不同
+                $this->printBodyLine($diffIndex + 1, $reqLine, 'request');
+                $this->printBodyLine($diffIndex + 1, $chanLine, 'channel');
+            } elseif ($reqLine !== null) {
+                // Channel 缺少该行
+                $this->printBodyLine($diffIndex + 1, $reqLine, 'request');
+            } else {
+                // Request 缺少该行
+                $this->printBodyLine($diffIndex + 1, $chanLine, 'channel');
+            }
+
+            // 显示差异之后的上下文行
+            $contextEnd = min($diffIndex + $contextLines, $maxLines - 1);
+            for ($i = $diffIndex + 1; $i <= $contextEnd; $i++) {
+                // 只有当下一行不是差异行时才显示
+                if (! in_array($i, $diffLineIndices)) {
+                    $reqLine = $requestLines[$i] ?? '';
+                    $this->printBodyLine($i + 1, $reqLine, 'context');
+                }
+            }
+
+            $displayedDiffs++;
+            $lastDisplayedIndex = $contextEnd;
+        }
+
+        $this->newLine();
+        $this->line('  <fg=cyan>--- 行级比对结束 ---</>');
+    }
+
+    /**
+     * 打印单行 Body 内容
+     */
+    private function printBodyLine(int $lineNum, string $content, string $type): void
+    {
+        // 截断过长的行
+        $maxLineLength = 120;
+        if (strlen($content) > $maxLineLength) {
+            $content = substr($content, 0, $maxLineLength).'...';
+        }
+
+        // 转义控制字符
+        $content = str_replace(["\r", "\t"], ['\r', '\t'], $content);
+
+        // 格式化行号
+        $lineNumStr = str_pad($lineNum, 4, ' ', STR_PAD_LEFT);
+
+        match ($type) {
+            'request' => $this->line("  <fg=green>{$lineNumStr} - {$content}</>"),
+            'channel' => $this->line("  <fg=red>{$lineNumStr} + {$content}</>"),
+            'context' => $this->line("  <fg=gray>{$lineNumStr}   {$content}</>"),
+        };
     }
 
     /**

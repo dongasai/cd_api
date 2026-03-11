@@ -197,10 +197,23 @@ class StandardMessage
 
         // 处理内容
         if ($this->contentBlocks !== null) {
-            $result['content'] = array_map(
-                fn ($block) => $block->toAnthropic($includeCacheControl),
-                $this->contentBlocks
+            // 过滤掉 thinking 内容块（Anthropic 上游不支持）
+            $filteredBlocks = array_filter(
+                $this->contentBlocks,
+                fn ($block) => $block->type !== 'thinking'
             );
+            // 重新索引数组
+            $filteredBlocks = array_values($filteredBlocks);
+
+            if (! empty($filteredBlocks)) {
+                $result['content'] = array_map(
+                    fn ($block) => $block->toAnthropic($includeCacheControl),
+                    $filteredBlocks
+                );
+            } else {
+                // 如果过滤后为空，使用空字符串
+                $result['content'] = '';
+            }
         } elseif ($this->toolCalls !== null) {
             // 工具调用转为 content blocks
             $blocks = [];

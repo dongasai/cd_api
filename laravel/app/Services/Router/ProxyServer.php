@@ -548,7 +548,7 @@ class ProxyServer
             'headers' => $this->filterSensitiveHeaders($request->headers->all()),
             'content_type' => $request->header('Content-Type'),
             'content_length' => strlen($request->getContent()),
-            'body_text' => $this->truncateBody(json_encode($rawRequest)),
+            'body_text' => $this->truncateBody($request->getContent()),
             'model' => $rawRequest['model'] ?? null,
             'model_params' => $this->extractModelParams($rawRequest),
             'messages' => $rawRequest['messages'] ?? null,
