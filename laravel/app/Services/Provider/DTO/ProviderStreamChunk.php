@@ -2,6 +2,8 @@
 
 namespace App\Services\Provider\DTO;
 
+use Illuminate\Support\Facades\Log;
+
 /**
  * 供应商流式响应块数据传输对象
  *
@@ -29,6 +31,7 @@ class ProviderStreamChunk
      */
     public static function fromOpenAI(string $rawEvent): ?self
     {
+        // Log::debug("fromOpenAI ".$rawEvent);
         $lines = explode("\n", trim($rawEvent));
         $event = '';
         $data = '';

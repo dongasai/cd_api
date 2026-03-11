@@ -364,6 +364,9 @@ class ProxyServer
 
         $latencyMs = $this->calculateLatency();
 
+        // 非流式请求的首字时间等于总延迟
+        $this->firstTokenMs = $latencyMs;
+
         // 更新渠道请求日志，记录响应信息（非流式请求的 TTFB 等于总延迟）
         $this->updateChannelRequestLogForResponse($providerResponse, $latencyMs, true, $latencyMs);
 
