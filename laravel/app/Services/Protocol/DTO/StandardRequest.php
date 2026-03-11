@@ -240,11 +240,10 @@ class StandardRequest
         if ($this->toolChoice !== null) {
             $request['tool_choice'] = $this->buildAnthropicToolChoice();
         }
+
         // 先处理 metadata_container，恢复完整的 metadata（用于 Anthropic to Anthropic 转发）
-        $allowedParams = $this->additionalParams;
-        if (isset($allowedParams['metadata_container']) && is_array($allowedParams['metadata_container'])) {
-            $request['metadata'] = $allowedParams['metadata_container'];
-            unset($allowedParams['metadata_container']);
+        if (isset($this->additionalParams['metadata_container']) && is_array($this->additionalParams['metadata_container'])) {
+            $request['metadata'] = $this->additionalParams['metadata_container'];
         }
 
         // 如果 metadata 不存在，使用 user 字段构建
@@ -253,17 +252,58 @@ class StandardRequest
         }
 
         // 处理 metadata_extra，添加额外的 metadata 字段
-        if (isset($allowedParams['metadata_extra']) && is_array($allowedParams['metadata_extra'])) {
-            foreach ($allowedParams['metadata_extra'] as $key => $value) {
+        if (isset($this->additionalParams['metadata_extra']) && is_array($this->additionalParams['metadata_extra'])) {
+            foreach ($this->additionalParams['metadata_extra'] as $key => $value) {
                 $request['metadata'][$key] = $value;
             }
-            unset($allowedParams['metadata_extra']);
         }
 
         // 过滤参数，保留 Anthropic 特有参数
-        $allowedParams = $this->filterAllowedParams($allowedParams);
+        $allowedParams = $this->filterAllowedParams($this->additionalParams);
 
-        return array_merge($allowedParams, $request);
+        // 如果有原始请求，按照原始请求的字段顺序构建最终请求
+        if ($this->rawRequest !== null) {
+            return $this->buildOrderedRequest($request, $allowedParams);
+        }
+
+        // 否则，直接合并（标准字段在前，特有字段在后）
+        return array_merge($request, $allowedParams);
+    }
+
+    /**
+     * 按照原始请求的字段顺序构建最终请求
+     */
+    private function buildOrderedRequest(array $request, array $allowedParams): array
+    {
+        $ordered = [];
+
+        // 遍历原始请求的所有字段
+        foreach (array_keys($this->rawRequest) as $key) {
+            // 如果这个字段在标准请求中有转换后的值，使用转换后的值
+            if (array_key_exists($key, $request)) {
+                $ordered[$key] = $request[$key];
+                // 从 request 中移除，避免后续重复添加
+                unset($request[$key]);
+            }
+            // 如果这个字段在允许的额外参数中，使用原始值
+            elseif (array_key_exists($key, $allowedParams)) {
+                $ordered[$key] = $allowedParams[$key];
+                // 从 allowedParams 中移除，避免后续重复添加
+                unset($allowedParams[$key]);
+            }
+        }
+
+        // 添加原始请求中没有的标准字段（如转换后新增的字段）
+        foreach ($request as $key => $value) {
+            $ordered[$key] = $value;
+        }
+
+        // 添加原始请求中没有的额外参数
+        foreach ($allowedParams as $key => $value) {
+            $ordered[$key] = $value;
+        }
+
+        return $ordered;
     }
 
     /**

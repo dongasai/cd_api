@@ -52,7 +52,7 @@ abstract class AbstractProvider implements ProviderInterface
     /**
      * 请求超时时间（秒）
      */
-    protected int $timeout = 60;
+    protected int $timeout = 600;
 
     /**
      * 连接超时时间（秒）
@@ -103,12 +103,17 @@ abstract class AbstractProvider implements ProviderInterface
 
     protected array $clientHeaders = [];
 
+    /**
+     * Header 黑名单（不允许穿透的 header）
+     */
+    protected array $headerBlacklist = [];
+
     public function __construct(array $config = [])
     {
         $this->config = $config;
         $this->baseUrl = $config['base_url'] ?? $this->getDefaultBaseUrl();
         $this->apiKey = $config['api_key'] ?? '';
-        $this->timeout = $config['timeout'] ?? 60;
+        $this->timeout = $config['timeout'] ?? 600;
         $this->connectTimeout = $config['connect_timeout'] ?? 10;
         $this->maxRetries = $config['max_retries'] ?? 3;
         $this->retryDelay = $config['retry_delay'] ?? 1000;
@@ -117,6 +122,12 @@ abstract class AbstractProvider implements ProviderInterface
         $this->circuitResetTimeout = $config['circuit_reset_timeout'] ?? 60;
         $this->forwardHeaders = $config['forward_headers'] ?? [];
         $this->clientHeaders = $config['client_headers'] ?? [];
+        // 合并配置的黑名单到默认黑名单
+        if (isset($config['header_blacklist'])) {
+            $this->headerBlacklist = array_unique(
+                array_merge($this->headerBlacklist, $config['header_blacklist'])
+            );
+        }
     }
 
     /**
@@ -154,6 +165,7 @@ abstract class AbstractProvider implements ProviderInterface
 
         $result = [];
         $clientHeadersFlat = $this->flattenHeaders($this->clientHeaders);
+        $blacklist = array_map('strtolower', $this->headerBlacklist);
 
         foreach ($this->forwardHeaders as $pattern) {
             $pattern = strtolower(trim($pattern));
@@ -164,6 +176,11 @@ abstract class AbstractProvider implements ProviderInterface
             foreach ($clientHeadersFlat as $headerName => $headerValue) {
                 $headerNameLower = strtolower($headerName);
 
+                // 检查是否在黑名单中
+                if (in_array($headerNameLower, $blacklist, true)) {
+                    continue;
+                }
+
                 if ($this->matchHeaderPattern($pattern, $headerNameLower)) {
                     $result[$headerName] = $headerValue;
                 }
@@ -171,6 +188,53 @@ abstract class AbstractProvider implements ProviderInterface
         }
 
         return $result;
+    }
+
+    /**
+     * 构建完整 URL（包含 query 参数）
+     *
+     * @param  string  $endpoint  API 端点路径
+     * @param  string|null  $queryString  额外的 query 参数
+     * @return string 完整 URL
+     */
+    protected function buildUrl(string $endpoint, ?string $queryString = null): string
+    {
+        // 解析 baseUrl，分离 query 参数
+        $parsedUrl = parse_url($this->baseUrl);
+
+        // 构建基础 URL（不包含 query 参数）
+        $baseUrlWithoutQuery = ($parsedUrl['scheme'] ?? 'https').'://'.($parsedUrl['host'] ?? '');
+        if (isset($parsedUrl['port'])) {
+            $baseUrlWithoutQuery .= ':'.$parsedUrl['port'];
+        }
+        if (isset($parsedUrl['path'])) {
+            $baseUrlWithoutQuery .= $parsedUrl['path'];
+        }
+
+        // 拼接 endpoint
+        $url = rtrim($baseUrlWithoutQuery, '/').'/'.ltrim($endpoint, '/');
+
+        // 收集所有 query 参数
+        $queryParams = [];
+
+        // baseUrl 中的 query 参数
+        if (isset($parsedUrl['query'])) {
+            parse_str($parsedUrl['query'], $params);
+            $queryParams = array_merge($queryParams, $params);
+        }
+
+        // 额外的 query 参数
+        if ($queryString !== null) {
+            parse_str($queryString, $params);
+            $queryParams = array_merge($queryParams, $params);
+        }
+
+        // 添加 query 参数到 URL
+        if (! empty($queryParams)) {
+            $url .= '?'.http_build_query($queryParams);
+        }
+
+        return $url;
     }
 
     protected function flattenHeaders(array $headers): array
@@ -277,7 +341,7 @@ abstract class AbstractProvider implements ProviderInterface
         $request->stream = true;
         $body = $this->buildRequestBody($request);
         $endpoint = $this->getEndpoint($request);
-        $url = rtrim($this->baseUrl, '/').'/'.ltrim($endpoint, '/');
+        $url = $this->buildUrl($endpoint, $request->queryString);
         $headers = $this->getHeaders();
 
         // 存储实际请求信息
@@ -428,7 +492,7 @@ abstract class AbstractProvider implements ProviderInterface
     {
         $body = $this->buildRequestBody($request);
         $endpoint = $this->getEndpoint($request);
-        $url = rtrim($this->baseUrl, '/').'/'.ltrim($endpoint, '/');
+        $url = $this->buildUrl($endpoint, $request->queryString);
         $headers = $this->getHeaders();
 
         // 存储实际请求信息

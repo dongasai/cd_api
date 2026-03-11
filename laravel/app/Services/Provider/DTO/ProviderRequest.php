@@ -22,6 +22,8 @@ class ProviderRequest
         public ?array $tools = null,
         public mixed $toolChoice = null,
         public ?string $user = null,
+        public ?array $rawRequest = null,
+        public ?string $queryString = null,
     ) {}
 
     /**
@@ -60,6 +62,7 @@ class ProviderRequest
             tools: $data['tools'] ?? null,
             toolChoice: $data['tool_choice'] ?? $data['toolChoice'] ?? null,
             user: $data['user'] ?? ($data['metadata']['user_id'] ?? null),
+            rawRequest: $data,
         );
     }
 
@@ -211,45 +214,70 @@ class ProviderRequest
             $filteredMessages[] = $previousUserMessage;
         }
 
-        // 构建基础请求，保留 parameters 中的未知参数（如 thinking, output_config, beta 等）
-        $request = array_merge($this->parameters, [
+        // 构建标准字段
+        $standardFields = [
             'model' => $this->model,
             'messages' => $filteredMessages,
-        ]);
+        ];
 
         // max_tokens 对于 Anthropic API 是必需的，但如果为 null 则不设置
         if ($this->maxTokens !== null) {
-            $request['max_tokens'] = $this->maxTokens;
+            $standardFields['max_tokens'] = $this->maxTokens;
         }
 
         // system 字段：保持原始格式（数组或字符串），支持 cache_control
         if ($this->systemPrompt !== null) {
-            $request['system'] = $this->systemPrompt;
+            $standardFields['system'] = $this->systemPrompt;
         }
         if ($this->temperature !== null) {
-            $request['temperature'] = $this->temperature;
+            $standardFields['temperature'] = $this->temperature;
         }
         if ($this->topP !== null) {
-            $request['top_p'] = $this->topP;
+            $standardFields['top_p'] = $this->topP;
         }
         if ($this->stop !== null) {
-            $request['stop_sequences'] = $this->stop;
+            $standardFields['stop_sequences'] = $this->stop;
         }
         if ($this->stream) {
-            $request['stream'] = true;
+            $standardFields['stream'] = true;
         }
         if ($this->tools !== null) {
-            // 直接传递 tools，不做修改，保持原始格式
-            $request['tools'] = $this->tools;
+            $standardFields['tools'] = $this->tools;
         }
         if ($this->toolChoice !== null) {
-            $request['tool_choice'] = $this->toolChoice;
+            $standardFields['tool_choice'] = $this->toolChoice;
         }
         if ($this->user !== null) {
-            $request['metadata']['user_id'] = $this->user;
+            $standardFields['metadata']['user_id'] = $this->user;
         }
 
-        return $request;
+        // 如果有原始请求，按照原始请求的字段顺序构建最终请求
+        if ($this->rawRequest !== null) {
+            $ordered = [];
+
+            // 遍历原始请求的所有字段
+            foreach (array_keys($this->rawRequest) as $key) {
+                // 如果这个字段在标准字段中有转换后的值，使用转换后的值
+                if (array_key_exists($key, $standardFields)) {
+                    $ordered[$key] = $standardFields[$key];
+                    unset($standardFields[$key]);
+                }
+                // 如果这个字段在额外参数中，使用原始值
+                elseif (array_key_exists($key, $this->parameters)) {
+                    $ordered[$key] = $this->parameters[$key];
+                }
+            }
+
+            // 添加原始请求中没有的标准字段
+            foreach ($standardFields as $key => $value) {
+                $ordered[$key] = $value;
+            }
+
+            return $ordered;
+        }
+
+        // 否则，合并标准字段和额外参数
+        return array_merge($standardFields, $this->parameters);
     }
 
     /**

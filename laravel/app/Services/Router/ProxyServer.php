@@ -936,7 +936,12 @@ class ProxyServer
 
         $requestData['model'] = $actualModel;
 
-        return ProviderRequest::fromArray($requestData);
+        $providerRequest = ProviderRequest::fromArray($requestData);
+
+        // 传递客户端请求的 query_string
+        $providerRequest->queryString = request()->getQueryString();
+
+        return $providerRequest;
     }
 
     /**

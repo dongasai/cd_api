@@ -203,10 +203,23 @@ class AnalyzeRequestDiff extends Command
     }
 
     /**
-     * 比较单条消息
+     * 比较单条消息（检测消息字段顺序）
      */
     private function compareSingleMessage(int $index, array $reqMsg, array $chanMsg, int $diffLimit): void
     {
+        // 先比较消息字段顺序
+        $reqMsgKeys = array_keys($reqMsg);
+        $chanMsgKeys = array_keys($chanMsg);
+
+        if ($reqMsgKeys !== $chanMsgKeys && $this->diffCount < $diffLimit) {
+            $this->printDiff(
+                "消息[{$index}] 字段顺序",
+                implode(' → ', $reqMsgKeys),
+                implode(' → ', $chanMsgKeys),
+                $diffLimit
+            );
+        }
+
         $reqRole = $reqMsg['role'] ?? 'unknown';
         $chanRole = $chanMsg['role'] ?? 'unknown';
 
@@ -268,8 +281,8 @@ class AnalyzeRequestDiff extends Command
         if ($reqContent !== $chanContent && $this->diffCount < $diffLimit) {
             $this->printDiff(
                 "消息[{$index}].content",
-                $this->truncate(json_encode($reqContent)),
-                $this->truncate(json_encode($chanContent)),
+                $this->truncate(json_encode($reqContent, JSON_UNESCAPED_UNICODE)),
+                $this->truncate(json_encode($chanContent, JSON_UNESCAPED_UNICODE)),
                 $diffLimit
             );
         }
@@ -335,7 +348,20 @@ class AnalyzeRequestDiff extends Command
                 );
             }
 
-            // 比较其他字段
+            // 比较键顺序
+            $reqBlockKeys = array_keys($reqBlock);
+            $chanBlockKeys = array_keys($chanBlock);
+
+            if ($reqBlockKeys !== $chanBlockKeys && $this->diffCount < $diffLimit) {
+                $this->printDiff(
+                    "消息[{$msgIndex}].content[{$i}] 字段顺序",
+                    implode(' → ', $reqBlockKeys),
+                    implode(' → ', $chanBlockKeys),
+                    $diffLimit
+                );
+            }
+
+            // 比较其他字段（按 request 的顺序遍历）
             foreach ($reqBlock as $key => $value) {
                 if ($key === 'type') {
                     continue;
@@ -345,8 +371,15 @@ class AnalyzeRequestDiff extends Command
                     break 2;
                 }
 
-                // 如果 channel 中不存在该字段，跳过（后面会专门处理缺失字段的情况）
+                // 检查 channel 中是否存在该字段
                 if (! array_key_exists($key, $chanBlock)) {
+                    $this->printDiff(
+                        "消息[{$msgIndex}].content[{$i}].{$key}",
+                        $this->truncate(json_encode($value, JSON_UNESCAPED_UNICODE)),
+                        '不存在',
+                        $diffLimit
+                    );
+
                     continue;
                 }
 
@@ -358,8 +391,8 @@ class AnalyzeRequestDiff extends Command
 
                     $this->printDiff(
                         "消息[{$msgIndex}].content[{$i}].{$key}",
-                        ($isLargeText ? '[大型文本，见下方 diff]' : $this->truncate(json_encode($value))),
-                        ($isLargeChanText ? '[大型文本，见下方 diff]' : $this->truncate(json_encode($chanValue))),
+                        ($isLargeText ? '[大型文本，见下方 diff]' : $this->truncate(json_encode($value, JSON_UNESCAPED_UNICODE))),
+                        ($isLargeChanText ? '[大型文本，见下方 diff]' : $this->truncate(json_encode($chanValue, JSON_UNESCAPED_UNICODE))),
                         $diffLimit,
                         is_string($value) ? $value : json_encode($value, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
                         is_string($chanValue) ? $chanValue : json_encode($chanValue, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
@@ -369,7 +402,7 @@ class AnalyzeRequestDiff extends Command
 
             // 检查 channel 有但 request 没有的字段
             foreach ($chanBlock as $key => $value) {
-                if ($key === 'type' || isset($reqBlock[$key])) {
+                if ($key === 'type' || array_key_exists($key, $reqBlock)) {
                     continue;
                 }
 
@@ -378,27 +411,9 @@ class AnalyzeRequestDiff extends Command
                 }
 
                 $this->printDiff(
-                    "消息 [{$msgIndex}].content[{$i}].{$key}",
+                    "消息[{$msgIndex}].content[{$i}].{$key}",
                     '不存在',
-                    $this->truncate(json_encode($value)),
-                    $diffLimit
-                );
-            }
-
-            // 检查 request 有但 channel 没有的字段
-            foreach ($reqBlock as $key => $value) {
-                if ($key === 'type' || isset($chanBlock[$key])) {
-                    continue;
-                }
-
-                if ($this->diffCount >= $diffLimit) {
-                    break 2;
-                }
-
-                $this->printDiff(
-                    "消息 [{$msgIndex}].content[{$i}].{$key}",
-                    $this->truncate(json_encode($value)),
-                    '不存在',
+                    $this->truncate(json_encode($value, JSON_UNESCAPED_UNICODE)),
                     $diffLimit
                 );
             }
@@ -406,19 +421,33 @@ class AnalyzeRequestDiff extends Command
     }
 
     /**
-     * 比较其他字段
+     * 比较其他字段（保留原始键顺序，检测顺序差异）
      */
     private function compareOtherFields(array $requestBody, array $channelBody, int $diffLimit): void
     {
-        // 获取所有字段（排除 messages，因为已经单独比较了）
-        $allFields = array_unique(array_merge(
-            array_keys($requestBody),
-            array_keys($channelBody)
-        ));
+        // 排除已经单独比较的字段
+        $excludeFields = ['messages'];
 
-        $excludeFields = ['messages']; // 排除已经单独比较的字段
+        // 先比较键的顺序
+        $reqKeys = array_keys($requestBody);
+        $chanKeys = array_keys($channelBody);
 
-        foreach ($allFields as $field) {
+        // 过滤掉排除的字段
+        $reqKeysFiltered = array_values(array_filter($reqKeys, fn ($k) => ! in_array($k, $excludeFields)));
+        $chanKeysFiltered = array_values(array_filter($chanKeys, fn ($k) => ! in_array($k, $excludeFields)));
+
+        // 检查键顺序是否一致
+        if ($reqKeysFiltered !== $chanKeysFiltered && $this->diffCount < $diffLimit) {
+            $this->printDiff(
+                '字段顺序',
+                implode(' → ', $reqKeysFiltered),
+                implode(' → ', $chanKeysFiltered),
+                $diffLimit
+            );
+        }
+
+        // 按顺序遍历 request_log 的字段
+        foreach ($requestBody as $field => $reqValue) {
             if (in_array($field, $excludeFields)) {
                 continue;
             }
@@ -427,25 +456,11 @@ class AnalyzeRequestDiff extends Command
                 break;
             }
 
-            $reqValue = $requestBody[$field] ?? null;
-            $chanValue = $channelBody[$field] ?? null;
-
-            // 如果一边存在另一边不存在
-            if (! array_key_exists($field, $requestBody)) {
-                $this->printDiff(
-                    $field,
-                    '不存在',
-                    $this->truncate(json_encode($chanValue)),
-                    $diffLimit
-                );
-
-                continue;
-            }
-
+            // 检查 channel 是否存在该字段
             if (! array_key_exists($field, $channelBody)) {
                 $this->printDiff(
                     $field,
-                    $this->truncate(json_encode($reqValue)),
+                    $this->truncate(json_encode($reqValue, JSON_UNESCAPED_UNICODE)),
                     '不存在',
                     $diffLimit
                 );
@@ -453,12 +468,34 @@ class AnalyzeRequestDiff extends Command
                 continue;
             }
 
-            // 标准化比较
+            $chanValue = $channelBody[$field];
+
+            // 标准化比较（保留原始顺序）
             $reqStr = $this->normalizeValue($reqValue);
             $chanStr = $this->normalizeValue($chanValue);
 
             if ($reqStr !== $chanStr) {
                 $this->printDiff($field, $reqStr, $chanStr, $diffLimit);
+            }
+        }
+
+        // 检查 channel 有但 request 没有的字段
+        foreach ($channelBody as $field => $chanValue) {
+            if (in_array($field, $excludeFields)) {
+                continue;
+            }
+
+            if ($this->diffCount >= $diffLimit) {
+                break;
+            }
+
+            if (! array_key_exists($field, $requestBody)) {
+                $this->printDiff(
+                    $field,
+                    '不存在',
+                    $this->truncate(json_encode($chanValue, JSON_UNESCAPED_UNICODE)),
+                    $diffLimit
+                );
             }
         }
 
@@ -620,24 +657,6 @@ class AnalyzeRequestDiff extends Command
     }
 
     /**
-     * 转义终端特殊字符
-     */
-    private function escape(string $text): string
-    {
-        // 截断过长的行
-        if (strlen($text) > 150) {
-            $text = substr($text, 0, 150).'... ('.(strlen($text) - 150).' more chars)';
-        }
-
-        // 转义终端控制字符
-        return str_replace(
-            ["\r", "\t"],
-            ['\r', '\t'],
-            $text
-        );
-    }
-
-    /**
      * 格式化值用于显示
      */
     private function formatValue(mixed $value): string
@@ -668,7 +687,7 @@ class AnalyzeRequestDiff extends Command
     }
 
     /**
-     * 标准化值用于比较
+     * 标准化值用于比较（保留原始顺序，不忽略键顺序差异）
      */
     private function normalizeValue(mixed $value): string
     {
@@ -679,7 +698,9 @@ class AnalyzeRequestDiff extends Command
             return $value ? 'true' : 'false';
         }
         if (is_array($value)) {
-            return json_encode($value);
+            // 使用 JSON_PRESERVE_ZERO_FRACTION 保持浮点数格式
+            // 注意：不使用任何排序，保留原始键顺序
+            return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
         }
 
         return (string) $value;

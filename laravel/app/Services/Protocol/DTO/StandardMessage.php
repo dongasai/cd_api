@@ -172,8 +172,8 @@ class StandardMessage
         // tool 角色需要转换为 user 角色的 tool_result content block
         if ($this->role === 'tool') {
             $contentBlock = [
-                'type' => 'tool_result',
                 'tool_use_id' => $this->toolCallId,
+                'type' => 'tool_result',
                 'content' => $this->content,
             ];
 

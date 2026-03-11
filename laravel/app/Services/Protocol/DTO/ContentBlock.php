@@ -177,8 +177,8 @@ class ContentBlock
                 'input' => $this->toolInput ?? [],
             ],
             'tool_result' => [
-                'type' => 'tool_result',
                 'tool_use_id' => $this->toolResultId,
+                'type' => 'tool_result',
                 'content' => $this->toolResultContent,
                 'is_error' => $this->toolResultIsError,
             ],

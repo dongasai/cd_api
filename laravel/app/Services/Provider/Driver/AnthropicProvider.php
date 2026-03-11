@@ -19,6 +19,13 @@ class AnthropicProvider extends AbstractProvider
     protected string $apiVersion = '2023-06-01';
 
     /**
+     * Header 黑名单（不允许穿透到上游的 header）
+     */
+    protected array $headerBlacklist = [
+        'x-api-key',
+    ];
+
+    /**
      * 支持的模型列表
      */
     protected array $supportedModels = [

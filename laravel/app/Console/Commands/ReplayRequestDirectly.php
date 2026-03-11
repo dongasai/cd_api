@@ -306,11 +306,12 @@ class ReplayRequestDirectly extends Command
 
             // 显示 token 使用情况
             if (isset($data['usage'])) {
+                \dump($data['usage']);
                 $this->newLine();
                 $this->info('Token 使用:');
-                $this->info("  输入：{$data['usage']['prompt_tokens']}");
-                $this->info("  输出：{$data['usage']['completion_tokens']}");
-                $this->info("  总计：{$data['usage']['total_tokens']}");
+                $this->info("  输入：{$data['usage']['input_tokens']}");
+                $this->info("  输出：{$data['usage']['output_tokens']}");
+                $this->info("  缓存：{$data['usage']['cache_read_input_tokens']}");
             }
 
             // 显示结束原因
