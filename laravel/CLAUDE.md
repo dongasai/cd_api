@@ -78,7 +78,7 @@ cd laravel && php artisan test --compact --filter=testName
 ## 工作流程
 
 1. **开发前**: 确保在 `laravel/` 目录下工作
-2. **编写代码**: 遵循 Laravel 和 Filament 规范
+2. **编写代码**: 遵循 Laravel 和 Dcat Admin v2 规范
 3. **编写测试**: 为新功能编写完整的测试
 4. **代码格式化**: 运行 Pint 格式化代码
 5. **运行测试**: 确保所有测试通过

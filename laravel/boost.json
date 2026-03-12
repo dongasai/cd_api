@@ -6,8 +6,6 @@
     "herd_mcp": false,
     "mcp": true,
     "nightwatch_mcp": false,
-    "packages": [
-        "filament/filament"
-    ],
+    "packages": [],
     "sail": false
 }
