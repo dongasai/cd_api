@@ -1,16 +1,10 @@
 <?php
 
-use App\Http\Controllers\Admin\ChannelTestController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
-});
-
-// Admin API routes for channel testing
-Route::prefix('api/admin')->middleware(['web', 'auth'])->group(function () {
-    Route::post('/channels/{channel}/test-model', [ChannelTestController::class, 'testModel']);
 });
 
 // Debug file viewer route
