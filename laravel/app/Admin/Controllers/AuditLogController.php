@@ -2,6 +2,9 @@
 
 namespace App\Admin\Controllers;
 
+use App\Admin\Actions\ViewChannelRequestLog;
+use App\Admin\Actions\ViewRequestLog;
+use App\Admin\Actions\ViewResponseLog;
 use App\Models\AuditLog;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
@@ -35,13 +38,12 @@ class AuditLogController extends AdminController
      */
     protected function grid()
     {
-        return Grid::make(AuditLog::with(['user', 'channel']), function (Grid $grid) {
+        return Grid::make(AuditLog::with(['channel', 'requestLog', 'responseLog', 'channelRequestLogs']), function (Grid $grid) {
             // 默认按创建时间倒序排序
             $grid->model()->orderBy('id', 'desc');
 
             // 列表字段
             $grid->column('id', 'ID')->sortable();
-            $grid->column('username', '用户名');
             $grid->column('channel_name', '渠道名称');
             $grid->column('model_info', '模型')->display(function () {
                 $model = $this->model ?? '-';
@@ -61,6 +63,14 @@ class AuditLogController extends AdminController
                 $total = round($this->latency_ms / 1000, 2);
 
                 return "首字: {$first} / 总计: {$total}";
+            });
+            $grid->column('channel_affinity_hit', '渠道亲和命中')->display(function () {
+                $affinity = $this->channel_affinity;
+                if (empty($affinity) || ! isset($affinity['is_affinity_hit']) || ! $affinity['is_affinity_hit']) {
+                    return "<span class='badge bg-secondary'>否</span>";
+                }
+
+                return "<span class='badge bg-success'>是</span>";
             });
             $grid->column('status_code', '状态码')->display(function ($value) {
                 if (is_null($value)) {
@@ -112,6 +122,16 @@ class AuditLogController extends AdminController
 
             // 启用详情按钮
             $grid->showViewButton();
+
+            // 直接显示操作按钮（不使用下拉菜单）
+            $grid->setActionClass(\Dcat\Admin\Grid\Displayers\Actions::class);
+
+            // 添加自定义行操作按钮
+            $grid->actions(function (Grid\Displayers\Actions $actions) {
+                $actions->append(new ViewRequestLog);
+                $actions->append(new ViewChannelRequestLog);
+                $actions->append(new ViewResponseLog);
+            });
 
             // 设置每页显示行数
             $grid->paginate(20);

@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ApiKey extends Model
@@ -18,7 +17,6 @@ class ApiKey extends Model
         'key',
         'key_hash',
         'key_prefix',
-        'permissions',
         'allowed_models',
         'model_mappings',
         'allowed_channels',
@@ -32,7 +30,6 @@ class ApiKey extends Model
     protected function casts(): array
     {
         return [
-            'permissions' => 'array',
             'allowed_models' => 'array',
             'model_mappings' => 'array',
             'allowed_channels' => 'array',
@@ -93,12 +90,6 @@ class ApiKey extends Model
         $mappings = $this->getModelMappings();
 
         return $mappings[$model] ?? $model;
-    }
-
-    public function allowedChannels(): BelongsToMany
-    {
-        return $this->belongsToMany(Channel::class, 'api_key_channel', 'api_key_id', 'channel_id')
-            ->withTimestamps();
     }
 
     public function getAllowedChannelIds(): array

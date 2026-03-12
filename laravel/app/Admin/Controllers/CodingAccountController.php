@@ -77,7 +77,7 @@ class CodingAccountController extends AdminController
             // 操作按钮
             $grid->actions(function (Grid\Displayers\Actions $actions) {
                 // 查看按钮
-                $actions->append('<a href="'.route('admin.coding-accounts.show', $actions->getKey()).'" class="btn btn-primary btn-sm" style="margin-left: 5px;"><i class="feather icon-eye"></i> 查看</a>');
+                $actions->append('<a href="'.route('dcat.admin.coding-accounts.show', $actions->getKey()).'" class="btn btn-primary btn-sm" style="margin-left: 5px;"><i class="feather icon-eye"></i> 查看</a>');
             });
 
             // 批量操作

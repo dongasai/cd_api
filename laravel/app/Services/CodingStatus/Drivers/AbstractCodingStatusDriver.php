@@ -4,7 +4,6 @@ namespace App\Services\CodingStatus\Drivers;
 
 use App\Models\CodingAccount;
 use App\Models\CodingUsageLog;
-use App\Models\ModelMultiplier;
 use Illuminate\Support\Facades\Redis;
 
 /**
@@ -127,7 +126,7 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
      */
     protected function getModelMultiplier(string $model): float
     {
-        return ModelMultiplier::findMultiplier($this->account->platform, $model);
+        return 1.0;
     }
 
     /**

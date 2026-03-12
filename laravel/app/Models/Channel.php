@@ -31,8 +31,6 @@ class Channel extends Model
         'base_url',
         'api_key',
         'api_key_hash',
-        'models',
-        'default_model',
         'weight',
         'priority',
         'status',
@@ -62,7 +60,6 @@ class Channel extends Model
     protected function casts(): array
     {
         return [
-            'models' => 'array',
             'config' => 'array',
             'forward_headers' => 'array',
             'coding_status_override' => 'array',
@@ -181,28 +178,13 @@ class Channel extends Model
     }
 
     /**
-     * 获取转发header配置
-     *
-     * @return array 转发配置 ['headers' => ['x-*', 'user-agent'], 'mode' => 'whitelist']
-     */
-    public function getForwardHeadersConfig(): array
-    {
-        return $this->forward_headers ?? [
-            'headers' => [],
-            'mode' => 'whitelist',
-        ];
-    }
-
-    /**
      * 获取需要转发的header名称列表
      *
      * @return array header名称列表，支持通配符如 'x-*'
      */
     public function getForwardHeaderNames(): array
     {
-        $config = $this->getForwardHeadersConfig();
-
-        return $config['headers'] ?? [];
+        return $this->forward_headers ?? [];
     }
 
     /**
@@ -258,7 +240,6 @@ class Channel extends Model
      */
     public function getModelsArray(): array
     {
-        // 优先从新表获取
         $models = $this->enabledModels()->get();
         if ($models->isNotEmpty()) {
             $result = [];
@@ -269,8 +250,7 @@ class Channel extends Model
             return $result;
         }
 
-        // 兼容旧数据
-        return $this->models ?? [];
+        return [];
     }
 
     /**
@@ -296,13 +276,11 @@ class Channel extends Model
      */
     public function getDefaultModelName(): ?string
     {
-        // 优先从新表获取
         $defaultModel = $this->defaultModel();
         if ($defaultModel) {
             return $defaultModel->model_name;
         }
 
-        // 兼容旧数据
-        return $this->default_model;
+        return null;
     }
 }

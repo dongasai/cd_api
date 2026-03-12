@@ -4,7 +4,6 @@ namespace App\Services\CodingStatus\Drivers;
 
 use App\Models\CodingAccount;
 use App\Models\CodingSlidingUsageLog;
-use App\Models\ModelMultiplier;
 use App\Services\CodingStatus\SlidingWindowRepository;
 
 class SlidingRequestCodingStatusDriver implements CodingStatusDriver
@@ -69,7 +68,7 @@ class SlidingRequestCodingStatusDriver implements CodingStatusDriver
 
     protected function getModelMultiplier(string $model): float
     {
-        return ModelMultiplier::findMultiplier($this->account->platform, $model);
+        return 1.0;
     }
 
     protected function calculateUsageRate(int $used, int $limit): float

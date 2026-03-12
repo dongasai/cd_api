@@ -72,9 +72,9 @@ class ChannelModelController extends AdminController
                 $actions->append(new Grid\Actions\Show);
             });
 
-            // 批量操作
+            // 批量操作（默认已启用批量删除）
             $grid->batchActions(function (Grid\Tools\BatchActions $batch) {
-                $batch->enableDelete();
+                // 可以添加其他批量操作
             });
         });
     }

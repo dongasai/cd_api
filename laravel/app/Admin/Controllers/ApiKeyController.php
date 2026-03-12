@@ -2,7 +2,9 @@
 
 namespace App\Admin\Controllers;
 
+use App\Admin\Grids\ChannelSelectGrid;
 use App\Models\ApiKey;
+use App\Models\Channel;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
@@ -89,11 +91,69 @@ class ApiKeyController extends AdminController
                 'revoked' => '已撤销',
                 'expired' => '已过期',
             ]);
-            $show->field('permissions', '权限配置')->json();
             $show->field('model_mappings', '模型映射')->json();
-            $show->field('allowed_channels', '允许的渠道')->json();
-            $show->field('not_allowed_channels', '禁止的渠道')->json();
-            $show->field('rate_limit', '速率限制')->json();
+
+            // 允许的渠道 - 显示渠道名称
+            $show->field('allowed_channels', '允许的渠道')
+                ->label('success')
+                ->as(function ($value) {
+                    // 确保是数组
+                    if (is_string($value)) {
+                        $value = json_decode($value, true);
+                    }
+                    if (empty($value) || ! is_array($value)) {
+                        return '不限制';
+                    }
+                    // 转换为整数数组
+                    $channelIds = array_map('intval', $value);
+                    $channels = Channel::whereIn('id', $channelIds)->pluck('name')->toArray();
+
+                    return $channels ? implode('、', $channels) : '不限制';
+                });
+
+            // 禁止的渠道 - 显示渠道名称
+            $show->field('not_allowed_channels', '禁止的渠道')
+                ->label('danger')
+                ->as(function ($value) {
+                    // 确保是数组
+                    if (is_string($value)) {
+                        $value = json_decode($value, true);
+                    }
+                    if (empty($value) || ! is_array($value)) {
+                        return '无';
+                    }
+                    // 转换为整数数组
+                    $channelIds = array_map('intval', $value);
+                    $channels = Channel::whereIn('id', $channelIds)->pluck('name')->toArray();
+
+                    return $channels ? implode('、', $channels) : '无';
+                });
+
+            // 速率限制 - 友好显示
+            $show->field('rate_limit', '速率限制')
+                ->label('info')
+                ->as(function ($value) {
+                    // 确保是数组
+                    if (is_string($value)) {
+                        $value = json_decode($value, true);
+                    }
+                    if (empty($value) || ! is_array($value)) {
+                        return '不限制';
+                    }
+                    $parts = [];
+                    if (! empty($value['requests_per_minute'])) {
+                        $parts[] = "{$value['requests_per_minute']} 次/分钟";
+                    }
+                    if (! empty($value['requests_per_day'])) {
+                        $parts[] = "{$value['requests_per_day']} 次/天";
+                    }
+                    if (! empty($value['tokens_per_day'])) {
+                        $parts[] = "{$value['tokens_per_day']} Token/天";
+                    }
+
+                    return $parts ? implode('，', $parts) : '不限制';
+                });
+
             $show->field('expires_at', '过期时间');
             $show->field('last_used_at', '最后使用时间');
             $show->field('created_at', '创建时间');
@@ -141,20 +201,23 @@ class ApiKeyController extends AdminController
                 ->default('active')
                 ->required();
 
-            // 权限配置
-            $form->keyValue('permissions', '权限配置')
-                ->help('配置API密钥的权限，格式：权限名 => 值');
-
             // 模型映射
             $form->keyValue('model_mappings', '模型映射')
                 ->help('配置模型别名映射，格式：别名 => 实际模型名。例如：cd-coding-latest => gpt-4');
 
-            // 渠道限制
-            $form->list('allowed_channels', '允许的渠道')
-                ->help('配置允许访问的渠道ID列表，留空表示不限制');
+            // 渠道限制,
+            // 允许的渠道,多选
+            $form->multipleSelectTable('allowed_channels', '允许的渠道')
 
-            $form->list('not_allowed_channels', '禁止的渠道')
-                ->help('配置禁止访问的渠道ID列表');
+                ->from(new ChannelSelectGrid)
+                ->model(Channel::class, 'id', 'name')
+                ->help('选择允许访问的渠道，留空表示不限制');
+            // 禁止的渠道,多选
+            $form->multipleSelectTable('not_allowed_channels', '禁止的渠道')
+
+                ->from(new ChannelSelectGrid)
+                ->model(Channel::class, 'id', 'name')
+                ->help('选择禁止访问的渠道');
 
             // 速率限制
             $form->embeds('rate_limit', '速率限制', function ($form) {

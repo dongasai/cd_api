@@ -2,7 +2,9 @@
 
 namespace App\Admin\Controllers;
 
+use App\Admin\Actions\CopyChannel;
 use App\Models\Channel;
+use App\Models\ChannelModel;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
@@ -70,6 +72,9 @@ class ChannelController extends AdminController
             $grid->actions(function (Grid\Displayers\Actions $actions) {
                 // 查看按钮
                 $actions->append('<a href="'.admin_url('channels/'.$this->id).'" class="btn btn-primary btn-sm mr-1"><i class="fa fa-eye"></i> 查看</a>');
+
+                // 复制按钮
+                $actions->append(new CopyChannel);
             });
 
             // 批量操作
@@ -87,32 +92,98 @@ class ChannelController extends AdminController
      */
     protected function detail($id)
     {
-        return Show::make($id, Channel::class, function (Show $show) {
-            $show->field('id', 'ID');
-            $show->field('name', '渠道名称');
-            $show->field('slug', '标识符');
-            $show->field('provider', '提供商');
-            $show->field('base_url', 'API地址');
+        $channel = Channel::with(['channelModels'])->findOrFail($id);
+
+        return Show::make($channel, function (Show $show) {
+            // 使用 width 方法设置字段宽度，实现双列布局
+            $show->field('id', 'ID')->width(3);
+            $show->field('name', '渠道名称')->width(3);
+            $show->field('slug', '标识符')->width(3);
+            $show->field('provider', '提供商')->using([
+                'openai' => 'OpenAI',
+                'anthropic' => 'Anthropic',
+                'google' => 'Google',
+                'openai_compatible' => 'OpenAI Compatible',
+            ])->width(3);
+
+            $show->field('base_url', 'API地址')->width(6);
+            $show->field('status', '状态')->as(function ($value) {
+                $labels = [
+                    'active' => '<span class="label label-success">正常</span>',
+                    'disabled' => '<span class="label label-default">禁用</span>',
+                    'maintenance' => '<span class="label label-warning">维护中</span>',
+                ];
+
+                return $labels[$value] ?? $value;
+            })->width(3);
+            $show->field('weight', '权重')->width(3);
+
+            $show->divider('配置信息');
+
+            $show->field('priority', '优先级')->width(3);
+            $show->field('inherit_mode', '继承模式')->using([
+                'merge' => '合并继承',
+                'override' => '覆盖继承',
+                'extend' => '扩展继承',
+            ])->width(3);
+            $show->field('parent_id', '父渠道ID')->width(3);
+            $show->field('api_key_hash', 'API Key指纹')->as(function ($value) {
+                return $value ? '<code>'.substr($value, 0, 8).'...</code>' : '-';
+            })->width(3);
             $show->field('description', '描述');
-            $show->field('status', '状态')->using([
-                'active' => '正常',
-                'disabled' => '禁用',
-                'maintenance' => '维护中',
-            ]);
-            $show->field('weight', '权重');
-            $show->field('priority', '优先级');
-            $show->field('success_count', '成功次数');
-            $show->field('failure_count', '失败次数');
-            $show->field('total_requests', '总请求数');
-            $show->field('total_cost', '总成本');
+
+            $show->divider('运行统计');
+
+            $show->field('success_count', '成功次数')->as(function ($value) {
+                return '<span class="text-success font-weight-bold" style="font-size:1.2em">'.($value ?? 0).'</span>';
+            })->width(3);
+            $show->field('failure_count', '失败次数')->as(function ($value) {
+                return '<span class="text-danger font-weight-bold" style="font-size:1.2em">'.($value ?? 0).'</span>';
+            })->width(3);
+            $show->field('total_requests', '总请求数')->as(function ($value) {
+                return '<span class="text-primary font-weight-bold" style="font-size:1.2em">'.($value ?? 0).'</span>';
+            })->width(3);
             $show->field('success_rate', '成功率')->as(function ($value) {
-                return $value ? number_format($value * 100, 2).'%' : '-';
+                $rate = $value ? number_format($value * 100, 2) : 0;
+                $color = $rate >= 95 ? 'success' : ($rate >= 80 ? 'warning' : 'danger');
+
+                return '<span class="text-'.$color.' font-weight-bold" style="font-size:1.2em">'.$rate.'%</span>';
+            })->width(3);
+            $show->field('total_cost', '总成本')->as(function ($value) {
+                return '<span class="text-info font-weight-bold">$'.number_format($value ?? 0, 4).'</span>';
+            })->width(3);
+            $show->field('avg_latency_ms', '平均延迟')->as(function ($value) {
+                return '<span class="text-muted">'.($value ? number_format($value, 2).' ms' : '-').'</span>';
+            })->width(3);
+
+            $show->divider('时间记录');
+
+            $show->field('created_at', '创建时间')->width(4);
+            $show->field('updated_at', '更新时间')->width(4);
+            $show->field('last_check_at', '最后检查时间')->width(4);
+            $show->field('last_success_at', '最后成功时间')->width(4);
+            $show->field('last_failure_at', '最后失败时间')->width(4);
+
+            $show->divider('渠道模型列表');
+
+            $show->relation('channelModels', function ($model) {
+                $grid = new Grid(new ChannelModel);
+                $grid->model()->where('channel_id', $model->id);
+                $grid->column('id', 'ID')->sortable();
+                $grid->column('model_name', '模型名称')->label('primary');
+                $grid->column('display_name', '显示名称');
+                $grid->column('mapped_model', '映射模型')->label('info');
+                $grid->column('is_enabled', '状态')->bool();
+                $grid->column('is_default', '默认模型')->bool(['0' => '', '1' => '是']);
+                $grid->column('multiplier', '倍率');
+                $grid->column('rpm_limit', 'RPM限制');
+                $grid->column('context_length', '上下文长度');
+                $grid->disableActions();
+                $grid->disableCreateButton();
+                $grid->disablePagination();
+
+                return $grid;
             });
-            $show->field('last_check_at', '最后检查时间');
-            $show->field('last_success_at', '最后成功时间');
-            $show->field('last_failure_at', '最后失败时间');
-            $show->field('created_at', '创建时间');
-            $show->field('updated_at', '更新时间');
         });
     }
 
@@ -122,26 +193,33 @@ class ChannelController extends AdminController
     protected function form()
     {
         return Form::make(Channel::class, function (Form $form) {
+            // 编辑时加载关联数据
+            if ($form->isEditing()) {
+                $form->model()->load('channelModels');
+            }
             // 基本信息
             $form->tab('基本信息', function (Form $form) {
                 $form->text('name', '渠道名称')->required()->maxLength(100);
                 $form->text('slug', '标识符')->required()->maxLength(50)
                     ->help('唯一标识符，用于API调用时的渠道识别');
-                $form->text('provider', '提供商')->required()->maxLength(50)
-                    ->help('如: openai, anthropic, google 等');
-                $form->url('base_url', 'API地址')->required()
-                    ->help('上游API的基础URL地址');
+                $form->select('provider', '提供商')
+                    ->options([
+                        'openai' => 'OpenAI',
+                        'anthropic' => 'Anthropic',
+                        'google' => 'Google',
+                        'openai_compatible' => 'OpenAI Compatible',
+                    ])
+                    ->required()
+                    ->help('选择渠道驱动类型');
                 $form->textarea('description', '描述')->rows(3);
             });
 
             // API配置
             $form->tab('API配置', function (Form $form) {
+                $form->url('base_url', 'API地址')->required()
+                    ->help('上游API的基础URL地址');
                 $form->password('api_key', 'API Key')
                     ->help('上游API的密钥，将安全存储');
-                $form->keyValue('models', '模型列表')
-                    ->help('支持的模型映射，格式: 显示名称 => 实际模型名');
-                $form->text('default_model', '默认模型')
-                    ->help('当请求未指定模型时使用的默认模型');
             });
 
             // 状态设置
@@ -171,19 +249,46 @@ class ChannelController extends AdminController
                 $form->display('last_failure_at', '最后失败时间');
             });
 
+            // 渠道模型配置
+            $form->tab('渠道模型', function (Form $form) {
+                $form->hasMany('channelModels', '模型列表', function (Form\NestedForm $form) {
+                    $form->text('model_name', '模型名称')
+                        ->required()
+                        ->placeholder('如: gpt-4, claude-3-opus');
+                    $form->text('display_name', '显示名称')
+                        ->placeholder('用于显示的友好名称');
+                    $form->text('mapped_model', '映射模型')
+                        ->placeholder('实际调用上游的模型名称');
+                    $form->switch('is_enabled', '启用')->default(true);
+                    $form->switch('is_default', '默认模型')->default(false);
+                    $form->number('rpm_limit', 'RPM限制')
+                        ->min(0)
+                        ->placeholder('0表示不限制');
+                    $form->number('context_length', '上下文长度')
+                        ->min(0)
+                        ->placeholder('最大token数');
+                    $form->text('multiplier', '倍率')
+                        ->value('1.0000')
+                        ->placeholder('如: 1.0, 1.5');
+                });
+            });
+
             // 高级配置
             $form->tab('高级配置', function (Form $form) {
-                $form->keyValue('config', '扩展配置')
-                    ->help('渠道特定的配置项');
-                $form->keyValue('forward_headers', '转发Headers')
-                    ->help('需要转发到上游的请求头配置');
+                $form->embeds('config', '扩展配置', function (Form\EmbeddedForm $form) {
+                    $form->switch('filter_thinking', '过滤 Thinking')
+                        ->help('是否过滤模型响应中的 thinking 内容块')
+                        ->default(false);
+                });
+                $form->list('forward_headers', '转发Headers')
+                    ->help('需要转发到上游的请求头名称列表，支持通配符如 x-*');
                 $form->number('parent_id', '父渠道ID')->min(0)
                     ->help('继承配置的父渠道ID');
                 $form->select('inherit_mode', '继承模式')->options([
-                    'none' => '不继承',
-                    'partial' => '部分继承',
-                    'full' => '完全继承',
-                ])->default('none');
+                    'merge' => '合并继承',
+                    'override' => '覆盖继承',
+                    'extend' => '扩展继承',
+                ])->default('merge');
             });
 
             // 保存时处理API Key
@@ -191,6 +296,11 @@ class ChannelController extends AdminController
                 // 如果设置了新的API Key，生成hash
                 if ($form->api_key && $form->api_key !== $form->model()->api_key) {
                     $form->api_key_hash = substr(hash('sha256', $form->api_key), 0, 8);
+                }
+
+                // 确保 inherit_mode 有值
+                if (empty($form->inherit_mode)) {
+                    $form->inherit_mode = 'merge';
                 }
             });
 

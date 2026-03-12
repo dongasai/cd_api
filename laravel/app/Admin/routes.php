@@ -38,9 +38,6 @@ Route::group([
     // 系统设置管理
     $router->resource('system-settings', 'SystemSettingController');
 
-    // 模型倍率管理
-    $router->resource('model-multipliers', 'ModelMultiplierController');
-
     // 渠道亲和性规则
     $router->resource('channel-affinity-rules', 'ChannelAffinityRuleController');
 

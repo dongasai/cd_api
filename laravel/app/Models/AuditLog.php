@@ -106,6 +106,11 @@ class AuditLog extends Model
         return $this->hasOne(ResponseLog::class, 'audit_log_id');
     }
 
+    public function channelRequestLogs()
+    {
+        return $this->hasMany(ChannelRequestLog::class, 'audit_log_id');
+    }
+
     public static function getRequestTypes(): array
     {
         return [
