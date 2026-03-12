@@ -98,7 +98,7 @@ class SystemSettingSeeder extends Seeder
             [
                 'group' => SystemSetting::GROUP_SECURITY,
                 'key' => 'api_key_prefix',
-                'value' => 'sk-',
+                'value' => 'cdapi-',
                 'type' => SystemSetting::TYPE_STRING,
                 'label' => 'API Key前缀',
                 'description' => '生成的API Key前缀',

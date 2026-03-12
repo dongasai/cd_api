@@ -14,14 +14,24 @@ class CreateChannel extends CreateRecord
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        // 将 filter_thinking 合并到 config 中，默认 false
+        // 构建 config 数组
         $config = $data['config'] ?? [];
         if (! is_array($config)) {
             $config = [];
         }
+
+        // 将 filter_thinking 放入 config
         $config['filter_thinking'] = $data['filter_thinking'] ?? false;
+
+        // 合并额外配置
+        if (isset($data['config_extra']) && is_array($data['config_extra'])) {
+            foreach ($data['config_extra'] as $key => $value) {
+                $config[$key] = $value;
+            }
+        }
+
         $data['config'] = $config;
-        unset($data['filter_thinking']);
+        unset($data['filter_thinking'], $data['config_extra']);
 
         return $data;
     }

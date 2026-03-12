@@ -256,36 +256,21 @@ class ChannelForm
                                             ->label('过滤 Thinking 内容块')
                                             ->helperText('启用后，发送到上游时将移除消息中的 thinking 块（默认关闭，保留 thinking 内容）')
                                             ->default(false)
-                                            ->formatStateUsing(function ($state, $record) {
-                                                // 从 config 中读取 filter_thinking 值，默认 false
-                                                if ($record) {
-                                                    return $record->getConfig('filter_thinking', false);
-                                                }
-
-                                                return false;
-                                            })
-                                            ->dehydrated(false)
                                             ->columnSpanFull(),
 
-                                        KeyValue::make('config')
+                                        KeyValue::make('config_extra')
                                             ->label('额外配置')
                                             ->keyLabel('配置项')
                                             ->valueLabel('配置值')
                                             ->addActionLabel('添加配置')
-                                            ->formatStateUsing(function ($state, $record) {
-                                                // 过滤掉 filter_thinking，避免在 KeyValue 中显示
-                                                if (is_array($state) && isset($state['filter_thinking'])) {
-                                                    unset($state['filter_thinking']);
-                                                }
-
-                                                return $state;
-                                            })
+                                            ->dehydrated(false)
                                             ->columnSpanFull(),
                                     ])
-                                    ->afterStateHydrated(function (callable $set, $state) {
-                                        // 确保 filter_thinking 有默认值 false
-                                        if (! isset($state['filter_thinking'])) {
-                                            $set('filter_thinking', false);
+                                    ->afterStateHydrated(function (callable $set, $state, $record) {
+                                        // 从 config 中读取 filter_thinking 值
+                                        if ($record && $record->config) {
+                                            $set('filter_thinking', $record->getConfig('filter_thinking', false));
+                                            $set('config_extra', $record->config);
                                         }
                                     }),
                             ]),

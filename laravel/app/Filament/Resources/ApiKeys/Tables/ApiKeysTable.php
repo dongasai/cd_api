@@ -4,6 +4,7 @@ namespace App\Filament\Resources\ApiKeys\Tables;
 
 use App\Models\ApiKey;
 use App\Models\Channel;
+use App\Models\SystemSetting;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -138,12 +139,14 @@ class ApiKeysTable
 
     public static function regenerateKey(ApiKey $record): void
     {
-        $plainKey = 'sk-'.Str::random(48);
+        $prefix = SystemSetting::getValue(SystemSetting::GROUP_SECURITY, 'api_key_prefix', 'sk-');
+        $keyLength = SystemSetting::getValue(SystemSetting::GROUP_SECURITY, 'key_length', 48);
+        $plainKey = $prefix.Str::random($keyLength);
 
         $record->update([
             'key' => $plainKey,
             'key_hash' => hash('sha256', $plainKey),
-            'key_prefix' => substr($plainKey, 0, 12),
+            'key_prefix' => substr($plainKey, 0, strlen($prefix) + 4),
         ]);
 
         Notification::make()
