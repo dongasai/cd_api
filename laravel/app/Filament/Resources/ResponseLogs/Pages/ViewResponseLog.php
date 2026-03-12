@@ -176,7 +176,7 @@ class ViewResponseLog extends ViewRecord
                 ->label('查看审计日志')
                 ->icon('heroicon-o-arrow-right')
                 ->url(fn ($record) => $record->auditLog
-                    ? \App\Filament\Resources\AuditLogs\AuditLogResource::getUrl('view', ['record' => $record->auditLog])
+                    ? \App\Filament\Resources\AuditLogs\AuditLogResource::getUrl('index')
                     : null)
                 ->visible(fn ($record) => $record->auditLog !== null)
                 ->openUrlInNewTab(),

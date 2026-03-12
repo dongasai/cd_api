@@ -3,13 +3,15 @@
 namespace App\Filament\Resources\AuditLogs\Tables;
 
 use App\Models\AuditLog;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\ViewAction;
+use Filament\Infolists\Components\IconEntry;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Support\Enums\FontWeight;
-use Filament\Tables\Columns\Layout\Panel;
-use Filament\Tables\Columns\Layout\Split;
-use Filament\Tables\Columns\Layout\Stack;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Filters\Filter;
@@ -23,175 +25,145 @@ class AuditLogsTable
     {
         return $table
             ->columns([
-                Split::make([
-                    TextColumn::make('id')
-                        ->label('ID')
-                        ->weight(FontWeight::Bold)
-                        ->sortable()
-                        ->width('70px'),
+                TextColumn::make('id')
+                    ->label('ID')
+                    ->weight(FontWeight::Bold)
+                    ->sortable()
+                    ->toggleable(),
 
-                    TextColumn::make('created_at')
-                        ->label('时间')
-                        ->weight(FontWeight::Bold)
-                        ->dateTime('m-d H:i:s')
-                        ->sortable()
-                        ->width('120px'),
+                TextColumn::make('created_at')
+                    ->label('时间')
+                    ->dateTime('m-d H:i:s')
+                    ->sortable()
+                    ->toggleable(),
 
-                    TextColumn::make('channel_name')
-                        ->label('渠道')
-                        ->searchable()
-                        ->limit(15)
-                        ->placeholder('-')
-                        ->width('120px'),
+                TextColumn::make('channel_name')
+                    ->label('渠道')
+                    ->searchable()
+                    ->limit(20)
+                    ->placeholder('-')
+                    ->toggleable(),
 
-                    TextColumn::make('total_tokens')
-                        ->label('令牌')
-                        ->numeric()
-                        ->sortable()
-                        ->formatStateUsing(fn ($state) => number_format($state))
-                        ->width('80px'),
+                TextColumn::make('model_info')
+                    ->label('模型')
+                    ->html()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $query) use ($search): void {
+                            $query->where('model', 'like', "%{$search}%")
+                                ->orWhere('actual_model', 'like', "%{$search}%");
+                        });
+                    })
+                    ->state(function (AuditLog $record): string {
+                        $requestModel = $record->model ?? '-';
+                        $actualModel = $record->actual_model ?? '-';
 
-                    TextColumn::make('model')
-                        ->label('模型')
-                        ->searchable()
-                        ->limit(20)
-                        ->placeholder('-'),
+                        if ($requestModel === $actualModel) {
+                            return '<div class="text-sm">'.e($requestModel).'</div>';
+                        }
 
-                    TextColumn::make('latency_info')
-                        ->label('用时/首字')
-                        ->html()
-                        ->width('100px')
-                        ->state(function (AuditLog $record): string {
-                            $latency = number_format($record->latency_ms ?? 0);
-                            $firstToken = number_format($record->first_token_ms ?? 0);
+                        return '<div class="text-sm leading-tight">'.
+                            '<div><span class="text-gray-400 text-xs">请求:</span> <span class="text-primary-600">'.e($requestModel).'</span></div>'.
+                            '<div><span class="text-gray-400 text-xs">实际:</span> <span class="text-success-600">'.e($actualModel).'</span></div>'.
+                            '</div>';
+                    }),
 
-                            return '<div class="text-sm">'.
-                                '<div><span class="text-gray-500">总:</span> '.$latency.'ms</div>'.
-                                '<div><span class="text-gray-500">首:</span> '.$firstToken.'ms</div>'.
-                                '</div>';
-                        }),
+                TextColumn::make('tokens_info')
+                    ->label('令牌')
+                    ->html()
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query->orderBy('total_tokens', $direction);
+                    })
+                    ->state(function (AuditLog $record): string {
+                        $total = number_format($record->total_tokens ?? 0);
+                        $prompt = number_format($record->prompt_tokens ?? 0);
+                        $completion = number_format($record->completion_tokens ?? 0);
 
-                    TextColumn::make('prompt_tokens')
-                        ->label('输入')
-                        ->numeric()
-                        ->sortable()
-                        ->formatStateUsing(fn ($state) => number_format($state))
-                        ->width('70px'),
+                        return '<div class="text-sm leading-tight">'.
+                            '<div class="flex gap-3">'.
+                            '<span><span class="text-primary-600">'.$prompt.'</span> <span class="text-gray-400 text-xs">入</span></span>'.
+                            '<span><span class="text-success-600">'.$completion.'</span> <span class="text-gray-400 text-xs">出</span></span>'.
+                            '</div>'.
+                            '<div><span class="font-medium">'.$total.'</span> <span class="text-gray-400 text-xs">总</span></div>'.
+                            '</div>';
+                    }),
 
-                    TextColumn::make('completion_tokens')
-                        ->label('输出')
-                        ->numeric()
-                        ->sortable()
-                        ->formatStateUsing(fn ($state) => number_format($state))
-                        ->width('70px'),
-                ]),
+                TextColumn::make('latency_info')
+                    ->label('耗时')
+                    ->html()
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query->orderBy('latency_ms', $direction);
+                    })
+                    ->state(function (AuditLog $record): string {
+                        $latency = number_format(($record->latency_ms ?? 0) / 1000, 2);
+                        $firstToken = number_format(($record->first_token_ms ?? 0) / 1000, 2);
 
-                Panel::make([
-                    Stack::make([
-                        TextColumn::make('channel_detail')
-                            ->label('渠道信息')
-                            ->html()
-                            ->state(function (AuditLog $record): string {
-                                $html = '<div class="grid grid-cols-3 gap-4">';
-                                $html .= '<div><span class="text-gray-500">渠道:</span> '.e($record->channel_name ?? '-').'</div>';
-                                $html .= '<div><span class="text-gray-500">用户:</span> '.e($record->username ?? '-').'</div>';
-                                $html .= '<div><span class="text-gray-500">密钥:</span> '.e($record->api_key_name ?? '-').'</div>';
-                                $html .= '</div>';
+                        return '<div class="text-sm leading-tight">'.
+                            '<div><span class="font-medium">'.$latency.'</span><span class="text-gray-400 text-xs">s</span> <span class="text-gray-400 text-xs">总</span></div>'.
+                            '<div><span class="text-primary-600">'.$firstToken.'</span><span class="text-gray-400 text-xs">s</span> <span class="text-gray-400 text-xs">首字</span></div>'.
+                            '</div>';
+                    }),
 
-                                return $html;
-                            }),
+                TextColumn::make('status_code')
+                    ->label('状态')
+                    ->badge()
+                    ->formatStateUsing(fn (int $state): string => (string) $state)
+                    ->color(fn (int $state): string => match (true) {
+                        ($state >= 200 && $state < 300) => 'success',
+                        ($state >= 400) => 'danger',
+                        default => 'gray',
+                    }),
 
-                        TextColumn::make('request_id')
-                            ->label('Request ID')
-                            ->copyable()
-                            ->state(fn (AuditLog $record): string => $record->request_id ?? '-'),
+                TextColumn::make('cost')
+                    ->label('成本')
+                    ->money('USD', divideBy: 1)
+                    ->sortable()
+                    ->toggleable(),
 
-                        TextColumn::make('tokens_detail')
-                            ->label('Tokens详细')
-                            ->html()
-                            ->state(function (AuditLog $record): string {
-                                $html = '<div class="flex items-center gap-6">';
-                                $html .= '<div><span class="text-gray-500">输入:</span> '.number_format($record->prompt_tokens ?? 0).'</div>';
-                                $html .= '<div><span class="text-gray-500">缓存读:</span> '.number_format($record->cache_read_tokens ?? 0).'</div>';
-                                $html .= '<div><span class="text-gray-500">缓存写:</span> '.number_format($record->cache_write_tokens ?? 0).'</div>';
-                                $html .= '<div><span class="text-gray-500">输出:</span> '.number_format($record->completion_tokens ?? 0).'</div>';
-                                $html .= '</div>';
+                TextColumn::make('is_stream')
+                    ->label('流式')
+                    ->badge()
+                    ->formatStateUsing(fn (bool $state): string => $state ? '是' : '否')
+                    ->color(fn (bool $state): string => $state ? 'primary' : 'gray'),
 
-                                return $html;
-                            }),
+                TextColumn::make('affinity_hit')
+                    ->label('亲和命中')
+                    ->badge()
+                    ->state(function (AuditLog $record): string {
+                        $affinity = $record->channel_affinity;
+                        if (empty($affinity)) {
+                            return '-';
+                        }
 
-                        TextColumn::make('request_path')
-                            ->label('请求路径')
-                            ->html()
-                            ->state(function (AuditLog $record): string {
-                                $path = $record->requestLog?->path ?? '-';
-                                $method = $record->requestLog?->method ?? 'POST';
+                        return ($affinity['is_affinity_hit'] ?? false) ? '命中' : '未命中';
+                    })
+                    ->color(function (AuditLog $record): string {
+                        $affinity = $record->channel_affinity;
+                        if (empty($affinity)) {
+                            return 'gray';
+                        }
 
-                                return '<code class="text-sm bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">'.$method.' '.$path.'</code>';
-                            }),
+                        return ($affinity['is_affinity_hit'] ?? false) ? 'success' : 'warning';
+                    }),
 
-                        TextColumn::make('model_transform')
-                            ->label('请求转换')
-                            ->html()
-                            ->state(function (AuditLog $record): string {
-                                $requestModel = $record->model ?? '-';
-                                $actualModel = $record->actual_model ?? '-';
+                TextColumn::make('username')
+                    ->label('用户')
+                    ->searchable()
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-                                if ($requestModel === $actualModel) {
-                                    return '<span class="text-gray-500">无转换</span>';
-                                }
+                TextColumn::make('api_key_name')
+                    ->label('密钥')
+                    ->searchable()
+                    ->limit(15)
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
-                                return '<span class="text-primary-600">'.e($requestModel).'</span>'.
-                                    ' <span class="text-gray-400">→</span> '.
-                                    '<span class="text-success-600">'.e($actualModel).'</span>';
-                            }),
-
-                        TextColumn::make('extra_info')
-                            ->label('其他信息')
-                            ->html()
-                            ->state(function (AuditLog $record): string {
-                                $affinity = $record->channel_affinity;
-                                $affinityHtml = '<span class="text-gray-400">-</span>';
-                                if (! empty($affinity)) {
-                                    $isHit = $affinity['is_affinity_hit'] ?? false;
-                                    $affinityHtml = $isHit
-                                        ? '<span class="inline-flex items-center rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-800">命中</span>'
-                                        : '<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">未命中</span>';
-                                }
-
-                                $statusBadge = match (true) {
-                                    ($record->status_code >= 200 && $record->status_code < 300) => '<span class="inline-flex items-center rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-800">'.$record->status_code.'</span>',
-                                    ($record->status_code >= 400) => '<span class="inline-flex items-center rounded-md bg-red-100 px-2 py-1 text-xs font-medium text-red-800">'.$record->status_code.'</span>',
-                                    default => '<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">'.$record->status_code.'</span>',
-                                };
-
-                                $streamBadge = $record->is_stream
-                                    ? '<span class="inline-flex items-center rounded-md bg-primary-100 px-2 py-1 text-xs font-medium text-primary-700">流式</span>'
-                                    : '<span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-600">非流式</span>';
-
-                                $html = '<div class="flex items-center gap-4">';
-                                $html .= '<div><span class="text-gray-500">状态:</span> '.$statusBadge.'</div>';
-                                $html .= '<div><span class="text-gray-500">流式:</span> '.$streamBadge.'</div>';
-                                $html .= '<div><span class="text-gray-500">亲和性:</span> '.$affinityHtml.'</div>';
-                                $html .= '<div><span class="text-gray-500">成本:</span> $'.number_format($record->cost ?? 0, 6).'</div>';
-                                $html .= '</div>';
-
-                                return $html;
-                            }),
-
-                        TextColumn::make('error_detail')
-                            ->label('错误信息')
-                            ->html()
-                            ->visible(fn (?AuditLog $record): bool => $record && ! empty($record->error_message))
-                            ->state(function (AuditLog $record): string {
-                                $html = '<div class="text-danger-600 dark:text-danger-400">';
-                                $html .= '<span class="font-medium">错误:</span> '.e($record->error_type ?? '未知类型').' - '.e($record->error_message ?? '-');
-                                $html .= '</div>';
-
-                                return $html;
-                            }),
-                    ]),
-                ])->collapsible(),
+                TextColumn::make('request_id')
+                    ->label('Request ID')
+                    ->copyable()
+                    ->limit(20)
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('request_type')
@@ -238,7 +210,52 @@ class AuditLogsTable
                     }),
             ], layout: FiltersLayout::AboveContent)
             ->recordActions([
-                ViewAction::make(),
+                Action::make('view')
+                    ->label('查看')
+                    ->icon(Heroicon::Eye)
+                    ->color('gray')
+                    ->modalHeading('审计日志详情')
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('关闭')
+                    ->schema(fn (AuditLog $record): array => self::getInfolistSchema($record))
+                    ->extraModalFooterActions(fn (AuditLog $record): array => [
+                        Action::make('view_api_key')
+                            ->label('查看API密钥')
+                            ->icon(Heroicon::Key)
+                            ->color('primary')
+                            ->url(fn () => $record->apiKey
+                                ? \App\Filament\Resources\ApiKeys\ApiKeyResource::getUrl('view', ['record' => $record->apiKey])
+                                : null)
+                            ->visible(filled($record->apiKey))
+                            ->openUrlInNewTab(),
+                        Action::make('view_channel')
+                            ->label('查看渠道')
+                            ->icon(Heroicon::ServerStack)
+                            ->color('primary')
+                            ->url(fn () => $record->channel
+                                ? \App\Filament\Resources\Channels\ChannelResource::getUrl('view', ['record' => $record->channel])
+                                : null)
+                            ->visible(filled($record->channel))
+                            ->openUrlInNewTab(),
+                        Action::make('view_request')
+                            ->label('查看请求日志')
+                            ->icon(Heroicon::ArrowRight)
+                            ->color('primary')
+                            ->url(fn () => $record->requestLog
+                                ? \App\Filament\Resources\RequestLogs\RequestLogResource::getUrl('view', ['record' => $record->requestLog])
+                                : null)
+                            ->visible(filled($record->requestLog))
+                            ->openUrlInNewTab(),
+                        Action::make('view_response')
+                            ->label('查看响应日志')
+                            ->icon(Heroicon::ArrowRight)
+                            ->color('primary')
+                            ->url(fn () => $record->responseLog
+                                ? \App\Filament\Resources\ResponseLogs\ResponseLogResource::getUrl('view', ['record' => $record->responseLog])
+                                : null)
+                            ->visible(filled($record->responseLog))
+                            ->openUrlInNewTab(),
+                    ]),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -246,5 +263,143 @@ class AuditLogsTable
                 ]),
             ])
             ->defaultSort('created_at', 'desc');
+    }
+
+    public static function getInfolistSchema(AuditLog $record): array
+    {
+        return [
+            Grid::make(3)
+                ->schema([
+                    Section::make('基本信息')
+                        ->schema([
+                            TextEntry::make('id')
+                                ->label('ID'),
+                            TextEntry::make('request_id')
+                                ->label('请求ID')
+                                ->copyable(),
+                            TextEntry::make('request_type')
+                                ->label('请求类型')
+                                ->badge()
+                                ->formatStateUsing(fn (int $state): string => AuditLog::getRequestTypes()[$state] ?? '未知'),
+                            TextEntry::make('created_at')
+                                ->label('创建时间')
+                                ->dateTime('Y-m-d H:i:s'),
+                        ])
+                        ->columnSpan(1),
+
+                    Section::make('用户信息')
+                        ->schema([
+                            TextEntry::make('username')
+                                ->label('用户名')
+                                ->placeholder('匿名'),
+                            TextEntry::make('api_key_name')
+                                ->label('API密钥')
+                                ->placeholder('无'),
+                            TextEntry::make('cached_key_prefix')
+                                ->label('密钥前缀')
+                                ->placeholder('无'),
+                            TextEntry::make('client_ip')
+                                ->label('客户端IP'),
+                        ])
+                        ->columnSpan(1),
+
+                    Section::make('渠道信息')
+                        ->schema([
+                            TextEntry::make('channel_name')
+                                ->label('渠道名称')
+                                ->placeholder('无'),
+                            TextEntry::make('model')
+                                ->label('请求模型'),
+                            TextEntry::make('actual_model')
+                                ->label('实际模型')
+                                ->placeholder('无'),
+                            TextEntry::make('group_name')
+                                ->label('分组')
+                                ->placeholder('无'),
+                        ])
+                        ->columnSpan(1),
+
+                    Section::make('Token 使用')
+                        ->schema([
+                            TextEntry::make('prompt_tokens')
+                                ->label('输入Token'),
+                            TextEntry::make('completion_tokens')
+                                ->label('输出Token'),
+                            TextEntry::make('total_tokens')
+                                ->label('总Token'),
+                            TextEntry::make('cache_read_tokens')
+                                ->label('缓存读取')
+                                ->placeholder('0'),
+                            TextEntry::make('cache_write_tokens')
+                                ->label('缓存写入')
+                                ->placeholder('0'),
+                        ])
+                        ->columns(5)
+                        ->columnSpanFull(),
+
+                    Section::make('成本与配额')
+                        ->schema([
+                            TextEntry::make('cost')
+                                ->label('成本')
+                                ->prefix('$'),
+                            TextEntry::make('quota')
+                                ->label('配额消耗'),
+                            TextEntry::make('billing_source')
+                                ->label('计费来源')
+                                ->badge()
+                                ->formatStateUsing(fn (string $state): string => AuditLog::getBillingSources()[$state] ?? $state),
+                        ])
+                        ->columns(3)
+                        ->columnSpan(1),
+
+                    Section::make('响应信息')
+                        ->schema([
+                            TextEntry::make('status_code')
+                                ->label('状态码')
+                                ->badge(),
+                            TextEntry::make('latency_ms')
+                                ->label('总延迟(ms)'),
+                            TextEntry::make('first_token_ms')
+                                ->label('首Token延迟(ms)')
+                                ->placeholder('无'),
+                            IconEntry::make('is_stream')
+                                ->label('流式请求')
+                                ->boolean(),
+                            TextEntry::make('finish_reason')
+                                ->label('结束原因')
+                                ->placeholder('无'),
+                        ])
+                        ->columns(3)
+                        ->columnSpan(2),
+
+                    Section::make('错误信息')
+                        ->schema([
+                            TextEntry::make('error_type')
+                                ->label('错误类型')
+                                ->placeholder('无'),
+                            TextEntry::make('error_message')
+                                ->label('错误消息')
+                                ->placeholder('无')
+                                ->columnSpanFull(),
+                        ])
+                        ->columnSpanFull()
+                        ->visible(filled($record->error_type)),
+
+                    Section::make('元数据')
+                        ->schema([
+                            TextEntry::make('channel_affinity')
+                                ->label('渠道亲和性')
+                                ->placeholder('无')
+                                ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)),
+                            TextEntry::make('metadata')
+                                ->label('元数据')
+                                ->placeholder('无')
+                                ->formatStateUsing(fn ($state) => json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE))
+                                ->columnSpanFull(),
+                        ])
+                        ->columnSpanFull(),
+                ])
+                ->columnSpanFull(),
+        ];
     }
 }
