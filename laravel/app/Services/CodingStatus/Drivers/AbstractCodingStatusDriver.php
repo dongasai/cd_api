@@ -26,34 +26,6 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
     }
 
     /**
-     * 获取Redis键前缀
-     */
-    protected function getRedisKeyPrefix(): string
-    {
-        return "coding:{$this->account->id}:";
-    }
-
-    /**
-     * 获取使用量Redis键
-     */
-    protected function getUsageKey(string $metric): string
-    {
-        $period = $this->getCurrentPeriodKey();
-
-        return $this->getRedisKeyPrefix()."usage:{$metric}:{$period}";
-    }
-
-    /**
-     * 获取当前周期键
-     */
-    protected function getCurrentPeriodKey(): string
-    {
-        $periodInfo = $this->getPeriodInfo();
-
-        return $periodInfo['key'] ?? date('Y-m-d');
-    }
-
-    /**
      * 获取配额配置
      */
     protected function getQuotaConfig(): array
@@ -100,9 +72,22 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
      */
     protected function getCurrentUsage(string $metric): int
     {
-        $key = $this->getUsageKey($metric);
+        $periodInfo = $this->getPeriodInfo();
+        $periodKey = $periodInfo['key'] ?? date('Y-m-d');
+        $periodType = $periodInfo['type'] ?? 'monthly';
 
-        return (int) Redis::get($key) ?: 0;
+        $usage = CodingQuotaUsage::getOrCreateForPeriod(
+            $this->account->id,
+            $metric,
+            $periodKey,
+            $periodType,
+            [
+                'starts_at' => $periodInfo['starts_at'] ?? null,
+                'ends_at' => $periodInfo['ends_at'] ?? null,
+            ]
+        );
+
+        return $usage->used;
     }
 
     /**
@@ -110,15 +95,22 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
      */
     protected function incrementUsage(string $metric, int $amount): void
     {
-        $key = $this->getUsageKey($metric);
-        Redis::incrby($key, $amount);
-
-        // 设置过期时间，防止无限增长
         $periodInfo = $this->getPeriodInfo();
-        if (isset($periodInfo['ends_at'])) {
-            $ttl = $periodInfo['ends_at']->diffInSeconds(now()) + 86400; // 额外一天
-            Redis::expire($key, (int) $ttl);
-        }
+        $periodKey = $periodInfo['key'] ?? date('Y-m-d');
+        $periodType = $periodInfo['type'] ?? 'monthly';
+
+        $usage = CodingQuotaUsage::getOrCreateForPeriod(
+            $this->account->id,
+            $metric,
+            $periodKey,
+            $periodType,
+            [
+                'starts_at' => $periodInfo['starts_at'] ?? null,
+                'ends_at' => $periodInfo['ends_at'] ?? null,
+            ]
+        );
+
+        $usage->incrementUsage($amount);
     }
 
     /**
