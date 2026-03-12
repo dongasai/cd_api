@@ -153,7 +153,7 @@ class PromptCodingStatusDriver extends AbstractCodingStatusDriver
         $multiplier = $this->getModelMultiplier($model);
         $adjustedPrompts = (int) ceil($prompts * $multiplier);
 
-        // 更新Redis中的使用量
+        // 更新数据库中的使用量
         if ($cycle === '5h') {
             $this->incrementUsage('prompts_per_5h', $adjustedPrompts);
         } elseif ($cycle === 'daily') {

@@ -168,7 +168,7 @@ class GLMCodingStatusDriver extends AbstractCodingStatusDriver
         $totalTokens = $tokensInput + $tokensOutput;
         $adjustedTokens = (int) ($totalTokens * $multiplier);
 
-        // 更新Redis中的使用量
+        // 更新数据库中的使用量
         if ($cycle === '5h') {
             $this->incrementUsage('prompts_per_5h', $adjustedPrompts);
         } else {
@@ -353,7 +353,7 @@ class GLMCodingStatusDriver extends AbstractCodingStatusDriver
             return $cached['usage'];
         }
 
-        // 从Redis获取
+        // 从数据库获取
         return [
             'prompts' => $this->getCurrentUsage('prompts'),
             'prompts_per_5h' => $this->getCurrentUsage('prompts_per_5h'),

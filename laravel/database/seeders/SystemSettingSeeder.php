@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\SettingGroup;
 use App\Models\SystemSetting;
 use Illuminate\Database\Seeder;
 
@@ -12,7 +13,7 @@ class SystemSettingSeeder extends Seeder
         $settings = [
             // 系统设置
             [
-                'group' => SystemSetting::GROUP_SYSTEM,
+                'group' => SettingGroup::SYSTEM->value,
                 'key' => 'site_name',
                 'value' => 'CdApi',
                 'type' => SystemSetting::TYPE_STRING,
@@ -22,7 +23,7 @@ class SystemSettingSeeder extends Seeder
                 'sort_order' => 1,
             ],
             [
-                'group' => SystemSetting::GROUP_SYSTEM,
+                'group' => SettingGroup::SYSTEM->value,
                 'key' => 'site_description',
                 'value' => 'AI大模型API代理工具',
                 'type' => SystemSetting::TYPE_STRING,
@@ -32,7 +33,7 @@ class SystemSettingSeeder extends Seeder
                 'sort_order' => 2,
             ],
             [
-                'group' => SystemSetting::GROUP_SYSTEM,
+                'group' => SettingGroup::SYSTEM->value,
                 'key' => 'default_model',
                 'value' => 'gpt-4',
                 'type' => SystemSetting::TYPE_STRING,
@@ -42,7 +43,7 @@ class SystemSettingSeeder extends Seeder
                 'sort_order' => 3,
             ],
             [
-                'group' => SystemSetting::GROUP_SYSTEM,
+                'group' => SettingGroup::SYSTEM->value,
                 'key' => 'request_timeout',
                 'value' => '60',
                 'type' => SystemSetting::TYPE_INTEGER,
@@ -52,7 +53,7 @@ class SystemSettingSeeder extends Seeder
                 'sort_order' => 4,
             ],
             [
-                'group' => SystemSetting::GROUP_SYSTEM,
+                'group' => SettingGroup::SYSTEM->value,
                 'key' => 'max_retries',
                 'value' => '3',
                 'type' => SystemSetting::TYPE_INTEGER,
@@ -62,41 +63,9 @@ class SystemSettingSeeder extends Seeder
                 'sort_order' => 5,
             ],
 
-            // 配额设置
-            [
-                'group' => SystemSetting::GROUP_QUOTA,
-                'key' => 'default_rate_limit',
-                'value' => json_encode(['rpm' => 60, 'tpm' => 100000]),
-                'type' => SystemSetting::TYPE_JSON,
-                'label' => '默认速率限制',
-                'description' => '默认的每分钟请求数和令牌数限制',
-                'is_public' => false,
-                'sort_order' => 1,
-            ],
-            [
-                'group' => SystemSetting::GROUP_QUOTA,
-                'key' => 'quota_warning_threshold',
-                'value' => '0.8',
-                'type' => SystemSetting::TYPE_FLOAT,
-                'label' => '配额警告阈值',
-                'description' => '配额使用率达到此阈值时发出警告',
-                'is_public' => false,
-                'sort_order' => 2,
-            ],
-            [
-                'group' => SystemSetting::GROUP_QUOTA,
-                'key' => 'quota_critical_threshold',
-                'value' => '0.95',
-                'type' => SystemSetting::TYPE_FLOAT,
-                'label' => '配额临界阈值',
-                'description' => '配额使用率达到此阈值时进入临界状态',
-                'is_public' => false,
-                'sort_order' => 3,
-            ],
-
             // 安全设置
             [
-                'group' => SystemSetting::GROUP_SECURITY,
+                'group' => SettingGroup::SECURITY->value,
                 'key' => 'api_key_prefix',
                 'value' => 'cdapi-',
                 'type' => SystemSetting::TYPE_STRING,
@@ -106,7 +75,7 @@ class SystemSettingSeeder extends Seeder
                 'sort_order' => 1,
             ],
             [
-                'group' => SystemSetting::GROUP_SECURITY,
+                'group' => SettingGroup::SECURITY->value,
                 'key' => 'key_length',
                 'value' => '48',
                 'type' => SystemSetting::TYPE_INTEGER,
@@ -116,7 +85,7 @@ class SystemSettingSeeder extends Seeder
                 'sort_order' => 2,
             ],
             [
-                'group' => SystemSetting::GROUP_SECURITY,
+                'group' => SettingGroup::SECURITY->value,
                 'key' => 'enable_audit_log',
                 'value' => '1',
                 'type' => SystemSetting::TYPE_BOOLEAN,
@@ -126,7 +95,7 @@ class SystemSettingSeeder extends Seeder
                 'sort_order' => 3,
             ],
             [
-                'group' => SystemSetting::GROUP_SECURITY,
+                'group' => SettingGroup::SECURITY->value,
                 'key' => 'sensitive_fields',
                 'value' => json_encode(['api_key', 'password', 'token', 'secret']),
                 'type' => SystemSetting::TYPE_ARRAY,
@@ -138,7 +107,7 @@ class SystemSettingSeeder extends Seeder
 
             // 功能开关
             [
-                'group' => SystemSetting::GROUP_FEATURES,
+                'group' => SettingGroup::FEATURES->value,
                 'key' => 'enable_streaming',
                 'value' => '1',
                 'type' => SystemSetting::TYPE_BOOLEAN,
@@ -148,7 +117,7 @@ class SystemSettingSeeder extends Seeder
                 'sort_order' => 1,
             ],
             [
-                'group' => SystemSetting::GROUP_FEATURES,
+                'group' => SettingGroup::FEATURES->value,
                 'key' => 'enable_cache',
                 'value' => '1',
                 'type' => SystemSetting::TYPE_BOOLEAN,
@@ -158,7 +127,7 @@ class SystemSettingSeeder extends Seeder
                 'sort_order' => 2,
             ],
             [
-                'group' => SystemSetting::GROUP_FEATURES,
+                'group' => SettingGroup::FEATURES->value,
                 'key' => 'enable_model_mapping',
                 'value' => '1',
                 'type' => SystemSetting::TYPE_BOOLEAN,
@@ -168,7 +137,7 @@ class SystemSettingSeeder extends Seeder
                 'sort_order' => 3,
             ],
             [
-                'group' => SystemSetting::GROUP_FEATURES,
+                'group' => SettingGroup::FEATURES->value,
                 'key' => 'enable_fallback',
                 'value' => '1',
                 'type' => SystemSetting::TYPE_BOOLEAN,

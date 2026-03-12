@@ -2,13 +2,18 @@
 
 namespace App\Models;
 
+use App\Enums\SettingGroup;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * 系统设置模型
+ */
 class SystemSetting extends Model
 {
     use HasFactory;
 
+    // 类型常量
     public const TYPE_STRING = 'string';
 
     public const TYPE_INTEGER = 'integer';
@@ -20,14 +25,6 @@ class SystemSetting extends Model
     public const TYPE_JSON = 'json';
 
     public const TYPE_ARRAY = 'array';
-
-    public const GROUP_SYSTEM = 'system';
-
-    public const GROUP_QUOTA = 'quota';
-
-    public const GROUP_SECURITY = 'security';
-
-    public const GROUP_FEATURES = 'features';
 
     protected $fillable = [
         'group',
@@ -45,19 +42,21 @@ class SystemSetting extends Model
         return [
             'is_public' => 'boolean',
             'sort_order' => 'integer',
+            'group' => SettingGroup::class,
         ];
     }
 
+    /**
+     * 获取所有分组选项
+     */
     public static function getGroups(): array
     {
-        return [
-            self::GROUP_SYSTEM => '系统设置',
-            self::GROUP_QUOTA => '配额设置',
-            self::GROUP_SECURITY => '安全设置',
-            self::GROUP_FEATURES => '功能开关',
-        ];
+        return SettingGroup::options();
     }
 
+    /**
+     * 获取所有类型选项
+     */
     public static function getTypes(): array
     {
         return [
@@ -70,6 +69,9 @@ class SystemSetting extends Model
         ];
     }
 
+    /**
+     * 获取类型值
+     */
     public function getTypedValue(): mixed
     {
         return match ($this->type) {
@@ -81,6 +83,9 @@ class SystemSetting extends Model
         };
     }
 
+    /**
+     * 设置值属性
+     */
     public function setValueAttribute(mixed $value): void
     {
         if (is_array($value)) {
@@ -92,21 +97,33 @@ class SystemSetting extends Model
         }
     }
 
+    /**
+     * 获取分组标签
+     */
     public function getGroupLabel(): string
     {
-        return self::getGroups()[$this->group] ?? $this->group;
+        return $this->group->label();
     }
 
+    /**
+     * 获取类型标签
+     */
     public function getTypeLabel(): string
     {
         return self::getTypes()[$this->type] ?? $this->type;
     }
 
+    /**
+     * 根据分组和键查找设置
+     */
     public static function findByKey(string $group, string $key): ?self
     {
         return static::where('group', $group)->where('key', $key)->first();
     }
 
+    /**
+     * 获取设置值
+     */
     public static function getValue(string $group, string $key, mixed $default = null): mixed
     {
         $setting = static::findByKey($group, $key);
@@ -114,6 +131,9 @@ class SystemSetting extends Model
         return $setting ? $setting->getTypedValue() : $default;
     }
 
+    /**
+     * 设置值
+     */
     public static function setValue(string $group, string $key, mixed $value, string $type = self::TYPE_STRING): self
     {
         return static::updateOrCreate(

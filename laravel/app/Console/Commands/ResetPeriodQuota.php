@@ -3,15 +3,15 @@
 namespace App\Console\Commands;
 
 use App\Models\CodingAccount;
+use App\Models\CodingQuotaUsage;
 use App\Services\CodingStatus\ChannelCodingStatusService;
 use App\Services\CodingStatus\CodingStatusDriverManager;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Redis;
 
 /**
  * 重置周期配额定时任务
  *
- * 每分钟检查是否有账户进入新周期，重置配额使用缓存
+ * 清理过期的配额使用记录，并恢复进入新周期的账户状态
  */
 class ResetPeriodQuota extends Command
 {
@@ -70,17 +70,23 @@ class ResetPeriodQuota extends Command
                 // 获取当前周期键
                 $currentPeriodKey = $periodInfo['key'] ?? date('Y-m-d');
 
-                // 检查是否需要重置 (通过比较存储的周期键)
-                $lastPeriodKey = Redis::get("coding:{$account->id}:last_period_key");
+                // 检查是否需要重置 (通过检查数据库中是否存在当前周期的记录)
+                $hasCurrentPeriod = CodingQuotaUsage::where('account_id', $account->id)
+                    ->where('period_key', $currentPeriodKey)
+                    ->exists();
 
-                if ($lastPeriodKey !== $currentPeriodKey) {
+                // 如果不存在当前周期记录，说明进入新周期
+                if (! $hasCurrentPeriod) {
                     $this->info("账户 {$account->name} (ID: {$account->id}) 进入新周期: {$currentPeriodKey}");
 
-                    // 重置配额使用缓存
-                    $this->resetQuotaCache($account->id);
+                    // 清理过期配额记录
+                    $deletedCount = CodingQuotaUsage::where('account_id', $account->id)
+                        ->where('period_ends_at', '<', now())
+                        ->delete();
 
-                    // 更新周期键
-                    Redis::set("coding:{$account->id}:last_period_key", $currentPeriodKey);
+                    if ($deletedCount > 0) {
+                        $this->info("  已清理 {$deletedCount} 条过期配额记录");
+                    }
 
                     // 如果账户之前是耗尽状态，尝试恢复
                     if ($account->status === CodingAccount::STATUS_EXHAUSTED) {
@@ -106,37 +112,6 @@ class ResetPeriodQuota extends Command
         $this->info("处理完成: 重置 {$resetCount} 个账户, 启用 {$enableCount} 个渠道");
 
         return self::SUCCESS;
-    }
-
-    /**
-     * 重置配额使用缓存
-     */
-    protected function resetQuotaCache(int $accountId): void
-    {
-        // 获取所有可能的配额维度
-        $metrics = [
-            'tokens_input',
-            'tokens_output',
-            'tokens_total',
-            'requests',
-            'requests_per_5h',
-            'prompts',
-            'prompts_per_5h',
-            'prompts_per_day',
-            'credits',
-        ];
-
-        // 删除当前周期的使用量缓存
-        foreach ($metrics as $metric) {
-            $pattern = "coding:{$accountId}:usage:{$metric}:*";
-            $keys = Redis::keys($pattern);
-            foreach ($keys as $key) {
-                Redis::del($key);
-            }
-        }
-
-        // 清除其他相关缓存
-        Redis::del("coding:{$accountId}:quota_info");
     }
 
     /**

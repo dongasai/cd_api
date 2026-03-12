@@ -2,6 +2,7 @@
 
 namespace App\Admin\Controllers;
 
+use App\Enums\SettingGroup;
 use App\Models\SystemSetting;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
@@ -30,13 +31,9 @@ class SystemSettingController extends AdminController
             // 列字段配置
             $grid->column('id', 'ID')->sortable();
             $grid->column('group', '分组')->display(function ($value) {
-                return SystemSetting::getGroups()[$value] ?? $value;
-            })->label([
-                SystemSetting::GROUP_SYSTEM => 'primary',
-                SystemSetting::GROUP_QUOTA => 'success',
-                SystemSetting::GROUP_SECURITY => 'danger',
-                SystemSetting::GROUP_FEATURES => 'info',
-            ]);
+                // $value 已经是 SettingGroup 枚举实例
+                return $value instanceof SettingGroup ? $value->label() : $value;
+            })->label(SettingGroup::styleMapping());
             $grid->column('key', '配置键')->copyable();
             $grid->column('label', '显示标签');
             $grid->column('value', '数值')->display(function ($value) {
@@ -132,7 +129,7 @@ class SystemSettingController extends AdminController
             $form->select('group', '分组')
                 ->options(SystemSetting::getGroups())
                 ->required()
-                ->default(SystemSetting::GROUP_SYSTEM);
+                ->default(SettingGroup::SYSTEM->value);
 
             $form->text('key', '配置键')
                 ->required()

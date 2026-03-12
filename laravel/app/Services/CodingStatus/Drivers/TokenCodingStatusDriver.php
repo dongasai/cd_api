@@ -161,7 +161,7 @@ class TokenCodingStatusDriver extends AbstractCodingStatusDriver
         $adjustedTokensOutput = (int) ($tokensOutput * $multiplier);
         $adjustedTokensTotal = $adjustedTokensInput + $adjustedTokensOutput;
 
-        // 更新Redis中的使用量
+        // 更新数据库中的使用量
         if ($adjustedTokensInput > 0) {
             $this->incrementUsage('tokens_input', $adjustedTokensInput);
         }

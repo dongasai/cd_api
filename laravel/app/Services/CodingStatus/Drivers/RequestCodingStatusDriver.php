@@ -144,7 +144,7 @@ class RequestCodingStatusDriver extends AbstractCodingStatusDriver
         $multiplier = $this->getModelMultiplier($model);
         $adjustedRequests = (int) ceil($requests * $multiplier);
 
-        // 更新Redis中的使用量
+        // 更新数据库中的使用量
         if ($cycle === '5h') {
             $this->incrementUsage('requests_per_5h', $adjustedRequests);
         } else {

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\SettingGroup;
 use App\Models\SystemSetting;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -12,12 +13,7 @@ class SystemSettingFactory extends Factory
     public function definition(): array
     {
         return [
-            'group' => $this->faker->randomElement([
-                SystemSetting::GROUP_SYSTEM,
-                SystemSetting::GROUP_QUOTA,
-                SystemSetting::GROUP_SECURITY,
-                SystemSetting::GROUP_FEATURES,
-            ]),
+            'group' => $this->faker->randomElement(SettingGroup::cases())->value,
             'key' => $this->faker->unique()->word(),
             'value' => $this->faker->word(),
             'type' => $this->faker->randomElement([
