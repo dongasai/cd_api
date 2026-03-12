@@ -929,7 +929,9 @@ class ProxyServer
     protected function buildProviderRequest(StandardRequest $standardRequest, Channel $channel, string $targetProtocol, string $actualModel): ProviderRequest
     {
         if ($targetProtocol === 'anthropic') {
-            $requestData = $standardRequest->toAnthropic();
+            // 获取渠道的 filter_thinking 配置，默认过滤 thinking 块
+            $filterThinking = $channel->shouldFilterThinking();
+            $requestData = $standardRequest->toAnthropic(true, $filterThinking);
         } else {
             $requestData = $standardRequest->toOpenAI();
         }

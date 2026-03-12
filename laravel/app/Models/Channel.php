@@ -206,6 +206,28 @@ class Channel extends Model
     }
 
     /**
+     * 获取配置项
+     *
+     * @return mixed 配置值，如果不存在返回默认值
+     */
+    public function getConfig(string $key, mixed $default = null): mixed
+    {
+        $config = $this->config ?? [];
+
+        return $config[$key] ?? $default;
+    }
+
+    /**
+     * 是否过滤 thinking 内容块
+     *
+     * 默认返回 false，即不过滤 thinking 块（保留 thinking 内容）
+     */
+    public function shouldFilterThinking(): bool
+    {
+        return $this->getConfig('filter_thinking', false);
+    }
+
+    /**
      * 渠道支持的模型列表
      */
     public function channelModels(): HasMany

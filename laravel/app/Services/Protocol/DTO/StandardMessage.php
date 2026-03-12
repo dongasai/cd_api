@@ -166,8 +166,9 @@ class StandardMessage
      * 转换为 Anthropic 格式
      *
      * @param  bool  $includeCacheControl  是否包含 cache_control 字段
+     * @param  bool  $filterThinking  是否过滤 thinking 内容块
      */
-    public function toAnthropic(bool $includeCacheControl = true): array
+    public function toAnthropic(bool $includeCacheControl = true, bool $filterThinking = true): array
     {
         // tool 角色需要转换为 user 角色的 tool_result content block
         if ($this->role === 'tool') {
@@ -197,13 +198,17 @@ class StandardMessage
 
         // 处理内容
         if ($this->contentBlocks !== null) {
-            // 过滤掉 thinking 内容块（Anthropic 上游不支持）
-            $filteredBlocks = array_filter(
-                $this->contentBlocks,
-                fn ($block) => $block->type !== 'thinking'
-            );
-            // 重新索引数组
-            $filteredBlocks = array_values($filteredBlocks);
+            $filteredBlocks = $this->contentBlocks;
+
+            // 根据配置过滤 thinking 内容块
+            if ($filterThinking) {
+                $filteredBlocks = array_filter(
+                    $filteredBlocks,
+                    fn ($block) => $block->type !== 'thinking'
+                );
+                // 重新索引数组
+                $filteredBlocks = array_values($filteredBlocks);
+            }
 
             if (! empty($filteredBlocks)) {
                 $result['content'] = array_map(

@@ -9,6 +9,23 @@ class EditChannel extends EditRecord
 {
     protected static string $resource = ChannelResource::class;
 
+    /**
+     * 在保存前处理表单数据
+     */
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // 将 filter_thinking 合并到 config 中，默认 false
+        $config = $data['config'] ?? [];
+        if (! is_array($config)) {
+            $config = [];
+        }
+        $config['filter_thinking'] = $data['filter_thinking'] ?? false;
+        $data['config'] = $config;
+        unset($data['filter_thinking']);
+
+        return $data;
+    }
+
     protected function afterSave(): void
     {
         // 确保数据库中只有一个默认模型
