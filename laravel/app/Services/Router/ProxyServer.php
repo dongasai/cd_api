@@ -709,6 +709,8 @@ class ProxyServer
                 'prompt_tokens' => $response->usage->promptTokens ?? 0,
                 'completion_tokens' => $response->usage->completionTokens ?? 0,
                 'total_tokens' => $response->usage->totalTokens ?? 0,
+                'cache_read_tokens' => $response->usage->cacheReadTokens ?? 0,
+                'cache_write_tokens' => $response->usage->cacheWriteTokens ?? 0,
             ] : null,
         ]);
     }
@@ -800,6 +802,8 @@ class ProxyServer
             'prompt_tokens' => $usage?->promptTokens ?? 0,
             'completion_tokens' => $usage?->completionTokens ?? 0,
             'total_tokens' => $usage?->totalTokens ?? 0,
+            'cache_read_tokens' => $usage?->cacheReadTokens ?? 0,
+            'cache_write_tokens' => $usage?->cacheWriteTokens ?? 0,
             'cost' => $cost,
             'quota' => $cost,
             'billing_source' => AuditLog::BILLING_SOURCE_QUOTA,
@@ -852,6 +856,8 @@ class ProxyServer
                 'prompt_tokens' => $usage->promptTokens ?? 0,
                 'completion_tokens' => $usage->completionTokens ?? 0,
                 'total_tokens' => $usage->totalTokens ?? 0,
+                'cache_read_tokens' => $usage->cacheReadTokens ?? 0,
+                'cache_write_tokens' => $usage->cacheWriteTokens ?? 0,
             ] : null,
             'upstream_provider' => $this->selectedChannel?->provider,
             'upstream_model' => $providerResponse?->model,

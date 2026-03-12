@@ -3,8 +3,8 @@
 namespace App\Services\CodingStatus\Drivers;
 
 use App\Models\CodingAccount;
+use App\Models\CodingQuotaUsage;
 use App\Models\CodingUsageLog;
-use Illuminate\Support\Facades\Redis;
 
 /**
  * CodingStatus 驱动抽象基类

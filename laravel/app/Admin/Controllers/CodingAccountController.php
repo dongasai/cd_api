@@ -3,6 +3,7 @@
 namespace App\Admin\Controllers;
 
 use App\Models\CodingAccount;
+use App\Services\CodingStatus\CodingStatusDriverManager;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
@@ -106,7 +107,7 @@ class CodingAccountController extends AdminController
      */
     protected function detail($id)
     {
-        return Show::make($id, CodingAccount::class, function (Show $show) {
+        return Show::make(CodingAccount::findOrFail($id), function (Show $show) {
             $show->field('id', 'ID');
             $show->field('name', '账户名称');
             $show->field('platform', '平台')->as(function ($platform) {
@@ -117,10 +118,51 @@ class CodingAccountController extends AdminController
                 return CodingAccount::getStatuses()[$status] ?? $status;
             });
 
+            // 当前配额消耗 - 可读性展示
+            $show->field('quota_usage', '当前配额消耗')->unescape()->as(function () {
+                try {
+                    $driver = app(CodingStatusDriverManager::class)->driver($this->driver_class);
+                    $driver->setAccount($this);
+                    $quotaInfo = $driver->getQuotaInfo();
+
+                    if (empty($quotaInfo['metrics'])) {
+                        return '<span class="text-muted">暂无数据</span>';
+                    }
+
+                    $html = '<div style="line-height: 2;">';
+
+                    foreach ($quotaInfo['metrics'] as $metric => $data) {
+                        $total = (int) $data['limit'];
+                        $used = (int) $data['used'];
+                        $percent = $total > 0 ? round($used / $total * 100, 2) : 0;
+
+                        // 进度条颜色
+                        $color = 'success';
+                        if ($percent >= 95) {
+                            $color = 'danger';
+                        } elseif ($percent >= 90) {
+                            $color = 'warning';
+                        } elseif ($percent >= 80) {
+                            $color = 'info';
+                        }
+
+                        $html .= '<div style="margin-top: 10px;"><strong>'.$data['label'].':</strong></div>';
+                        $html .= "<div>已用: {$used} / 总量: {$total} ({$percent}%)</div>";
+                        $html .= "<div class='progress' style='height: 20px; margin: 5px 0;'>";
+                        $html .= "<div class='progress-bar bg-{$color}' role='progressbar' style='width: {$percent}%' aria-valuenow='{$percent}' aria-valuemin='0' aria-valuemax='100'>{$percent}%</div>";
+                        $html .= '</div>';
+                    }
+
+                    $html .= '</div>';
+
+                    return $html;
+                } catch (\Exception $e) {
+                    return '<span class="text-danger">获取配额信息失败: '.$e->getMessage().'</span>';
+                }
+            });
+
             // JSON 字段格式化显示
             $show->field('credentials', '凭据配置')->json();
-            $show->field('quota_config', '配额配置')->json();
-            $show->field('quota_cached', '配额缓存')->json();
             $show->field('config', '扩展配置')->json();
 
             $show->field('last_sync_at', '最后同步时间');
@@ -187,52 +229,6 @@ class CodingAccountController extends AdminController
                 ->default(CodingAccount::STATUS_ACTIVE)
                 ->required();
 
-            // 配额配置
-            $form->textarea('quota_config', '配额配置')
-                ->rows(8)
-                ->help('JSON格式的配额配置，例如：{"limits": {}, "thresholds": {"warning": 0.8, "critical": 0.9}, "cycle": "monthly"}')
-                ->customFormat(function ($value) {
-                    if (empty($value)) {
-                        return '';
-                    }
-                    if (is_array($value)) {
-                        return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                    }
-
-                    return $value;
-                })
-                ->saving(function ($value) {
-                    if (empty($value)) {
-                        return null;
-                    }
-                    $decoded = json_decode($value, true);
-
-                    return json_last_error() === JSON_ERROR_NONE ? $decoded : null;
-                });
-
-            // 配额缓存
-            $form->textarea('quota_cached', '配额缓存')
-                ->rows(5)
-                ->help('JSON格式的配额缓存信息（系统自动维护）')
-                ->customFormat(function ($value) {
-                    if (empty($value)) {
-                        return '';
-                    }
-                    if (is_array($value)) {
-                        return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                    }
-
-                    return $value;
-                })
-                ->saving(function ($value) {
-                    if (empty($value)) {
-                        return null;
-                    }
-                    $decoded = json_decode($value, true);
-
-                    return json_last_error() === JSON_ERROR_NONE ? $decoded : null;
-                });
-
             // 扩展配置
             $form->textarea('config', '扩展配置')
                 ->rows(5)
@@ -283,16 +279,6 @@ class CodingAccountController extends AdminController
                         return $form->response()->error('凭据配置 JSON 格式错误');
                     }
                     $form->input('credentials', $decoded);
-                }
-
-                // 验证 quota_config JSON 格式
-                $quotaConfig = $form->input('quota_config');
-                if (! empty($quotaConfig) && is_string($quotaConfig)) {
-                    $decoded = json_decode($quotaConfig, true);
-                    if (json_last_error() !== JSON_ERROR_NONE) {
-                        return $form->response()->error('配额配置 JSON 格式错误');
-                    }
-                    $form->input('quota_config', $decoded);
                 }
 
                 // 验证 config JSON 格式

@@ -39,6 +39,25 @@ class SystemSettingController extends AdminController
             ]);
             $grid->column('key', '配置键')->copyable();
             $grid->column('label', '显示标签');
+            $grid->column('value', '数值')->display(function ($value) {
+                // 根据类型格式化显示
+                if ($this->type === SystemSetting::TYPE_BOOLEAN) {
+                    return $value ? '是' : '否';
+                }
+                if ($this->type === SystemSetting::TYPE_JSON || $this->type === SystemSetting::TYPE_ARRAY) {
+                    $decoded = json_decode($value, true);
+                    if (is_array($decoded)) {
+                        return json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+                    }
+                }
+                // 限制显示长度
+                $display = (string) $value;
+                if (mb_strlen($display) > 50) {
+                    return mb_substr($display, 0, 50).'...';
+                }
+
+                return $display;
+            })->limit(50);
             $grid->column('type', '类型')->display(function ($value) {
                 return SystemSetting::getTypes()[$value] ?? $value;
             })->label([

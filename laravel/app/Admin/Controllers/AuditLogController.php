@@ -56,7 +56,14 @@ class AuditLogController extends AdminController
                 $prompt = number_format($this->prompt_tokens);
                 $completion = number_format($this->completion_tokens);
 
-                return "总: {$total}<br>入: {$prompt} / 出: {$completion}";
+                $cacheInfo = '';
+                if ($this->cache_read_tokens > 0 || $this->cache_write_tokens > 0) {
+                    $cacheRead = number_format($this->cache_read_tokens);
+                    $cacheWrite = number_format($this->cache_write_tokens);
+                    $cacheInfo = "<br>缓存读: {$cacheRead} / 写: {$cacheWrite}";
+                }
+
+                return "总: {$total}<br>入: {$prompt} / 出: {$completion}{$cacheInfo}";
             });
             $grid->column('latency', '耗时(s)')->display(function () {
                 $first = $this->first_token_ms ? round($this->first_token_ms / 1000, 2) : '-';

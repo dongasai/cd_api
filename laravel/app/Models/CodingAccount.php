@@ -55,8 +55,6 @@ class CodingAccount extends Model
         'driver_class',
         'credentials',
         'status',
-        'quota_config',
-        'quota_cached',
         'config',
         'last_sync_at',
         'sync_error',
@@ -74,8 +72,6 @@ class CodingAccount extends Model
     {
         return [
             'credentials' => 'array',
-            'quota_config' => 'array',
-            'quota_cached' => 'array',
             'config' => 'array',
             'last_sync_at' => 'datetime',
             'expires_at' => 'datetime',
@@ -136,11 +132,14 @@ class CodingAccount extends Model
     }
 
     /**
-     * 获取配额配置
+     * 获取配额配置 (已弃用 - 使用驱动特定表)
+     *
+     * @deprecated 使用驱动特定的配额模型代替
      */
     public function getQuotaConfig(): array
     {
-        return $this->quota_config ?? [
+        // 返回默认配置，实际配置现在存储在驱动特定的表中
+        return [
             'limits' => [],
             'thresholds' => [
                 'warning' => 0.80,

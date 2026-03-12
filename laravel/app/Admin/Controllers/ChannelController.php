@@ -25,7 +25,7 @@ class ChannelController extends AdminController
      */
     protected function grid()
     {
-        return Grid::make(Channel::class, function (Grid $grid) {
+        return Grid::make(Channel::with('codingAccount'), function (Grid $grid) {
             // 默认排序
             $grid->model()->orderBy('id', 'desc');
 
@@ -36,6 +36,32 @@ class ChannelController extends AdminController
             });
             $grid->column('slug', '标识符');
             $grid->column('provider', '提供商');
+
+            // 关联的Coding账户
+            $grid->column('coding_account.name', '关联账户')->display(function () {
+                if ($this->codingAccount) {
+                    $status = $this->codingAccount->status;
+                    $statusLabels = \App\Models\CodingAccount::getStatuses();
+                    $statusLabel = $statusLabels[$status] ?? $status;
+
+                    $colors = [
+                        \App\Models\CodingAccount::STATUS_ACTIVE => 'success',
+                        \App\Models\CodingAccount::STATUS_WARNING => 'warning',
+                        \App\Models\CodingAccount::STATUS_CRITICAL => 'danger',
+                        \App\Models\CodingAccount::STATUS_EXHAUSTED => 'secondary',
+                        \App\Models\CodingAccount::STATUS_EXPIRED => 'info',
+                        \App\Models\CodingAccount::STATUS_SUSPENDED => 'dark',
+                        \App\Models\CodingAccount::STATUS_ERROR => 'danger',
+                    ];
+                    $color = $colors[$status] ?? 'secondary';
+
+                    $url = admin_url('coding-accounts/'.$this->codingAccount->id);
+
+                    return "<a href='{$url}'><span class='badge bg-{$color}'>{$this->codingAccount->name} ({$statusLabel})</span></a>";
+                }
+
+                return '<span class="text-muted">-</span>';
+            });
             $grid->column('status', '状态')->using([
                 'active' => '正常',
                 'disabled' => '禁用',
@@ -96,7 +122,7 @@ class ChannelController extends AdminController
      */
     protected function detail($id)
     {
-        $channel = Channel::with(['channelModels'])->findOrFail($id);
+        $channel = Channel::with(['channelModels', 'codingAccount'])->findOrFail($id);
 
         return Show::make($channel, function (Show $show) {
             // 使用 width 方法设置字段宽度，实现双列布局
@@ -111,6 +137,33 @@ class ChannelController extends AdminController
             ])->width(3);
 
             $show->field('base_url', 'API地址')->width(6);
+
+            // 关联的 Coding 账户
+            $show->field('coding_account_id', '关联Coding账户')->as(function () {
+                if ($this->codingAccount) {
+                    $status = $this->codingAccount->status;
+                    $statusLabels = \App\Models\CodingAccount::getStatuses();
+                    $statusLabel = $statusLabels[$status] ?? $status;
+
+                    $colors = [
+                        \App\Models\CodingAccount::STATUS_ACTIVE => 'success',
+                        \App\Models\CodingAccount::STATUS_WARNING => 'warning',
+                        \App\Models\CodingAccount::STATUS_CRITICAL => 'danger',
+                        \App\Models\CodingAccount::STATUS_EXHAUSTED => 'secondary',
+                        \App\Models\CodingAccount::STATUS_EXPIRED => 'info',
+                        \App\Models\CodingAccount::STATUS_SUSPENDED => 'dark',
+                        \App\Models\CodingAccount::STATUS_ERROR => 'danger',
+                    ];
+                    $color = $colors[$status] ?? 'secondary';
+
+                    $url = admin_url('coding-accounts/'.$this->codingAccount->id);
+
+                    return "<a href='{$url}'><span class='badge bg-{$color}'>{$this->codingAccount->name} ({$statusLabel})</span></a>";
+                }
+
+                return '<span class="text-muted">未关联</span>';
+            })->width(6);
+
             $show->field('status', '状态')->as(function ($value) {
                 $labels = [
                     'active' => '<span class="label label-success">正常</span>',
@@ -241,6 +294,12 @@ class ChannelController extends AdminController
                     'disabled' => '禁用',
                     'maintenance' => '维护中',
                 ])->default('active')->required();
+
+                // 关联 Coding 账户
+                $form->select('coding_account_id', '关联Coding账户')
+                    ->options(\App\Models\CodingAccount::pluck('name', 'id')->toArray())
+                    ->help('关联后，渠道将根据 Coding 账户的配额状态自动调整可用性');
+
                 $form->number('weight', '权重')->default(1)->min(0)->max(100)
                     ->help('负载均衡时的权重，值越大分配的请求越多');
                 $form->number('priority', '优先级')->default(1)->min(1)->max(100)
