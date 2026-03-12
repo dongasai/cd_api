@@ -51,6 +51,10 @@ class ChannelModelController extends AdminController
 
             // 筛选器
             $grid->filter(function (Grid\Filter $filter) {
+                // 不使用抽屉模式，直接展开
+                $filter->panel();
+                $filter->expand(true);
+
                 $filter->equal('id', 'ID');
                 $filter->equal('channel_id', '所属渠道')->select(
                     Channel::pluck('name', 'id')->toArray()
@@ -151,7 +155,6 @@ class ChannelModelController extends AdminController
             // 倍率
             $form->decimal('multiplier', '倍率')
                 ->default(1.0)
-                ->precision(4)
                 ->help('计费倍率，用于计算实际消耗');
 
             // JSON配置

@@ -73,6 +73,10 @@ class ResponseLogController extends AdminController
 
             // 筛选器
             $grid->filter(function (Grid\Filter $filter) {
+                // 不使用抽屉模式，直接展开
+                $filter->panel();
+                $filter->expand(true);
+
                 $filter->equal('id', 'ID');
                 $filter->equal('request_id', '请求ID');
                 $filter->equal('status_code', '状态码');

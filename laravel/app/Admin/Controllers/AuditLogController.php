@@ -92,6 +92,10 @@ class AuditLogController extends AdminController
 
             // 筛选器
             $grid->filter(function ($filter) {
+                // 不使用抽屉模式，直接展开
+                $filter->panel();
+                $filter->expand(true);
+
                 // 用户名筛选
                 $filter->like('username', '用户名');
 

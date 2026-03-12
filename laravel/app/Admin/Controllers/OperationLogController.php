@@ -57,6 +57,10 @@ class OperationLogController extends AdminController
 
             // 筛选器
             $grid->filter(function ($filter) {
+                // 不使用抽屉模式，直接展开
+                $filter->panel();
+                $filter->expand(true);
+
                 // 操作类型筛选
                 $filter->equal('type', '操作类型')->select(OperationType::options());
 

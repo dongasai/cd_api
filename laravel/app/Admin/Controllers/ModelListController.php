@@ -65,6 +65,10 @@ class ModelListController extends AdminController
 
             // 筛选器
             $grid->filter(function (Grid\Filter $filter) {
+                // 不使用抽屉模式，直接展开
+                $filter->panel();
+                $filter->expand(true);
+
                 $filter->equal('id', 'ID');
                 $filter->like('model_name', '模型名称');
                 $filter->like('display_name', '显示名称');

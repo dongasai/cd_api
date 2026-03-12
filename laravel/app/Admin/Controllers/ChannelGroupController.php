@@ -49,6 +49,10 @@ class ChannelGroupController extends AdminController
 
             // 筛选器
             $grid->filter(function (Grid\Filter $filter) {
+                // 不使用抽屉模式，直接展开
+                $filter->panel();
+                $filter->expand(true);
+
                 $filter->equal('id', 'ID');
                 $filter->like('name', '分组名称');
                 $filter->like('slug', '标识符');

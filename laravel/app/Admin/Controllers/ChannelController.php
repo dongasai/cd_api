@@ -53,6 +53,10 @@ class ChannelController extends AdminController
 
             // 筛选器
             $grid->filter(function (Grid\Filter $filter) {
+                // 不使用抽屉模式，直接展开
+                $filter->panel();
+                $filter->expand(true);
+
                 $filter->equal('id', 'ID');
                 $filter->like('name', '渠道名称');
                 $filter->equal('status', '状态')->select([
@@ -115,7 +119,7 @@ class ChannelController extends AdminController
                 ];
 
                 return $labels[$value] ?? $value;
-            })->width(3);
+            })->unescape()->width(3);
             $show->field('weight', '权重')->width(3);
 
             $show->divider('配置信息');
@@ -136,25 +140,33 @@ class ChannelController extends AdminController
 
             $show->field('success_count', '成功次数')->as(function ($value) {
                 return '<span class="text-success font-weight-bold" style="font-size:1.2em">'.($value ?? 0).'</span>';
-            })->width(3);
+            })->unescape()->width(3);
             $show->field('failure_count', '失败次数')->as(function ($value) {
                 return '<span class="text-danger font-weight-bold" style="font-size:1.2em">'.($value ?? 0).'</span>';
-            })->width(3);
+            })->unescape()->width(3);
             $show->field('total_requests', '总请求数')->as(function ($value) {
-                return '<span class="text-primary font-weight-bold" style="font-size:1.2em">'.($value ?? 0).'</span>';
-            })->width(3);
+                // 计算实际总请求数 = 成功次数 + 失败次数
+                $total = ($this->success_count ?? 0) + ($this->failure_count ?? 0);
+
+                return '<span class="text-primary font-weight-bold" style="font-size:1.2em">'.$total.'</span>';
+            })->unescape()->width(3);
             $show->field('success_rate', '成功率')->as(function ($value) {
-                $rate = $value ? number_format($value * 100, 2) : 0;
+                // 重新计算成功率
+                $successCount = $this->success_count ?? 0;
+                $failureCount = $this->failure_count ?? 0;
+                $total = $successCount + $failureCount;
+
+                $rate = $total > 0 ? ($successCount / $total) * 100 : 0;
                 $color = $rate >= 95 ? 'success' : ($rate >= 80 ? 'warning' : 'danger');
 
-                return '<span class="text-'.$color.' font-weight-bold" style="font-size:1.2em">'.$rate.'%</span>';
-            })->width(3);
+                return '<span class="text-'.$color.' font-weight-bold" style="font-size:1.2em">'.number_format($rate, 2).'%</span>';
+            })->unescape()->width(3);
             $show->field('total_cost', '总成本')->as(function ($value) {
                 return '<span class="text-info font-weight-bold">$'.number_format($value ?? 0, 4).'</span>';
-            })->width(3);
+            })->unescape()->width(3);
             $show->field('avg_latency_ms', '平均延迟')->as(function ($value) {
                 return '<span class="text-muted">'.($value ? number_format($value, 2).' ms' : '-').'</span>';
-            })->width(3);
+            })->unescape()->width(3);
 
             $show->divider('时间记录');
 

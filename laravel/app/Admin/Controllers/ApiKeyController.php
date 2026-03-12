@@ -50,6 +50,10 @@ class ApiKeyController extends AdminController
 
             // 筛选器
             $grid->filter(function (Grid\Filter $filter) {
+                // 不使用抽屉模式，直接展开
+                $filter->panel();
+                $filter->expand(true);
+
                 $filter->equal('status', '状态')->select([
                     'active' => '激活',
                     'revoked' => '已撤销',
@@ -95,63 +99,77 @@ class ApiKeyController extends AdminController
 
             // 允许的渠道 - 显示渠道名称
             $show->field('allowed_channels', '允许的渠道')
-                ->label('success')
+                ->unescape()
                 ->as(function ($value) {
                     // 确保是数组
                     if (is_string($value)) {
                         $value = json_decode($value, true);
                     }
                     if (empty($value) || ! is_array($value)) {
-                        return '不限制';
+                        return '<span class="text-muted">不限制</span>';
                     }
                     // 转换为整数数组
                     $channelIds = array_map('intval', $value);
                     $channels = Channel::whereIn('id', $channelIds)->pluck('name')->toArray();
 
-                    return $channels ? implode('、', $channels) : '不限制';
+                    if (empty($channels)) {
+                        return '<span class="text-muted">不限制</span>';
+                    }
+
+                    // 返回带标签样式的 HTML
+                    return collect($channels)->map(function ($name) {
+                        return "<span class='label bg-success'>$name</span>";
+                    })->implode(' ');
                 });
 
             // 禁止的渠道 - 显示渠道名称
             $show->field('not_allowed_channels', '禁止的渠道')
-                ->label('danger')
+                ->unescape()
                 ->as(function ($value) {
                     // 确保是数组
                     if (is_string($value)) {
                         $value = json_decode($value, true);
                     }
                     if (empty($value) || ! is_array($value)) {
-                        return '无';
+                        return '<span class="text-muted">无</span>';
                     }
                     // 转换为整数数组
                     $channelIds = array_map('intval', $value);
                     $channels = Channel::whereIn('id', $channelIds)->pluck('name')->toArray();
 
-                    return $channels ? implode('、', $channels) : '无';
+                    if (empty($channels)) {
+                        return '<span class="text-muted">无</span>';
+                    }
+
+                    // 返回带标签样式的 HTML
+                    return collect($channels)->map(function ($name) {
+                        return "<span class='label bg-danger'>$name</span>";
+                    })->implode(' ');
                 });
 
             // 速率限制 - 友好显示
             $show->field('rate_limit', '速率限制')
-                ->label('info')
+                ->unescape()
                 ->as(function ($value) {
                     // 确保是数组
                     if (is_string($value)) {
                         $value = json_decode($value, true);
                     }
                     if (empty($value) || ! is_array($value)) {
-                        return '不限制';
+                        return '<span class="text-muted">不限制</span>';
                     }
                     $parts = [];
                     if (! empty($value['requests_per_minute'])) {
-                        $parts[] = "{$value['requests_per_minute']} 次/分钟";
+                        $parts[] = "<span class='label bg-info'>{$value['requests_per_minute']} 次/分钟</span>";
                     }
                     if (! empty($value['requests_per_day'])) {
-                        $parts[] = "{$value['requests_per_day']} 次/天";
+                        $parts[] = "<span class='label bg-info'>{$value['requests_per_day']} 次/天</span>";
                     }
                     if (! empty($value['tokens_per_day'])) {
-                        $parts[] = "{$value['tokens_per_day']} Token/天";
+                        $parts[] = "<span class='label bg-info'>{$value['tokens_per_day']} Token/天</span>";
                     }
 
-                    return $parts ? implode('，', $parts) : '不限制';
+                    return $parts ? implode(' ', $parts) : '<span class="text-muted">不限制</span>';
                 });
 
             $show->field('expires_at', '过期时间');
