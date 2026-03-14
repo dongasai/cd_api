@@ -17,12 +17,16 @@ use Illuminate\Support\Arr;
  * php artisan request:replay-direct --request-id=1004
  * php artisan request:replay-direct --audit-id=500
  * php artisan request:replay-direct --request-id=req_abc123
+ * php artisan request:replay-direct --request-id=1004 --stream    # 强制流式请求
+ * php artisan request:replay-direct --request-id=1004 --no-stream # 强制非流式请求
  */
 class ReplayRequestDirectly extends Command
 {
     protected $signature = 'request:replay-direct
                             {--request-id= : 请求 ID 或 request_id}
-                            {--audit-id= : 审计 ID}';
+                            {--audit-id= : 审计 ID}
+                            {--stream : 强制使用流式请求}
+                            {--no-stream : 强制使用非流式请求}';
 
     protected $description = '直接重放请求 - 不经过 HTTP，直接调用 ProxyServer';
 
@@ -33,6 +37,8 @@ class ReplayRequestDirectly extends Command
 
         $requestId = $this->option('request-id');
         $auditId = $this->option('audit-id');
+        $forceStream = $this->option('stream');
+        $forceNoStream = $this->option('no-stream');
 
         // 二选一验证
         if (! $requestId && ! $auditId) {
@@ -43,6 +49,13 @@ class ReplayRequestDirectly extends Command
 
         if ($requestId && $auditId) {
             $this->error('--request-id 和 --audit-id 参数不能同时使用');
+
+            return self::FAILURE;
+        }
+
+        // stream 参数验证
+        if ($forceStream && $forceNoStream) {
+            $this->error('--stream 和 --no-stream 参数不能同时使用');
 
             return self::FAILURE;
         }
@@ -88,7 +101,7 @@ class ReplayRequestDirectly extends Command
         $this->displayRequestInfo($requestLog);
 
         // 发送请求
-        return $this->sendRequestDirectly($requestLog);
+        return $this->sendRequestDirectly($requestLog, $forceStream, $forceNoStream);
     }
 
     protected function displayRequestInfo(RequestLog $log): void
@@ -135,7 +148,7 @@ class ReplayRequestDirectly extends Command
         return [];
     }
 
-    protected function sendRequestDirectly(RequestLog $log): int
+    protected function sendRequestDirectly(RequestLog $log, bool $forceStream = false, bool $forceNoStream = false): int
     {
         $body = $this->getRequestBody($log);
 
@@ -143,6 +156,15 @@ class ReplayRequestDirectly extends Command
             $this->error('请求体为空');
 
             return self::FAILURE;
+        }
+
+        // 根据 stream 参数覆盖原始请求体中的 stream 设置
+        if ($forceStream) {
+            $body['stream'] = true;
+            $this->info('已强制启用流式请求');
+        } elseif ($forceNoStream) {
+            $body['stream'] = false;
+            $this->info('已强制禁用流式请求');
         }
 
         $this->newLine();

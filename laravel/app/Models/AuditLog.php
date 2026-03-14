@@ -101,6 +101,11 @@ class AuditLog extends Model
         return $this->hasOne(RequestLog::class, 'audit_log_id');
     }
 
+    public function requestLog2(): HasOne
+    {
+        return $this->hasOne(RequestLog::class, 'request_id', 'request_id');
+    }
+
     public function responseLog(): HasOne
     {
         return $this->hasOne(ResponseLog::class, 'audit_log_id');

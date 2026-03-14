@@ -123,7 +123,10 @@ class JsonPreviewController extends Controller
             }
         }
 
-        // 格式化 JSON
+        // 存储原始数据用于复制
+        $originalData = $value;
+
+        // 格式化 JSON 用于显示
         $jsonString = is_array($value) || is_object($value)
             ? json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
             : (string) $value;
@@ -139,6 +142,7 @@ class JsonPreviewController extends Controller
             'field' => $field,
             'fieldLabel' => $this->getFieldLabel($field),
             'jsonString' => $jsonString,
+            'originalData' => $originalData,
         ]);
     }
 

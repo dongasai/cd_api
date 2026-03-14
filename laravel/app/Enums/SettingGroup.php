@@ -11,6 +11,7 @@ enum SettingGroup: string
     case SECURITY = 'security';
     case FEATURES = 'features';
     case CHANNEL_AFFINITY = 'channel_affinity';
+    case TEST = 'test';
 
     /**
      * 获取分组标签
@@ -22,6 +23,7 @@ enum SettingGroup: string
             self::SECURITY => '安全设置',
             self::FEATURES => '功能开关',
             self::CHANNEL_AFFINITY => '渠道亲和性',
+            self::TEST => '测试配置',
         };
     }
 
@@ -35,6 +37,7 @@ enum SettingGroup: string
             self::SECURITY => 'danger',
             self::FEATURES => 'info',
             self::CHANNEL_AFFINITY => 'success',
+            self::TEST => 'warning',
         };
     }
 

@@ -62,6 +62,10 @@ class ShowFieldMacro
         };
     }
 
+    public function json_view()
+    {
+        return $this->json_view_iframe();
+    }
     /**
      * JSON 字段 iframe 嵌入显示
      *
@@ -102,6 +106,43 @@ class ShowFieldMacro
                        'style="width: 100%; height: '.$height.'px; border: 1px solid #dee2e6; border-radius: 4px;" '.
                        'frameborder="0"></iframe>';
             });
+        };
+    }
+
+    /**
+     * 可复制内容显示
+     *
+     * 用于在详情页显示可一键复制的内容，支持自定义提示文字
+     *
+     * @return Field
+     */
+    public function copyable()
+    {
+        return function ($buttonText = null, $successText = null) {
+            return $this->as(function ($value) use ($buttonText, $successText) {
+                // 如果值为空，显示占位符
+                if (empty($value)) {
+                    return '<span class="text-muted">-</span>';
+                }
+
+                // 默认按钮文字和成功提示
+                $buttonText = $buttonText ?? '复制';
+                $successText = $successText ?? '已复制到剪贴板';
+
+                // 生成唯一 ID
+                $uniqueId = 'copyable-'.uniqid();
+
+                // 转义内容
+                $escapedValue = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+                // 使用视图渲染
+                return view('admin.components.copyable', [
+                    'value' => $escapedValue,
+                    'uniqueId' => $uniqueId,
+                    'buttonText' => $buttonText,
+                    'successText' => $successText,
+                ])->render();
+            })->unescape();
         };
     }
 }

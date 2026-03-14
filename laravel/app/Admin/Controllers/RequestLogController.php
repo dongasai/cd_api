@@ -33,7 +33,7 @@ class RequestLogController extends AdminController
             $grid->disableCreateButton();
             $grid->disableEditButton();
             $grid->disableDeleteButton();
-            $grid->disableViewButton();
+            $grid->showViewButton();
 
             // 禁用批量删除
             $grid->disableBatchDelete();
@@ -126,70 +126,25 @@ class RequestLogController extends AdminController
             $show->field('created_at', '创建时间');
 
             // JSON 字段使用代码高亮显示
-            $show->field('headers', '请求头')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
+            $show->field('headers', '请求头')->json();
 
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
+            $show->field('model_params', '模型参数')->json();
 
-            $show->field('model_params', '模型参数')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
+            $show->field('messages', '消息列表')->json_view();
+            
 
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
-
-            $show->field('messages', '消息列表')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
-
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
-
-            $show->field('sensitive_fields', '敏感字段')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
-
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
-
-            $show->field('metadata', '元数据')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
-
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
+            $show->field('metadata', '元数据')->json_view();
 
             // 模型相关字段
             $show->field('model', '请求模型');
             $show->field('upstream_model', '上游模型');
             $show->field('prompt', '提示词');
 
-            // 请求体使用代码高亮
-            $show->field('body_text', '请求体')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
-                // 尝试格式化 JSON
-                $decoded = json_decode($value, true);
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    return json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                }
+            // // 请求体使用代码高亮
+            $show->field('body_text', '请求体')->json_view();
 
-                return $value;
-            })->unescape();
-
-            // 二进制数据不直接显示
-            $show->field('body_binary', '二进制数据')->as(function ($value) {
-                return $value ? '已存储 ('.strlen($value).' bytes)' : '无';
-            });
-
+          
+            
             // 敏感数据标记
             $show->field('has_sensitive', '包含敏感数据')->using([
                 0 => '否',
@@ -200,27 +155,27 @@ class RequestLogController extends AdminController
             $show->disableEditButton();
             $show->disableDeleteButton();
 
-            // 分组显示字段
-            $show->divider('基本信息');
-            $show->fields(['id', 'audit_log_id', 'request_id', 'run_unid', 'created_at']);
+            // // 分组显示字段
+            // $show->divider('基本信息');
+            // $show->fields(['id', 'audit_log_id', 'request_id', 'run_unid', 'created_at']);
 
             $show->divider('渠道信息');
             $show->fields(['channel_id', 'channel_name']);
 
-            $show->divider('请求信息');
-            $show->fields(['method', 'path', 'query_string', 'headers', 'content_type', 'content_length']);
+            // $show->divider('请求信息');
+            // $show->fields(['method', 'path', 'query_string', 'headers', 'content_type', 'content_length']);
 
-            $show->divider('模型信息');
-            $show->fields(['model', 'upstream_model', 'model_params', 'messages', 'prompt']);
+            // $show->divider('模型信息');
+            // $show->fields(['model', 'upstream_model', 'model_params', 'messages', 'prompt']);
 
-            $show->divider('请求体');
-            $show->fields(['body_text', 'body_binary']);
+            // $show->divider('请求体');
+            // $show->fields(['body_text', 'body_binary']);
 
-            $show->divider('敏感数据');
-            $show->fields(['sensitive_fields', 'has_sensitive']);
+            // $show->divider('敏感数据');
+            // $show->fields(['sensitive_fields', 'has_sensitive']);
 
-            $show->divider('其他');
-            $show->fields(['metadata']);
+            // $show->divider('其他');
+            // $show->fields(['metadata']);
         });
     }
 }

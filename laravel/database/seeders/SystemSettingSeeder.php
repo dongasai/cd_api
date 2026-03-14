@@ -146,6 +146,18 @@ class SystemSettingSeeder extends Seeder
                 'is_public' => false,
                 'sort_order' => 4,
             ],
+
+            // 测试配置
+            [
+                'group' => SettingGroup::TEST->value,
+                'key' => 'default_test_api_key',
+                'value' => '',
+                'type' => SystemSetting::TYPE_STRING,
+                'label' => '默认测试API Key',
+                'description' => '系统API测试使用的默认API Key',
+                'is_public' => false,
+                'sort_order' => 1,
+            ],
         ];
 
         foreach ($settings as $setting) {

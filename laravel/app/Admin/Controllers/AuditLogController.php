@@ -2,6 +2,7 @@
 
 namespace App\Admin\Controllers;
 
+use App\Admin\Actions\ViewAffinityHit;
 use App\Admin\Actions\ViewChannelRequestLog;
 use App\Admin\Actions\ViewRequestLog;
 use App\Admin\Actions\ViewResponseLog;
@@ -44,7 +45,17 @@ class AuditLogController extends AdminController
 
             // 列表字段
             $grid->column('id', 'ID')->sortable();
-            $grid->column('api_key_name', 'API Key');
+            $grid->column('api_key_and_affinity', 'API Key ')->display(function () {
+                $apiKey = $this->api_key_name ?: '-';
+                $affinity = $this->channel_affinity ?? [];
+                $isHit = isset($affinity['is_affinity_hit']) && $affinity['is_affinity_hit'];
+
+                if ($isHit) {
+                    return "<span class='border border-success rounded px-1' title='渠道亲和命中'>{$apiKey}</span>";
+                }
+
+                return "<span title='渠道亲和未命中'>{$apiKey}</span>";
+            });
             $grid->column('channel_name', '渠道名称');
             $grid->column('model_info', '模型')->display(function () {
                 $model = $this->model ?? '-';
@@ -71,14 +82,6 @@ class AuditLogController extends AdminController
                 $total = round($this->latency_ms / 1000, 2);
 
                 return "首字: {$first} / 总计: {$total}";
-            });
-            $grid->column('channel_affinity_hit', '渠道亲和命中')->display(function () {
-                $affinity = $this->channel_affinity;
-                if (empty($affinity) || ! isset($affinity['is_affinity_hit']) || ! $affinity['is_affinity_hit']) {
-                    return "<span class='badge bg-secondary'>否</span>";
-                }
-
-                return "<span class='badge bg-success'>是</span>";
             });
             $grid->column('status_code', '状态码')->display(function ($value) {
                 if (is_null($value)) {
@@ -143,6 +146,7 @@ class AuditLogController extends AdminController
                 $actions->append(new ViewRequestLog);
                 $actions->append(new ViewChannelRequestLog);
                 $actions->append(new ViewResponseLog);
+                $actions->append(new ViewAffinityHit);
             });
 
             // 设置每页显示行数

@@ -33,7 +33,7 @@ class ResponseLogController extends AdminController
             $grid->disableCreateButton();
             $grid->disableEditButton();
             $grid->disableDeleteButton();
-            $grid->disableViewButton();
+            $grid->showViewButton();
 
             // 禁用批量删除
             $grid->disableBatchDelete();

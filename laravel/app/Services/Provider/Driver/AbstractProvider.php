@@ -552,6 +552,22 @@ abstract class AbstractProvider implements ProviderInterface
 
         $this->lastErrorMessage = is_string($errorMessage) ? $errorMessage : json_encode($errorMessage);
 
+        // 对于404错误，特别处理模型不存在的错误消息
+        if ($statusCode === 404) {
+            // 尝试从错误消息中提取模型名称
+            $modelName = $this->extractModelNameFromErrorMessage($this->lastErrorMessage);
+            if ($modelName) {
+                return ProviderException::modelNotFound($modelName, $body);
+            }
+
+            // 如果无法提取模型名称，但错误消息看起来是关于模型不存在的
+            // 例如包含"模型"或"Model"关键字
+            if (preg_match('/模型|Model/i', $this->lastErrorMessage)) {
+                // 使用"unknown"作为模型名称，避免产生奇怪的错误消息
+                return ProviderException::modelNotFound('unknown', $body);
+            }
+        }
+
         return match ($statusCode) {
             401 => ProviderException::authError($this->lastErrorMessage, $body),
             403 => ProviderException::authError($this->lastErrorMessage, $body),
@@ -560,6 +576,30 @@ abstract class AbstractProvider implements ProviderInterface
             404 => ProviderException::modelNotFound($this->lastErrorMessage, $body),
             default => ProviderException::serverError($this->lastErrorMessage, $statusCode, $body),
         };
+    }
+
+    /**
+     * 从错误消息中提取模型名称
+     */
+    protected function extractModelNameFromErrorMessage(string $errorMessage): ?string
+    {
+        // 处理中文错误消息格式："模型 stepfun-ai/Step-3.5-Flash 无效"
+        if (preg_match('/模型\s+([a-zA-Z0-9_\-\.\/]+)\s+无效/', $errorMessage, $matches)) {
+            return $matches[1];
+        }
+
+        // 处理英文错误消息格式："Model 'stepfun-ai/Step-3.5-Flash' not found"
+        if (preg_match("/Model '([^']+)' not found/", $errorMessage, $matches)) {
+            return $matches[1];
+        }
+
+        // 处理英文错误消息格式："Model does not exist"
+        if (str_contains($errorMessage, 'Model does not exist')) {
+            // 无法提取具体模型名称，返回null
+            return null;
+        }
+
+        return null;
     }
 
     /**

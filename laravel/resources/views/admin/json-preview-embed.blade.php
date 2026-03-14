@@ -170,7 +170,7 @@
 
     <script>
         // 存储原始JSON数据
-        let originalJson = {!! $jsonString !!};
+        let originalJson = {!! json_encode($originalData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) !!};
 
         // 渲染JSON树
         function renderJson(data, depth = 0) {
@@ -272,19 +272,56 @@
 
         // 复制到剪贴板
         function copyToClipboard() {
-            const text = JSON.stringify(originalJson, null, 2);
-            navigator.clipboard.writeText(text).then(function() {
-                alert('已复制到剪贴板');
-            }).catch(function(err) {
-                // 降级方案
+            try {
+                const text = JSON.stringify(originalJson, null, 2);
+
+                // 使用 textarea 降级方案（更可靠，特别是 iframe 环境）
                 const textarea = document.createElement('textarea');
                 textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                textarea.style.top = '0';
+                textarea.style.opacity = '0';
                 document.body.appendChild(textarea);
+                textarea.focus();
                 textarea.select();
-                document.execCommand('copy');
+
+                const successful = document.execCommand('copy');
                 document.body.removeChild(textarea);
-                alert('已复制到剪贴板');
-            });
+
+                if (successful) {
+                    showCopySuccess();
+                } else {
+                    // 如果 execCommand 失败，尝试 clipboard API
+                    navigator.clipboard.writeText(text).then(function() {
+                        showCopySuccess();
+                    }).catch(function(err) {
+                        console.error('复制失败:', err);
+                        alert('复制失败，请手动复制');
+                    });
+                }
+            } catch (err) {
+                console.error('复制出错:', err);
+                alert('复制出错: ' + err.message);
+            }
+        }
+
+        // 显示复制成功提示
+        function showCopySuccess() {
+            const btn = event.target.closest('.btn');
+            if (btn) {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i>✓</i> 已复制';
+                btn.style.background = '#28a745';
+                btn.style.borderColor = '#28a745';
+                btn.style.color = '#fff';
+                setTimeout(function() {
+                    btn.innerHTML = originalText;
+                    btn.style.background = '';
+                    btn.style.borderColor = '';
+                    btn.style.color = '';
+                }, 2000);
+            }
         }
 
         // 初始化渲染

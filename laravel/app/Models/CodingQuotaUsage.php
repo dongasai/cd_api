@@ -16,6 +16,11 @@ class CodingQuotaUsage extends Model
     use HasFactory;
 
     /**
+     * 指定表名（迁移创建的是单数形式）
+     */
+    protected $table = 'coding_quota_usage';
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>

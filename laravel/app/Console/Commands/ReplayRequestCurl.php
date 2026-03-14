@@ -14,7 +14,7 @@ use Illuminate\Console\Command;
  *
  * 从 request_logs 表读取数据，使用 PHP curl 扩展直接发送请求到上游
  *
- * php artisan request:replay-curl --request-id=1971
+ * php artisan request:replay-curl --request-id=2510
  * php artisan request:replay-curl --audit-id=500
  * php artisan request:replay-curl --request-id=req_abc123
  */

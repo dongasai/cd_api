@@ -423,7 +423,13 @@ class ProxyServer
         string $targetProtocol,
         RequestLog $requestLog
     ): Generator {
-        $stream = $provider->sendStream($providerRequest);
+        try {
+            $stream = $provider->sendStream($providerRequest);
+        } catch (\Exception $e) {
+            // 立即更新审计日志状态
+            $this->handleError($e, $httpRequest, $requestLog);
+            throw $e; // 重新抛出异常
+        }
 
         // 从 Provider 获取实际请求信息并更新日志
         $this->updateChannelRequestLogFromProvider($provider);
@@ -437,52 +443,58 @@ class ProxyServer
         $reasoningContent = '';
         Log::debug('handleStreamRequest  ', []);
 
-        foreach ($stream as $chunk) {
-            // 记录首个 Token 时间（TTFB）
-            if ($firstTokenTime === null) {
-                $this->firstTokenMs = (int) ((microtime(true) - $this->startTime) * 1000);
-                $firstTokenTime = microtime(true);
-                $ttfbMs = $this->firstTokenMs;
+        try {
+            foreach ($stream as $chunk) {
+                // 记录首个 Token 时间（TTFB）
+                if ($firstTokenTime === null) {
+                    $this->firstTokenMs = (int) ((microtime(true) - $this->startTime) * 1000);
+                    $firstTokenTime = microtime(true);
+                    $ttfbMs = $this->firstTokenMs;
+                }
+
+                // 记录首个响应块时间用于 TTFB
+                if ($this->channelRequestLog && $ttfbMs === null) {
+                    $ttfbMs = (int) ((microtime(true) - $this->startTime) * 1000);
+                }
+
+                $standardEvent = $this->parseStreamChunk($chunk, $targetProtocol);
+                if ($standardEvent === null) {
+                    Log::info('standardEvent nullcontinue ', []);
+
+                    continue;
+                }
+
+                // 累积内容
+                if ($standardEvent->contentDelta) {
+                    $fullContent .= $standardEvent->contentDelta;
+                }
+
+                // 累积推理内容
+                if ($standardEvent->reasoningDelta) {
+                    $reasoningContent .= $standardEvent->reasoningDelta;
+                }
+
+                // 累积工具调用（流式响应中 tool_calls 是增量发送的）
+                if ($standardEvent->toolCall) {
+                    $this->accumulateToolCall($toolCalls, $standardEvent->toolCall);
+                }
+
+                if ($standardEvent->usage) {
+                    $usage = $standardEvent->usage;
+                }
+
+                if ($standardEvent->finishReason) {
+                    $finishReason = $standardEvent->finishReason;
+                }
+
+                $convertedChunk = $this->convertStreamChunk($standardEvent, $sourceProtocol);
+
+                yield $convertedChunk;
             }
-
-            // 记录首个响应块时间用于 TTFB
-            if ($this->channelRequestLog && $ttfbMs === null) {
-                $ttfbMs = (int) ((microtime(true) - $this->startTime) * 1000);
-            }
-
-            $standardEvent = $this->parseStreamChunk($chunk, $targetProtocol);
-            if ($standardEvent === null) {
-                Log::info('standardEvent nullcontinue ', []);
-
-                continue;
-            }
-
-            // 累积内容
-            if ($standardEvent->contentDelta) {
-                $fullContent .= $standardEvent->contentDelta;
-            }
-
-            // 累积推理内容
-            if ($standardEvent->reasoningDelta) {
-                $reasoningContent .= $standardEvent->reasoningDelta;
-            }
-
-            // 累积工具调用（流式响应中 tool_calls 是增量发送的）
-            if ($standardEvent->toolCall) {
-                $this->accumulateToolCall($toolCalls, $standardEvent->toolCall);
-            }
-
-            if ($standardEvent->usage) {
-                $usage = $standardEvent->usage;
-            }
-
-            if ($standardEvent->finishReason) {
-                $finishReason = $standardEvent->finishReason;
-            }
-
-            $convertedChunk = $this->convertStreamChunk($standardEvent, $sourceProtocol);
-
-            yield $convertedChunk;
+        } catch (\Exception $e) {
+            // 流式处理过程中的异常
+            $this->handleError($e, $httpRequest, $requestLog);
+            throw $e; // 重新抛出异常
         }
 
         $latencyMs = $this->calculateLatency();
@@ -563,6 +575,7 @@ class ProxyServer
     protected function createRequestLog(Request $request, array $rawRequest, string $protocol): RequestLog
     {
         return RequestLog::create([
+            'audit_log_id' => $this->auditLog?->id,
             'request_id' => $this->requestId,
             'run_unid' => defined('RUN_UNID') ? RUN_UNID : null,
             'method' => $request->method(),
@@ -761,7 +774,7 @@ class ProxyServer
             'run_unid' => defined('RUN_UNID') ? RUN_UNID : null,
             'request_type' => AuditLog::REQUEST_TYPE_CHAT,
             'model' => $model,
-            'status_code' => 0,
+            'status_code' => 102, // HTTP 102 Processing，表示请求处理中
             'latency_ms' => 0,
             'first_token_ms' => 0,
             'prompt_tokens' => 0,
@@ -937,12 +950,18 @@ class ProxyServer
     protected function handleError(\Exception $e, Request $request, RequestLog $requestLog): void
     {
         $latencyMs = $this->calculateLatency();
+        $statusCode = $this->getStatusCode($e);
+
+        // 确保状态码不为0，避免审计日志内容缺失
+        if ($statusCode === 0) {
+            $statusCode = 500; // 设置为500内部服务器错误
+        }
 
         // 更新审计日志记录错误信息
         $this->updateAuditLog([
             'channel_id' => $this->selectedChannel?->id,
             'channel_name' => $this->selectedChannel?->name,
-            'status_code' => $this->getStatusCode($e),
+            'status_code' => $statusCode,
             'latency_ms' => $latencyMs,
             'error_type' => get_class($e),
             'error_message' => $e->getMessage(),
@@ -951,7 +970,7 @@ class ProxyServer
         // 更新渠道请求日志记录错误信息
         if ($this->channelRequestLog) {
             $this->channelRequestLog->update([
-                'response_status' => $this->getStatusCode($e),
+                'response_status' => $statusCode,
                 'is_success' => false,
                 'error_type' => get_class($e),
                 'error_message' => $e->getMessage(),

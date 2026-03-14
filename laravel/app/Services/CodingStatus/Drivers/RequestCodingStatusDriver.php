@@ -3,6 +3,7 @@
 namespace App\Services\CodingStatus\Drivers;
 
 use App\Models\CodingAccount;
+use App\Models\CodingUsageLog;
 
 /**
  * Request Coding Status 驱动

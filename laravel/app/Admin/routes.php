@@ -38,8 +38,8 @@ Route::group([
     // 系统设置管理
     $router->resource('system-settings', 'SystemSettingController');
 
-    // 渠道亲和性规则
-    $router->resource('channel-affinity-rules', 'ChannelAffinityRuleController');
+    // 渠道亲和性缓存
+    $router->resource('channel-affinity-cache', 'ChannelAffinityCacheController')->only(['index', 'show']);
 
     // 日志中心 - 只读
     $router->resource('audit-logs', 'AuditLogController')->only(['index', 'show']);
@@ -51,5 +51,14 @@ Route::group([
     // JSON 字段预览
     $router->get('json-preview/{table}/{id}/{field}', 'JsonPreviewController@show')->name('json-preview');
     $router->get('json-preview-embed/{table}/{id}/{field}', 'JsonPreviewController@embed')->name('json-preview-embed');
+
+    // 预设提示词管理
+    $router->resource('preset-prompts', 'PresetPromptController');
+
+    // 模型测试
+    $router->get('model-test', 'ModelTestController@index')->name('model-test');
+    $router->post('model-test/test', 'ModelTestController@test')->name('model-test.test');
+    $router->get('model-test/channel-models/{channel_id}', 'ModelTestController@getChannelModels')->name('model-test.channel-models');
+    $router->get('model-test/logs', 'ModelTestController@grid')->name('model-test.logs');
 
 });
