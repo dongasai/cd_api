@@ -1,0 +1,247 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\ApiKey;
+use App\Models\Channel;
+use App\Models\ModelList;
+use Illuminate\Support\Facades\Cache;
+
+/**
+ * 模型服务
+ *
+ * 提供模型可用性检查和模型列表获取功能
+ * 支持 API Key 级别的模型限制和别名映射
+ */
+class ModelService
+{
+    /**
+     * 缓存时间（秒）
+     */
+    private const CACHE_TTL = 30;
+
+    /**
+     * 获取可用的模型列表
+     *
+     * @param  ApiKey|null  $apiKey  API密钥，为空时返回全局启用模型
+     * @return array 模型列表数组，格式: [['id' => string, 'object' => string, 'created' => int, 'owned_by' => string], ...]
+     */
+    public static function getAvailableModels(?ApiKey $apiKey = null): array
+    {
+        $cacheKey = self::getCacheKey('models', $apiKey?->id);
+
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($apiKey) {
+            $allowedModels = $apiKey?->allowed_models;
+            $modelMappings = $apiKey?->model_mappings ?? [];
+
+            // 查询启用的模型
+            $query = ModelList::where('is_enabled', true);
+
+            // 如果有允许的模型列表，只查询这些模型
+            if (! empty($allowedModels) && is_array($allowedModels)) {
+                $query->whereIn('model_name', $allowedModels);
+            }
+
+            $modelLists = $query->get();
+
+            // 构建模型数据
+            $data = $modelLists->map(function ($modelList) {
+                return [
+                    'id' => $modelList->model_name,
+                    'object' => 'model',
+                    'created' => $modelList->created_at?->timestamp ?? time(),
+                    'owned_by' => $modelList->provider ?? 'system',
+                ];
+            })->values()->toArray();
+
+            // 添加映射的模型别名
+            if (! empty($modelMappings)) {
+                foreach ($modelMappings as $alias => $actualModel) {
+                    $data[] = [
+                        'id' => $alias,
+                        'object' => 'model',
+                        'created' => time(),
+                        'owned_by' => 'cdapi',
+                    ];
+                }
+            }
+
+            return $data;
+        });
+    }
+
+    /**
+     * 检查模型是否可用
+     *
+     * @param  string  $model  模型名称
+     * @param  ApiKey|null  $apiKey  API密钥，为空时检查全局可用性
+     * @return bool 模型是否可用
+     */
+    public static function isModelAvailable(string $model, ?ApiKey $apiKey = null): bool
+    {
+        $cacheKey = self::getCacheKey('availability', $apiKey?->id, $model);
+
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($model, $apiKey) {
+            // 1. 检查 API Key 的模型映射（别名）
+            if ($apiKey && ! empty($apiKey->model_mappings)) {
+                $mappings = $apiKey->model_mappings;
+                if (isset($mappings[$model])) {
+                    return true;
+                }
+            }
+
+            // 2. 检查 API Key 的允许模型列表
+            if ($apiKey && ! empty($apiKey->allowed_models)) {
+                return in_array($model, $apiKey->allowed_models, true);
+            }
+
+            // 3. 检查全局模型列表
+            return ModelList::where('model_name', $model)
+                ->where('is_enabled', true)
+                ->exists();
+        });
+    }
+
+    /**
+     * 获取模型解析后的实际名称
+     *
+     * 如果模型是别名，则返回映射后的实际模型名称
+     *
+     * @param  string  $model  模型名称
+     * @param  ApiKey|null  $apiKey  API密钥
+     * @return string 实际模型名称
+     */
+    public static function resolveModel(string $model, ?ApiKey $apiKey = null): string
+    {
+        if ($apiKey && ! empty($apiKey->model_mappings)) {
+            $mappings = $apiKey->model_mappings;
+            if (isset($mappings[$model])) {
+                return $mappings[$model];
+            }
+        }
+
+        return $model;
+    }
+
+    /**
+     * 获取 API Key 可用的渠道模型详情
+     *
+     * 用于后台展示，返回按渠道分组的可用模型列表
+     *
+     * @param  ApiKey  $apiKey  API密钥
+     * @return array 渠道模型列表，格式: [['channel' => Channel, 'models' => Collection], ...]
+     */
+    public static function getAvailableChannelModels(ApiKey $apiKey): array
+    {
+        $cacheKey = self::getCacheKey('channel_models', $apiKey->id);
+
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($apiKey) {
+            // 获取允许的渠道ID
+            $allowedChannels = $apiKey->allowed_channels;
+            if (is_string($allowedChannels)) {
+                $allowedChannels = json_decode($allowedChannels, true);
+            }
+
+            // 获取禁止的渠道ID
+            $notAllowedChannels = $apiKey->not_allowed_channels;
+            if (is_string($notAllowedChannels)) {
+                $notAllowedChannels = json_decode($notAllowedChannels, true);
+            }
+
+            // 构建查询
+            $query = Channel::where('status', 'active');
+
+            // 如果有禁止的渠道，排除它们
+            if (! empty($notAllowedChannels) && is_array($notAllowedChannels)) {
+                $query->whereNotIn('id', array_map('intval', $notAllowedChannels));
+            }
+
+            // 如果有允许的渠道，只查询这些渠道
+            if (! empty($allowedChannels) && is_array($allowedChannels)) {
+                $query->whereIn('id', array_map('intval', $allowedChannels));
+            }
+
+            $channels = $query->get();
+
+            $result = [];
+            foreach ($channels as $channel) {
+                $enabledModels = $channel->enabledModels()->get();
+                if ($enabledModels->isNotEmpty()) {
+                    $result[] = [
+                        'channel' => $channel,
+                        'models' => $enabledModels,
+                    ];
+                }
+            }
+
+            return $result;
+        });
+    }
+
+    /**
+     * 清除模型缓存
+     *
+     * @param  int|null  $apiKeyId  API密钥ID，为空时清除所有缓存
+     */
+    public static function clearCache(?int $apiKeyId = null): void
+    {
+        if ($apiKeyId === null) {
+            // 清除所有模型相关的缓存
+            $keys = Cache::get('model_service_cache_keys', []);
+            foreach ($keys as $key) {
+                Cache::forget($key);
+            }
+            Cache::forget('model_service_cache_keys');
+        } else {
+            // 清除特定 API Key 的缓存
+            $patterns = [
+                self::getCacheKey('models', $apiKeyId),
+                self::getCacheKey('availability', $apiKeyId, '*'),
+            ];
+
+            foreach ($patterns as $pattern) {
+                if (str_contains($pattern, '*')) {
+                    // 通配符模式，需要从记录的键中匹配
+                    $keys = Cache::get('model_service_cache_keys', []);
+                    foreach ($keys as $key) {
+                        if (str_starts_with($key, dirname($pattern))) {
+                            Cache::forget($key);
+                        }
+                    }
+                } else {
+                    Cache::forget($pattern);
+                }
+            }
+        }
+    }
+
+    /**
+     * 生成缓存键
+     *
+     * @param  string  $type  缓存类型
+     * @param  int|null  $apiKeyId  API密钥ID
+     * @param  string|null  $model  模型名称
+     * @return string 缓存键
+     */
+    private static function getCacheKey(string $type, ?int $apiKeyId = null, ?string $model = null): string
+    {
+        $key = "model_service:{$type}";
+
+        if ($apiKeyId !== null) {
+            $key .= ":key:{$apiKeyId}";
+        }
+
+        if ($model !== null) {
+            $key .= ":model:{$model}";
+        }
+
+        // 记录缓存键以便清理
+        $keys = Cache::get('model_service_cache_keys', []);
+        if (! in_array($key, $keys)) {
+            $keys[] = $key;
+            Cache::put('model_service_cache_keys', $keys, self::CACHE_TTL * 2);
+        }
+
+        return $key;
+    }
+}

@@ -130,12 +130,12 @@ class ChannelRequestLogController extends AdminController
      */
     protected function detail($id)
     {
-        return Show::make($id, ChannelRequestLog::with(['auditLog', 'requestLog', 'channel']), function (Show $show) {
+        return Show::make($id, ChannelRequestLog::with(['auditLog', 'requestLog']), function (Show $show) {
             // 基本信息
             $show->field('id', 'ID');
             $show->field('audit_log_id', '审计日志ID');
             $show->field('request_log_id', '请求日志ID');
-            $show->field('request_id', '请求ID')->copyable();
+            $show->field('request_id', '请求ID');
 
             // 渠道信息
             $show->field('channel_id', '渠道ID');
@@ -149,29 +149,16 @@ class ChannelRequestLogController extends AdminController
             $show->field('full_url', '完整URL');
 
             // JSON 字段格式化显示
-            $show->field('request_headers', '请求头')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
-
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
+            $show->field('request_headers', '请求头')->json();
 
             $show->field('request_body', '请求体')->as(function ($value) {
                 if (empty($value)) {
                     return '-';
                 }
-                // 如果是数组，直接格式化
-                if (is_array($value)) {
-                    return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                }
-                // 尝试解析 JSON
-                $decoded = json_decode($value, true);
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    return json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                }
 
-                return $value;
+                $url = admin_url('json-preview/channel-request-logs/'.$this->id.'/request_body');
+
+                return '<a href="'.$url.'" class="btn btn-sm btn-primary" target="_blank"><i class="fa fa-eye"></i> 查看JSON</a>';
             })->unescape();
 
             $show->field('request_size', '请求大小')->display(function ($value) {
@@ -184,54 +171,50 @@ class ChannelRequestLogController extends AdminController
 
             // 响应信息
             $show->field('response_status', '响应状态');
-            $show->field('response_headers', '响应头')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
+            // 使用链接跳转到独立页面查看
+            // $show->field('response_headers', '响应头')->as(function ($value) {
+            //     if (empty($value)) {
+            //         return '-';
+            //     }
 
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
+            //     $url = admin_url('json-preview/channel-request-logs/'.$this->id.'/response_headers');
 
-            $show->field('response_body', '响应体')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
-                // 如果是数组，直接格式化
-                if (is_array($value)) {
-                    return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                }
-                // 尝试解析 JSON
-                $decoded = json_decode($value, true);
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    return json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                }
+            //     return '<a href="'.$url.'" class="btn btn-sm btn-primary"><i class="fa fa-eye"></i> 查看JSON</a>';
+            // })->unescape();
 
-                return $value;
-            })->unescape();
+            // $show->field('response_body', '响应体')->as(function ($value) {
+            //     if (empty($value)) {
+            //         return '-';
+            //     }
 
-            $show->field('response_size', '响应大小')->display(function ($value) {
-                if ($value === null) {
-                    return '-';
-                }
+            //     $url = admin_url('json-preview/channel-request-logs/'.$this->id.'/response_body');
 
-                return $this->formatFileSize($value);
-            });
+            //     return '<a href="'.$url.'" class="btn btn-sm btn-primary"><i class="fa fa-eye"></i> 查看JSON</a>';
+            // })->unescape();
+
+            // $show->field('response_size', '响应大小')->display(function ($value) {
+            //     if ($value === null) {
+            //         return '-';
+            //     }
+
+            //     return $this->formatFileSize($value);
+            // });
 
             // 性能指标
-            $show->field('latency_ms', '延迟(ms)')->as(function ($value) {
-                if ($value === null) {
-                    return '-';
-                }
+            // $show->field('latency_ms', '延迟(ms)')->as(function ($value) {
+            //     if ($value === null) {
+            //         return '-';
+            //     }
 
-                return number_format($value, 2);
-            });
-            $show->field('ttfb_ms', '首字节时间(ms)')->as(function ($value) {
-                if ($value === null) {
-                    return '-';
-                }
+            //     return number_format($value, 2);
+            // });
+            // $show->field('ttfb_ms', '首字节时间(ms)')->as(function ($value) {
+            //     if ($value === null) {
+            //         return '-';
+            //     }
 
-                return number_format($value, 2);
-            });
+            //     return number_format($value, 2);
+            // });
 
             // 状态信息
             $show->field('is_success', '是否成功')->using([
@@ -241,53 +224,58 @@ class ChannelRequestLogController extends AdminController
             $show->field('error_type', '错误类型');
             $show->field('error_message', '错误消息');
 
+            // 使用链接跳转到独立页面查看
             // JSON 字段格式化显示
-            $show->field('usage', '使用量')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
+            // $show->field('usage', '使用量')->as(function ($value) {
+            //     if (empty($value)) {
+            //         return '-';
+            //     }
 
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
+            //     $url = admin_url('json-preview/channel-request-logs/'.$this->id.'/usage');
 
-            $show->field('metadata', '元数据')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
+            //     return '<a href="'.$url.'" class="btn btn-sm btn-primary"><i class="fa fa-eye"></i> 查看JSON</a>';
+            // })->unescape();
 
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
+            // $show->field('metadata', '元数据')->as(function ($value) {
+            //     if (empty($value)) {
+            //         return '-';
+            //     }
 
-            // 时间信息
-            $show->field('sent_at', '发送时间');
-            $show->field('created_at', '创建时间');
-            $show->field('updated_at', '更新时间');
+            //     $url = admin_url('json-preview/channel-request-logs/'.$this->id.'/metadata');
 
-            // 禁用编辑和删除按钮
-            $show->disableEditButton();
-            $show->disableDeleteButton();
+            //     return '<a href="'.$url.'" class="btn btn-sm btn-primary"><i class="fa fa-eye"></i> 查看JSON</a>';
+            // })->unescape();
 
-            // 分组显示字段
-            $show->divider('基本信息');
-            $show->fields(['id', 'audit_log_id', 'request_log_id', 'request_id']);
+            // // 时间信息
+            // $show->field('sent_at', '发送时间');
+            // $show->field('created_at', '创建时间');
+            // $show->field('updated_at', '更新时间');
 
-            $show->divider('渠道信息');
-            $show->fields(['channel_id', 'channel_name', 'provider']);
+            // // 禁用编辑和删除按钮
+            // $show->disableEditButton();
+            // $show->disableDeleteButton();
 
-            $show->divider('请求信息');
-            $show->fields(['method', 'path', 'base_url', 'full_url', 'request_headers', 'request_body', 'request_size']);
+            // // 分组显示字段
+            // $show->divider('基本信息');
+            // $show->fields(['id', 'audit_log_id', 'request_log_id', 'request_id']);
 
-            $show->divider('响应信息');
-            $show->fields(['response_status', 'response_headers', 'response_body', 'response_size']);
+            // $show->divider('渠道信息');
+            // $show->fields(['channel_id', 'channel_name', 'provider']);
 
-            $show->divider('性能指标');
-            $show->fields(['latency_ms', 'ttfb_ms']);
+            // $show->divider('请求信息');
+            // $show->fields(['method', 'path', 'base_url', 'full_url', 'request_headers', 'request_body', 'request_size']);
 
-            $show->divider('状态信息');
-            $show->fields(['is_success', 'error_type', 'error_message']);
+            // $show->divider('响应信息');
+            // $show->fields(['response_status', 'response_headers', 'response_body', 'response_size']);
 
-            $show->divider('其他');
-            $show->fields(['usage', 'metadata', 'sent_at', 'created_at', 'updated_at']);
+            // $show->divider('性能指标');
+            // $show->fields(['latency_ms', 'ttfb_ms']);
+
+            // $show->divider('状态信息');
+            // $show->fields(['is_success', 'error_type', 'error_message']);
+
+            // $show->divider('其他');
+            // $show->fields(['usage', 'metadata', 'sent_at', 'created_at', 'updated_at']);
         });
     }
 

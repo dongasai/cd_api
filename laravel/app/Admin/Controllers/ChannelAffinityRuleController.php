@@ -2,6 +2,7 @@
 
 namespace App\Admin\Controllers;
 
+use App\Admin\Actions\CopyChannelAffinityRule;
 use App\Models\ChannelAffinityRule;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
@@ -63,6 +64,8 @@ class ChannelAffinityRuleController extends AdminController
             $grid->actions(function (Grid\Displayers\Actions $actions) {
                 // 禁用查看按钮，使用详情页
                 $actions->disableView();
+                // 添加复制操作
+                $actions->append(new CopyChannelAffinityRule());
             });
 
             // 批量操作

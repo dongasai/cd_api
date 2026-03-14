@@ -92,12 +92,12 @@ class ModelListController extends AdminController
             // 操作按钮
             $grid->actions(function (Grid\Displayers\Actions $actions) {
                 // 查看按钮
-                $actions->append('<a href="'.$actions->getResource().'/'.$actions->getKey().'" class="btn btn-primary btn-sm" style="margin-right:3px;"><i class="feather icon-eye"></i> 查看</a>');
+                $actions->append('<a href="'.admin_url('model-lists/'.$actions->getKey()).'" class="btn btn-primary btn-sm mr-1"><i class="fa fa-eye"></i> 查看</a>');
             });
 
-            // 批量操作
+            // 批量操作（默认已启用批量删除）
             $grid->batchActions(function (Grid\Tools\BatchActions $batch) {
-                $batch->enableDelete();
+                // 可以添加其他批量操作
             });
         });
     }

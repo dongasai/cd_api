@@ -10,6 +10,7 @@ use App\Models\RequestLog;
 use App\Models\ResponseLog;
 use App\Services\ChannelAffinity\ChannelAffinityService;
 use App\Services\CodingStatus\ChannelCodingStatusService;
+use App\Services\ModelService;
 use App\Services\Protocol\DTO\StandardRequest;
 use App\Services\Protocol\DTO\StandardResponse;
 use App\Services\Protocol\DTO\StandardToolCall;
@@ -1318,29 +1319,12 @@ class ProxyServer
     {
         $apiKey = $request->attributes->get('api_key');
 
-        // 检查 API Key 的模型映射（别名）
-        if ($apiKey && ! empty($apiKey->model_mappings)) {
-            $mappings = $apiKey->model_mappings;
-            if (isset($mappings[$model])) {
-                return;
-            }
-        }
-
-        // 检查 API Key 的允许模型列表
-        if ($apiKey && ! empty($apiKey->allowed_models)) {
-            if (in_array($model, $apiKey->allowed_models, true)) {
-                return;
+        // 使用 ModelService 检查模型可用性
+        if (! ModelService::isModelAvailable($model, $apiKey)) {
+            if ($apiKey && ! empty($apiKey->allowed_models)) {
+                throw new \InvalidArgumentException("Model '{$model}' is not in the allowed models list for this API key");
             }
 
-            throw new \InvalidArgumentException("Model '{$model}' is not in the allowed models list for this API key");
-        }
-
-        // 检查全局模型列表
-        $exists = \App\Models\ModelList::where('model_name', $model)
-            ->where('is_enabled', true)
-            ->exists();
-
-        if (! $exists) {
             throw new \InvalidArgumentException("Model '{$model}' is not available");
         }
     }

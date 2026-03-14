@@ -2,9 +2,11 @@
 
 namespace App\Admin\Controllers;
 
+use App\Admin\Actions\RefreshModelCache;
 use App\Admin\Grids\ChannelSelectGrid;
 use App\Models\ApiKey;
 use App\Models\Channel;
+use App\Services\ModelService;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
@@ -147,6 +149,41 @@ class ApiKeyController extends AdminController
                     })->implode(' ');
                 });
 
+            // 可用模型列表 - 从允许的渠道中获取启用的模型
+            $show->field('available_models', '可用模型')
+                ->unescape()
+                ->as(function ($value) {
+                    // 使用 ModelService 获取可用渠道模型
+                    $channelModels = ModelService::getAvailableChannelModels($this);
+
+                    if (empty($channelModels)) {
+                        return '<span class="text-muted">无可用模型</span>';
+                    }
+
+                    // 构建显示HTML
+                    $modelsHtml = [];
+                    foreach ($channelModels as $item) {
+                        $channel = $item['channel'];
+                        $models = $item['models'];
+
+                        $modelsHtml[] = "<div style='margin-bottom: 10px;'>";
+                        $modelsHtml[] = "<strong>{$channel->name}</strong>: ";
+                        $modelLabels = $models->map(function ($model) {
+                            $displayName = $model->getDisplayName();
+                            $modelName = $model->model_name;
+                            if ($model->mapped_model) {
+                                return "<span class='label bg-primary' title=\"实际模型: {$model->mapped_model}\">{$displayName} ({$modelName})</span>";
+                            }
+
+                            return "<span class='label bg-primary'>{$displayName} ({$modelName})</span>";
+                        })->implode(' ');
+                        $modelsHtml[] = $modelLabels;
+                        $modelsHtml[] = '</div>';
+                    }
+
+                    return implode('', $modelsHtml);
+                });
+
             // 速率限制 - 友好显示
             $show->field('rate_limit', '速率限制')
                 ->unescape()
@@ -176,6 +213,11 @@ class ApiKeyController extends AdminController
             $show->field('last_used_at', '最后使用时间');
             $show->field('created_at', '创建时间');
             $show->field('updated_at', '更新时间');
+
+            // 添加刷新模型缓存工具按钮
+            $show->tools(function (Show\Tools $tools) {
+                $tools->append(new RefreshModelCache);
+            });
         });
     }
 
@@ -269,6 +311,14 @@ class ApiKeyController extends AdminController
 
                     // 删除临时字段
                     $form->deleteInput('generated_key');
+                }
+            });
+
+            // 保存后回调 - 清除模型缓存
+            $form->saved(function (Form $form) {
+                $id = $form->model()->id;
+                if ($id) {
+                    ModelService::clearCache((int) $id);
                 }
             });
         });

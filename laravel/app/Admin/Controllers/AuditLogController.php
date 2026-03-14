@@ -44,6 +44,7 @@ class AuditLogController extends AdminController
 
             // 列表字段
             $grid->column('id', 'ID')->sortable();
+            $grid->column('api_key_name', 'API Key');
             $grid->column('channel_name', '渠道名称');
             $grid->column('model_info', '模型')->display(function () {
                 $model = $this->model ?? '-';

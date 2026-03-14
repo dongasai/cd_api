@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\ModelService;
 use App\Services\Router\ProxyServer;
 use Generator;
 use Illuminate\Http\JsonResponse;
@@ -48,40 +49,15 @@ class ProxyController extends Controller
         }
     }
 
+    /**
+     * 可用模型
+     */
     public function models(Request $request): JsonResponse
     {
         $apiKey = $request->attributes->get('api_key');
-        $allowedModels = $apiKey?->allowed_models;
-        $modelMappings = $apiKey?->model_mappings ?? [];
 
-        $query = \App\Models\ModelList::where('is_enabled', true);
-
-        if (! empty($allowedModels) && is_array($allowedModels)) {
-            $query->whereIn('model_name', $allowedModels);
-        }
-
-        $modelLists = $query->get();
-
-        $data = $modelLists->map(function ($modelList) {
-            return [
-                'id' => $modelList->model_name,
-                'object' => 'model',
-                'created' => $modelList->created_at?->timestamp ?? time(),
-                'owned_by' => $modelList->provider ?? 'system',
-            ];
-        })->values()->toArray();
-
-        // 添加映射的模型别名
-        if (! empty($modelMappings)) {
-            foreach ($modelMappings as $alias => $actualModel) {
-                $data[] = [
-                    'id' => $alias,
-                    'object' => 'model',
-                    'created' => time(),
-                    'owned_by' => 'cdapi',
-                ];
-            }
-        }
+        // 使用 ModelService 获取可用模型列表
+        $data = ModelService::getAvailableModels($apiKey);
 
         return response()->json([
             'object' => 'list',

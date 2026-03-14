@@ -108,7 +108,7 @@ class ChannelRouterService
 
         // 应用黑名单限制
         if ($apiKey->hasChannelBlacklist()) {
-            $notAllowedChannels = $apiKey->getNotAllowedChannelIds();
+            $notAllowedChannels = array_map('intval', $apiKey->getNotAllowedChannelIds());
             $channels = $channels->reject(function ($channel) use ($notAllowedChannels) {
                 return in_array($channel->id, $notAllowedChannels, true);
             });
@@ -116,7 +116,7 @@ class ChannelRouterService
 
         // 应用白名单限制
         if ($apiKey->hasChannelWhitelist()) {
-            $allowedChannels = $apiKey->getAllowedChannelIds();
+            $allowedChannels = array_map('intval', $apiKey->getAllowedChannelIds());
             $channels = $channels->filter(function ($channel) use ($allowedChannels) {
                 return in_array($channel->id, $allowedChannels, true);
             });

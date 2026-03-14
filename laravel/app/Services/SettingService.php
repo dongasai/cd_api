@@ -81,7 +81,7 @@ class SettingService
             function () {
                 $settings = [];
                 foreach (SystemSetting::all() as $setting) {
-                    $settings[$setting->group.'.'.$setting->key] = $setting->getTypedValue();
+                    $settings[$setting->group->value.'.'.$setting->key] = $setting->getTypedValue();
                 }
 
                 return $settings;
@@ -101,7 +101,7 @@ class SettingService
         $publicSettings = [];
 
         foreach (SystemSetting::where('is_public', true)->get() as $setting) {
-            $key = $setting->group.'.'.$setting->key;
+            $key = $setting->group->value.'.'.$setting->key;
             if (isset($settings[$key])) {
                 $publicSettings[$key] = $settings[$key];
             }

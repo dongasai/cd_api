@@ -48,4 +48,7 @@ Route::group([
     $router->resource('channel-request-logs', 'ChannelRequestLogController')->only(['index', 'show']);
     $router->resource('operation-logs', 'OperationLogController')->only(['index', 'show']);
 
+    // JSON 字段预览
+    $router->get('json-preview/{table}/{id}/{field}', 'JsonPreviewController@show')->name('json-preview');
+
 });
