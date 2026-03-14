@@ -13,7 +13,7 @@ class ChannelAffinityRuleSeeder extends Seeder
             [
                 'name' => 'Codex CLI 亲和性',
                 'description' => 'Codex CLI 基于 prompt_cache_key 的渠道亲和性，确保连续对话路由到同一渠道',
-                'model_patterns' => ['/^gpt-.*$/', '/^o[1-4].*$/', '/^codex-.*$/'],
+                'model_patterns' => '/^(gpt-.*|o[1-4].*|codex-.*)$/',
                 'path_patterns' => null,
                 'user_agent_patterns' => null,
                 'key_sources' => [
@@ -30,7 +30,7 @@ class ChannelAffinityRuleSeeder extends Seeder
             [
                 'name' => 'Claude CLI 亲和性',
                 'description' => 'Claude CLI 基于 metadata.user_id 的渠道亲和性，确保用户连续对话路由到同一渠道',
-                'model_patterns' => ['/^claude-.*$/'],
+                'model_patterns' => '/^claude-.*$/',
                 'path_patterns' => null,
                 'user_agent_patterns' => null,
                 'key_sources' => [
@@ -47,7 +47,7 @@ class ChannelAffinityRuleSeeder extends Seeder
             [
                 'name' => 'RooCode 亲和性',
                 'description' => 'RooCode VS Code 扩展基于 API Key + User-Agent 组合的渠道亲和性，确保同一用户的连续对话路由到同一渠道',
-                'model_patterns' => ['/.*/'],
+                'model_patterns' => '/.*/',
                 'path_patterns' => null,
                 'user_agent_patterns' => ['RooCode'],
                 'key_sources' => [

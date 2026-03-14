@@ -3,6 +3,7 @@
 namespace App\Admin\Controllers;
 
 use App\Admin\Actions\CopyChannelAffinityRule;
+use App\Enums\PathPattern;
 use App\Models\ChannelAffinityRule;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
@@ -65,7 +66,7 @@ class ChannelAffinityRuleController extends AdminController
                 // 禁用查看按钮，使用详情页
                 $actions->disableView();
                 // 添加复制操作
-                $actions->append(new CopyChannelAffinityRule());
+                $actions->append(new CopyChannelAffinityRule);
             });
 
             // 批量操作
@@ -90,9 +91,18 @@ class ChannelAffinityRuleController extends AdminController
             $show->field('id', 'ID');
             $show->field('name', '规则名称');
             $show->field('description', '描述');
-            $show->field('model_patterns', '模型匹配规则')->json();
-            $show->field('path_patterns', '路径匹配规则')->json();
-            $show->field('user_agent_patterns', 'User-Agent匹配规则')->json();
+            $show->field('model_patterns', '模型匹配规则');
+            $show->field('path_patterns', '路径匹配规则')->as(function ($value) {
+                if (empty($value)) {
+                    return '不限';
+                }
+                $pathPattern = PathPattern::tryFrom($value);
+                if ($pathPattern) {
+                    return $pathPattern->label();
+                }
+
+                return $value;
+            });
             $show->field('key_sources', '键来源配置')->json();
             $show->field('key_combine_strategy', '键组合策略');
             $show->field('ttl_seconds', 'TTL秒数');
@@ -124,9 +134,8 @@ class ChannelAffinityRuleController extends AdminController
                     ->help('规则的唯一名称，用于识别和管理');
 
                 $form->textarea('description', '描述')
-                    ->maxLength(500)
                     ->rows(3)
-                    ->help('规则的详细描述信息');
+                    ->help('规则的详细描述信息，最多500字符');
 
                 $form->number('priority', '优先级')
                     ->default(0)
@@ -141,14 +150,12 @@ class ChannelAffinityRuleController extends AdminController
 
             // 匹配规则
             $form->tab('匹配规则', function (Form $form) {
-                $form->tags('model_patterns', '模型匹配规则')
-                    ->help('匹配的模型名称模式，支持通配符，如：gpt-*, claude-*');
+                $form->text('model_patterns', '模型匹配规则')
+                    ->help('正则表达式，如：/^gpt-.*$/ 匹配所有 gpt 开头的模型');
 
-                $form->tags('path_patterns', '路径匹配规则')
-                    ->help('匹配的请求路径模式，如：/v1/chat/completions, /v1/models');
-
-                $form->tags('user_agent_patterns', 'User-Agent匹配规则')
-                    ->help('匹配的User-Agent模式，支持通配符');
+                $form->select('path_patterns', '路径匹配规则')
+                    ->options(PathPattern::options())
+                    ->help('选择要匹配的请求路径，留空表示不限');
             });
 
             // 键配置
@@ -196,8 +203,13 @@ class ChannelAffinityRuleController extends AdminController
                 $form->display('last_hit_at', '最后命中时间');
             });
 
-            // 保存前验证 JSON 格式
+            // 保存前转换
             $form->saving(function (Form $form) {
+                // 确保 key_combine_strategy 有默认值
+                if (empty($form->input('key_combine_strategy'))) {
+                    $form->model()->key_combine_strategy = 'first';
+                }
+
                 // 验证 key_sources JSON 格式
                 $keySources = $form->input('key_sources');
                 if (! empty($keySources) && is_string($keySources)) {

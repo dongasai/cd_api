@@ -16,6 +16,11 @@ class ChannelAffinityCache extends Model
     use HasFactory;
 
     /**
+     * 关联的表名
+     */
+    protected $table = 'channel_affinity_cache';
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>

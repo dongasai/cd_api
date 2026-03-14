@@ -28,11 +28,19 @@ class ChannelAffinityRule extends Model
         'last_hit_at',
     ];
 
+    protected $attributes = [
+        'key_combine_strategy' => 'first',
+        'ttl_seconds' => 120,
+        'skip_retry_on_failure' => false,
+        'include_group_in_key' => false,
+        'is_enabled' => true,
+        'priority' => 0,
+        'hit_count' => 0,
+    ];
+
     protected function casts(): array
     {
         return [
-            'model_patterns' => 'array',
-            'path_patterns' => 'array',
             'user_agent_patterns' => 'array',
             'key_sources' => 'array',
             'param_override_template' => 'array',

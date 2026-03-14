@@ -45,11 +45,11 @@ class RuleMatcher
 
     protected function matchesRule(Request $request, string $model, ChannelAffinityRule $rule): bool
     {
-        if (! $this->matchModel($model, $rule->model_patterns ?? [])) {
+        if (! $this->matchModel($model, $rule->model_patterns)) {
             return false;
         }
 
-        if (! $this->matchPath($request->path(), $rule->path_patterns ?? [])) {
+        if (! $this->matchPath($request->path(), $rule->path_patterns)) {
             return false;
         }
 
@@ -60,34 +60,22 @@ class RuleMatcher
         return true;
     }
 
-    protected function matchModel(string $model, array $patterns): bool
+    protected function matchModel(string $model, ?string $pattern): bool
     {
-        if (empty($patterns)) {
+        if (empty($pattern)) {
             return true;
         }
 
-        foreach ($patterns as $pattern) {
-            if (preg_match($pattern, $model)) {
-                return true;
-            }
-        }
-
-        return false;
+        return (bool) preg_match($pattern, $model);
     }
 
-    protected function matchPath(string $path, array $patterns): bool
+    protected function matchPath(string $path, ?string $pattern): bool
     {
-        if (empty($patterns)) {
+        if (empty($pattern)) {
             return true;
         }
 
-        foreach ($patterns as $pattern) {
-            if (preg_match($pattern, $path)) {
-                return true;
-            }
-        }
-
-        return false;
+        return $path === $pattern;
     }
 
     protected function matchUserAgent(?string $userAgent, array $patterns): bool

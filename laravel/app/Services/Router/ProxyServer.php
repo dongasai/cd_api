@@ -1297,11 +1297,11 @@ class ProxyServer
     protected function getStatusCode(\Exception $e): int
     {
         if (method_exists($e, 'getStatusCode')) {
-            return $e->getStatusCode();
+            return (int) $e->getStatusCode();
         }
 
         if (method_exists($e, 'getCode') && $e->getCode() > 0) {
-            return $e->getCode();
+            return (int) $e->getCode();
         }
 
         return 500;

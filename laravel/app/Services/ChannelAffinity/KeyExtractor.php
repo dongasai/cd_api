@@ -102,6 +102,28 @@ class KeyExtractor
         return $combined;
     }
 
+    /**
+     * 生成 Key Hash 并返回组合后的原始值
+     *
+     * @param  array  $values  提取的值数组
+     * @param  string  $strategy  组合策略
+     * @return array ['hash' => string, 'combined' => string]
+     */
+    public function generateKeyHashWithHint(array $values, string $strategy): array
+    {
+        $combined = match ($strategy) {
+            'first' => $values[0] ?? '',
+            'concat' => implode('|', $values),
+            'hash' => implode('|', $values),
+            default => $values[0] ?? '',
+        };
+
+        return [
+            'hash' => substr(md5($combined), 0, 16),
+            'combined' => $combined,
+        ];
+    }
+
     public function generateKeyHash(array $values, string $strategy): string
     {
         $combined = match ($strategy) {
@@ -114,18 +136,11 @@ class KeyExtractor
         return substr(md5($combined), 0, 16);
     }
 
+    /**
+     * 返回 Key 明文（用于缓存记录）
+     */
     public function fingerprint(?string $key): string
     {
-        if ($key === null || $key === '') {
-            return '';
-        }
-
-        $length = strlen($key);
-
-        if ($length <= 8) {
-            return str_repeat('*', $length);
-        }
-
-        return substr($key, 0, 4).str_repeat('*', $length - 8).substr($key, -4);
+        return $key ?? '';
     }
 }

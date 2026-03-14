@@ -67,7 +67,7 @@ class ChannelAffinityServiceTest extends TestCase
 
         $rule = ChannelAffinityRule::create([
             'name' => 'test-rule',
-            'model_patterns' => ['/^gpt-.*$/'],
+            'model_patterns' => '/^gpt-.*$/',
             'key_sources' => [['type' => 'api_key']],
             'key_combine_strategy' => 'first',
             'ttl_seconds' => 120,
@@ -114,7 +114,7 @@ class ChannelAffinityServiceTest extends TestCase
 
         ChannelAffinityRule::create([
             'name' => 'test-rule',
-            'model_patterns' => ['/^gpt-.*$/'],
+            'model_patterns' => '/^gpt-.*$/',
             'key_sources' => [['type' => 'api_key']],
             'key_combine_strategy' => 'first',
             'ttl_seconds' => 120,
@@ -156,7 +156,7 @@ class ChannelAffinityServiceTest extends TestCase
 
         $rule = ChannelAffinityRule::create([
             'name' => 'test-rule',
-            'model_patterns' => ['/^gpt-.*$/'],
+            'model_patterns' => '/^gpt-.*$/',
             'key_sources' => [['type' => 'api_key']],
             'key_combine_strategy' => 'first',
             'ttl_seconds' => 120,

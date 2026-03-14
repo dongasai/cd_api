@@ -51,13 +51,15 @@ class ChannelAffinityService
             return $this->lastResult;
         }
 
-        $keyHash = $this->extractKeyHash($request, $rule);
+        $keyHashResult = $this->extractKeyHash($request, $rule);
 
-        if ($keyHash === null) {
+        if ($keyHashResult === null) {
             $this->lastResult = AffinityResult::miss();
 
             return $this->lastResult;
         }
+
+        $keyHash = $keyHashResult['hash'];
 
         $cachedData = $this->cache->get($rule->id, $keyHash);
 
@@ -109,13 +111,14 @@ class ChannelAffinityService
             return;
         }
 
-        $keyHash = $this->extractKeyHash($request, $rule);
+        $keyHashResult = $this->extractKeyHash($request, $rule);
 
-        if ($keyHash === null) {
+        if ($keyHashResult === null) {
             return;
         }
 
-        $keyHint = $this->extractKeyHint($request, $rule);
+        $keyHash = $keyHashResult['hash'];
+        $keyHint = $keyHashResult['hint'];
 
         $cacheData = $this->cache->buildCacheData($channel, $rule->id, $keyHint);
 
@@ -170,7 +173,7 @@ class ChannelAffinityService
         $this->ruleMatcher->clearCache();
     }
 
-    protected function extractKeyHash(Request $request, ChannelAffinityRule $rule): ?string
+    protected function extractKeyHash(Request $request, ChannelAffinityRule $rule): ?array
     {
         $keySources = $rule->key_sources ?? [];
 
@@ -184,7 +187,12 @@ class ChannelAffinityService
             return null;
         }
 
-        return $this->keyExtractor->generateKeyHash($values, $rule->key_combine_strategy);
+        $result = $this->keyExtractor->generateKeyHashWithHint($values, $rule->key_combine_strategy);
+
+        return [
+            'hash' => $result['hash'],
+            'hint' => $result['combined'],
+        ];
     }
 
     protected function extractKeyValues(Request $request, array $keySources): array
@@ -209,30 +217,6 @@ class ChannelAffinityService
         }
 
         return $values;
-    }
-
-    protected function extractKeyHint(Request $request, ChannelAffinityRule $rule): string
-    {
-        $keySources = $rule->key_sources ?? [];
-
-        if (empty($keySources)) {
-            return '';
-        }
-
-        $firstSource = $keySources[0] ?? null;
-        $type = $firstSource['type'] ?? null;
-
-        $rawValue = match ($type) {
-            'header' => $request->header($firstSource['key'] ?? ''),
-            'json_path' => Arr::get($request->all(), $firstSource['path'] ?? ''),
-            'query' => $request->query($firstSource['key'] ?? ''),
-            'api_key' => $request->attributes->get('api_key')?->key,
-            'client_ip' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-            default => null,
-        };
-
-        return $this->keyExtractor->fingerprint($rawValue);
     }
 
     protected function isEnabled(): bool
