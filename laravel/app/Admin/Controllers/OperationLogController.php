@@ -130,9 +130,9 @@ class OperationLogController extends AdminController
             $show->field('description', '操作描述');
             $show->field('reason', '操作原因');
 
-            // 数据变更 - 格式化JSON显示
-            $show->field('before_data', '变更前数据')->json();
-            $show->field('after_data', '变更后数据')->json();
+            // 数据变更 - JSON 查看链接
+            $show->field('before_data', '变更前数据')->json_view_link('查看变更前', 'fa fa-code');
+            $show->field('after_data', '变更后数据')->json_view_link('查看变更后', 'fa fa-code');
 
             // 客户端信息
             $show->field('ip', 'IP地址');

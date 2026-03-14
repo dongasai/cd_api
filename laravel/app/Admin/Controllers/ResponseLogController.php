@@ -112,15 +112,15 @@ class ResponseLogController extends AdminController
             // 基本信息
             $show->field('id', 'ID');
             $show->field('audit_log_id', '审计日志ID');
-            $show->field('request_id', '请求ID')->copyable();
+            $show->field('request_id', '请求ID');
             $show->field('request_log_id', '请求日志ID');
             $show->field('created_at', '创建时间');
 
-            // 响应状态信息
+            // // 响应状态信息
             $show->field('status_code', '状态码');
             $show->field('status_message', '状态消息');
             $show->field('content_type', '内容类型');
-            $show->field('content_length', '内容长度')->display(function ($value) {
+            $show->field('content_length', '内容长度')->as(function ($value) {
                 if ($value === null) {
                     return '-';
                 }
@@ -131,35 +131,19 @@ class ResponseLogController extends AdminController
                     $value /= 1024;
                     $unit++;
                 }
+                // \dd($units);
 
                 return round($value, 2).' '.$units[$unit];
             });
 
-            // 响应类型
+            // // 响应类型
             $show->field('response_type', '响应类型')->using(ResponseLog::getResponseTypes());
 
             // 响应头使用代码高亮显示
-            $show->field('headers', '响应头')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
-
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
+            $show->field('headers', '响应头')->json();
 
             // 响应体使用代码高亮
-            $show->field('body_text', '响应体')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
-                // 尝试格式化 JSON
-                $decoded = json_decode($value, true);
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    return json_encode($decoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-                }
-
-                return $value;
-            })->unescape();
+            $show->field('body_text', '响应体')->json();
 
             // 二进制数据不直接显示
             $show->field('body_binary', '二进制数据')->as(function ($value) {
@@ -176,82 +160,82 @@ class ResponseLogController extends AdminController
             })->unescape();
 
             // 生成块使用代码高亮显示
-            $show->field('generated_chunks', '生成块')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
+            // $show->field('generated_chunks', '生成块')->as(function ($value) {
+            //     if (empty($value)) {
+            //         return '-';
+            //     }
 
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
+            //     return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            // })->unescape();
 
             // 完成原因
-            $show->field('finish_reason', '完成原因');
+            // $show->field('finish_reason', '完成原因');
 
-            // 使用情况使用代码高亮显示
-            $show->field('usage', '使用情况')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
+            // // 使用情况使用代码高亮显示
+            // $show->field('usage', '使用情况')->as(function ($value) {
+            //     if (empty($value)) {
+            //         return '-';
+            //     }
 
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
+            //     return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            // })->unescape();
 
-            // 错误信息
-            $show->field('error_type', '错误类型');
-            $show->field('error_code', '错误代码');
-            $show->field('error_message', '错误消息');
-            $show->field('error_details', '错误详情')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
+            // // 错误信息
+            // $show->field('error_type', '错误类型');
+            // $show->field('error_code', '错误代码');
+            // $show->field('error_message', '错误消息');
+            // $show->field('error_details', '错误详情')->as(function ($value) {
+            //     if (empty($value)) {
+            //         return '-';
+            //     }
 
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
+            //     return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            // })->unescape();
 
-            // 上游信息
-            $show->field('upstream_provider', '上游提供商');
-            $show->field('upstream_model', '上游模型');
-            $show->field('upstream_latency_ms', '上游延迟(ms)')->display(function ($value) {
-                return $value ? number_format($value) : '-';
-            });
+            // // 上游信息
+            // $show->field('upstream_provider', '上游提供商');
+            // $show->field('upstream_model', '上游模型');
+            // $show->field('upstream_latency_ms', '上游延迟(ms)')->display(function ($value) {
+            //     return $value ? number_format($value) : '-';
+            // });
 
-            // 元数据使用代码高亮显示
-            $show->field('metadata', '元数据')->as(function ($value) {
-                if (empty($value)) {
-                    return '-';
-                }
+            // // 元数据使用代码高亮显示
+            // // $show->field('metadata', '元数据')->as(function ($value) {
+            // //     if (empty($value)) {
+            // //         return '-';
+            // //     }
 
-                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            })->unescape();
+            // //     return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            // // })->unescape();
 
-            // 禁用编辑和删除按钮
-            $show->disableEditButton();
-            $show->disableDeleteButton();
+            // // 禁用编辑和删除按钮
+            // $show->disableEditButton();
+            // $show->disableDeleteButton();
 
-            // 分组显示字段
-            $show->divider('基本信息');
-            $show->fields(['id', 'audit_log_id', 'request_id', 'request_log_id', 'created_at']);
+            // // 分组显示字段
+            // $show->divider('基本信息');
+            // $show->fields(['id', 'audit_log_id', 'request_id', 'request_log_id', 'created_at']);
 
-            $show->divider('响应状态');
-            $show->fields(['status_code', 'status_message', 'content_type', 'content_length', 'response_type', 'headers']);
+            // $show->divider('响应状态');
+            // $show->fields(['status_code', 'status_message', 'content_type', 'content_length', 'response_type', 'headers']);
 
-            $show->divider('响应内容');
-            $show->fields(['body_text', 'body_binary']);
+            // $show->divider('响应内容');
+            // $show->fields(['body_text', 'body_binary']);
 
-            $show->divider('生成内容');
-            $show->fields(['generated_text', 'generated_chunks', 'finish_reason']);
+            // $show->divider('生成内容');
+            // $show->fields(['generated_text', 'generated_chunks', 'finish_reason']);
 
-            $show->divider('使用情况');
-            $show->fields(['usage']);
+            // $show->divider('使用情况');
+            // $show->fields(['usage']);
 
-            $show->divider('错误信息');
-            $show->fields(['error_type', 'error_code', 'error_message', 'error_details']);
+            // $show->divider('错误信息');
+            // $show->fields(['error_type', 'error_code', 'error_message', 'error_details']);
 
-            $show->divider('上游信息');
-            $show->fields(['upstream_provider', 'upstream_model', 'upstream_latency_ms']);
+            // $show->divider('上游信息');
+            // $show->fields(['upstream_provider', 'upstream_model', 'upstream_latency_ms']);
 
-            $show->divider('其他');
-            $show->fields(['metadata']);
+            // $show->divider('其他');
+            // $show->fields(['metadata']);
         });
     }
 }

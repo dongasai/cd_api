@@ -377,7 +377,18 @@ class ProxyServer
 
         $auditLog = $this->createAuditLog($httpRequest, $standardRequest, $standardResponse, $latencyMs, $providerResponse);
 
-        $this->createResponseLog($requestLog, $response, $providerResponse, $latencyMs, $auditLog?->id);
+        $this->createResponseLog(
+            $requestLog,
+            $response,
+            $providerResponse,
+            $latencyMs,
+            $auditLog?->id,
+            false,
+            $standardResponse->usage,
+            $standardResponse->finishReason,
+            $standardResponse->content,
+            null // 非流式请求不记录 chunks
+        );
 
         $this->recordUsage($standardRequest, $standardResponse);
 
@@ -492,7 +503,18 @@ class ProxyServer
 
         $auditLog = $this->createAuditLog($httpRequest, $standardRequest, $standardResponse, $latencyMs, null, true);
 
-        $this->createResponseLog($requestLog, ['stream' => true, 'content' => $fullContent], null, $latencyMs, $auditLog?->id, true, $usage, $finishReason);
+        $this->createResponseLog(
+            $requestLog,
+            ['stream' => true, 'content' => $fullContent],
+            null,
+            $latencyMs,
+            $auditLog?->id,
+            true,
+            $usage,
+            $finishReason,
+            $fullContent,
+            ! empty($toolCalls) ? $toolCalls : null
+        );
 
         $this->recordUsage($standardRequest, $standardResponse);
 
@@ -830,6 +852,8 @@ class ProxyServer
      * @param  bool  $isStream  是否流式请求
      * @param  mixed  $usage  Token 使用量
      * @param  string|null  $finishReason  结束原因
+     * @param  string|null  $generatedText  生成的文本内容
+     * @param  array|null  $generatedChunks  生成的分块内容
      * @return ResponseLog 响应日志实例
      */
     protected function createResponseLog(
@@ -840,19 +864,26 @@ class ProxyServer
         ?int $auditLogId = null,
         bool $isStream = false,
         $usage = null,
-        ?string $finishReason = null
+        ?string $finishReason = null,
+        ?string $generatedText = null,
+        ?array $generatedChunks = null
     ): ResponseLog {
+        $statusCode = 200;
+
         return ResponseLog::create([
             'audit_log_id' => $auditLogId ?? $requestLog->audit_log_id,
             'request_id' => $this->requestId,
             'request_log_id' => $requestLog->id,
-            'status_code' => 200,
+            'status_code' => $statusCode,
+            'status_message' => $this->getStatusMessage($statusCode),
             'headers' => ['content-type' => 'application/json'],
             'content_type' => 'application/json',
             'content_length' => strlen(json_encode($response)),
             'body_text' => $this->truncateBody(json_encode($response)),
             'response_type' => $isStream ? 'stream' : 'json',
             'finish_reason' => $finishReason,
+            'generated_text' => $generatedText,
+            'generated_chunks' => $generatedChunks,
             'usage' => $usage ? [
                 'prompt_tokens' => $usage->promptTokens ?? 0,
                 'completion_tokens' => $usage->completionTokens ?? 0,
@@ -864,6 +895,34 @@ class ProxyServer
             'upstream_model' => $providerResponse?->model,
             'upstream_latency_ms' => $latencyMs,
         ]);
+    }
+
+    /**
+     * 获取状态消息
+     *
+     * @param  int  $statusCode  HTTP 状态码
+     * @return string 状态消息
+     */
+    protected function getStatusMessage(int $statusCode): string
+    {
+        return match ($statusCode) {
+            200 => 'OK',
+            201 => 'Created',
+            202 => 'Accepted',
+            204 => 'No Content',
+            400 => 'Bad Request',
+            401 => 'Unauthorized',
+            403 => 'Forbidden',
+            404 => 'Not Found',
+            405 => 'Method Not Allowed',
+            408 => 'Request Timeout',
+            429 => 'Too Many Requests',
+            500 => 'Internal Server Error',
+            502 => 'Bad Gateway',
+            503 => 'Service Unavailable',
+            504 => 'Gateway Timeout',
+            default => 'Unknown',
+        };
     }
 
     /**
