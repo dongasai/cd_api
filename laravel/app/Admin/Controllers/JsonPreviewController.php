@@ -15,7 +15,7 @@ use Illuminate\Support\Str;
 class JsonPreviewController extends Controller
 {
     /**
-     * 预览 JSON 数据
+     * 预览 JSON 数据（完整页面，带侧边栏）
      *
      * @param  string  $table  表名/路由名（如 channel-request-logs）
      * @param  int  $id  主键ID
@@ -77,6 +77,69 @@ class JsonPreviewController extends Controller
                 'jsonString' => $jsonString,
                 'backUrl' => admin_url($table.'/'.$id),
             ]));
+    }
+
+    /**
+     * 预览 JSON 数据（纯内容，无侧边栏）
+     *
+     * 用于 iframe 嵌入场景
+     *
+     * @param  string  $table  表名/路由名（如 channel-request-logs）
+     * @param  int  $id  主键ID
+     * @param  string  $field  字段名
+     */
+    public function embed(string $table, int $id, string $field)
+    {
+        // 将路由名转换为模型名
+        $model = $this->getModelNameFromTable($table);
+
+        // 获取模型类名
+        $modelClass = $this->getModelClass($model);
+
+        if (! $modelClass) {
+            abort(404, "模型 {$model} 不存在");
+        }
+
+        // 查找模型实例
+        $instance = $modelClass::find($id);
+
+        if (! $instance) {
+            abort(404, '记录不存在');
+        }
+
+        // 检查字段是否存在
+        if (! isset($instance->$field) && ! Schema::hasColumn($instance->getTable(), $field)) {
+            abort(404, "字段 {$field} 不存在");
+        }
+
+        // 获取字段值
+        $value = $instance->$field;
+
+        // 如果是字符串，尝试解析为 JSON
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $value = $decoded;
+            }
+        }
+
+        // 格式化 JSON
+        $jsonString = is_array($value) || is_object($value)
+            ? json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            : (string) $value;
+
+        // 获取模型的显示名称
+        $modelTitle = $this->getModelTitle($model);
+
+        return view('admin.json-preview-embed', [
+            'table' => $table,
+            'model' => $model,
+            'modelTitle' => $modelTitle,
+            'id' => $id,
+            'field' => $field,
+            'fieldLabel' => $this->getFieldLabel($field),
+            'jsonString' => $jsonString,
+        ]);
     }
 
     /**

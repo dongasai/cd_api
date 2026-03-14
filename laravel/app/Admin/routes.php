@@ -50,5 +50,6 @@ Route::group([
 
     // JSON 字段预览
     $router->get('json-preview/{table}/{id}/{field}', 'JsonPreviewController@show')->name('json-preview');
+    $router->get('json-preview-embed/{table}/{id}/{field}', 'JsonPreviewController@embed')->name('json-preview-embed');
 
 });

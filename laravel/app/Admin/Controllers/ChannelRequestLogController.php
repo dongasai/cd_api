@@ -151,7 +151,7 @@ class ChannelRequestLogController extends AdminController
             // JSON 字段格式化显示
             $show->field('request_headers', '请求头')->json();
 
-            $show->field('request_body', '请求体')->json_view_link();
+            $show->field('request_body', '请求体')->json_view_iframe();
 
             $show->field('request_size', '请求大小')->display(function ($value) {
                 if ($value === null) {

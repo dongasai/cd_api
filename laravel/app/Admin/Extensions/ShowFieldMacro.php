@@ -61,4 +61,47 @@ class ShowFieldMacro
             });
         };
     }
+
+    /**
+     * JSON 字段 iframe 嵌入显示
+     *
+     * 用于在详情页直接嵌入 iframe 显示 JSON 数据
+     *
+     * @return Field
+     */
+    public function json_view_iframe()
+    {
+        return function ($height = 400) {
+            // $this 是 Field 对象
+            $field = $this;
+
+            return $this->unescape()->as(function ($value) use ($field, $height) {
+                // 如果值为空，显示占位符
+                if (empty($value)) {
+                    return '<span class="text-muted">-</span>';
+                }
+
+                // $this 在闭包中是模型对象
+                $model = $this;
+
+                // 获取字段名
+                $fieldName = $field->getName();
+
+                // 获取表名并转换为路由格式
+                $tableName = $model->getTable();
+                $routeName = str_replace('_', '-', $tableName);
+
+                // 获取记录 ID
+                $id = $model->getKey();
+
+                // 生成 JSON 预览 URL（使用 embed 路由）
+                $url = admin_url("json-preview-embed/{$routeName}/{$id}/{$fieldName}");
+
+                // 返回 iframe
+                return '<iframe src="'.$url.'" '.
+                       'style="width: 100%; height: '.$height.'px; border: 1px solid #dee2e6; border-radius: 4px;" '.
+                       'frameborder="0"></iframe>';
+            });
+        };
+    }
 }
