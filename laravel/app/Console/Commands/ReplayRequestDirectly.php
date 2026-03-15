@@ -379,9 +379,22 @@ class ReplayRequestDirectly extends Command
                     if (isset($parsedEvent['delta']['thinking'])) {
                         $reasoningContent .= $parsedEvent['delta']['thinking'];
                     }
-                    // 提取 usage
+                    // 合并 usage（需要累加，因为可能来自多个事件）
                     if (isset($parsedEvent['usage'])) {
-                        $usage = $parsedEvent['usage'];
+                        if ($usage === null) {
+                            $usage = $parsedEvent['usage'];
+                        } else {
+                            // 合并数据，保留非零值
+                            if (isset($parsedEvent['usage']['input_tokens'])) {
+                                $usage['input_tokens'] = $parsedEvent['usage']['input_tokens'];
+                            }
+                            if (isset($parsedEvent['usage']['output_tokens']) && $parsedEvent['usage']['output_tokens'] > 0) {
+                                $usage['output_tokens'] = $parsedEvent['usage']['output_tokens'];
+                            }
+                            if (isset($parsedEvent['usage']['cache_read_input_tokens'])) {
+                                $usage['cache_read_input_tokens'] = $parsedEvent['usage']['cache_read_input_tokens'];
+                            }
+                        }
                     }
                     // 提取 finish_reason
                     if (isset($parsedEvent['finish_reason'])) {
@@ -508,12 +521,28 @@ class ReplayRequestDirectly extends Command
                 break;
 
             case 'message_delta':
+                // message_delta 可能出现多次，需要合并 usage 数据
+                // 但只保留非零的 output_tokens（避免最后的 delta 事件用 0 覆盖）
                 if (isset($parsed['usage'])) {
-                    $result['usage'] = [
-                        'input_tokens' => $parsed['usage']['input_tokens'] ?? 0,
-                        'output_tokens' => $parsed['usage']['output_tokens'] ?? 0,
-                        'cache_read_input_tokens' => $parsed['usage']['cache_read_input_tokens'] ?? 0,
-                    ];
+                    // 如果 usage 还未初始化，先初始化
+                    if ($result['usage'] === null) {
+                        $result['usage'] = [
+                            'input_tokens' => 0,
+                            'output_tokens' => 0,
+                            'cache_read_input_tokens' => 0,
+                        ];
+                    }
+
+                    // 合并非零的字段
+                    if (isset($parsed['usage']['input_tokens'])) {
+                        $result['usage']['input_tokens'] = $parsed['usage']['input_tokens'];
+                    }
+                    if (isset($parsed['usage']['output_tokens']) && $parsed['usage']['output_tokens'] > 0) {
+                        $result['usage']['output_tokens'] = $parsed['usage']['output_tokens'];
+                    }
+                    if (isset($parsed['usage']['cache_read_input_tokens'])) {
+                        $result['usage']['cache_read_input_tokens'] = $parsed['usage']['cache_read_input_tokens'];
+                    }
                 }
                 if (isset($parsed['delta']['stop_reason'])) {
                     $result['finish_reason'] = $parsed['delta']['stop_reason'];

@@ -2,9 +2,9 @@
 
 namespace App\Services\Provider\Driver;
 
-use App\Services\Provider\DTO\ProviderRequest;
-use App\Services\Provider\DTO\ProviderResponse;
-use App\Services\Provider\DTO\ProviderStreamChunk;
+use App\Services\Shared\DTO\Request;
+use App\Services\Shared\DTO\Response;
+use App\Services\Shared\DTO\StreamChunk;
 
 /**
  * OpenAI 兼容供应商
@@ -43,7 +43,7 @@ class OpenAICompatibleProvider extends AbstractProvider
         return $this->config['base_url'] ?? '';
     }
 
-    public function getEndpoint(ProviderRequest $request): string
+    public function getEndpoint(Request $request): string
     {
         $baseUrl = $this->baseUrl ?? '';
         if (str_ends_with($baseUrl, '/v1')) {
@@ -73,19 +73,19 @@ class OpenAICompatibleProvider extends AbstractProvider
         return $this->mergeForwardedHeaders($headers);
     }
 
-    public function buildRequestBody(ProviderRequest $request): array
+    public function buildRequestBody(Request $request): array
     {
-        return $request->toOpenAIFormat();
+        return $this->toOpenAIFormat($request);
     }
 
-    public function parseResponse(array $response): ProviderResponse
+    public function parseResponse(array $response): Response
     {
-        return ProviderResponse::fromOpenAI($response);
+        return $this->parseOpenAIResponse($response);
     }
 
-    public function parseStreamChunk(string $rawChunk): ?ProviderStreamChunk
+    public function parseStreamChunk(string $rawChunk): ?StreamChunk
     {
-        return ProviderStreamChunk::fromOpenAI($rawChunk);
+        return $this->parseOpenAIStreamChunk($rawChunk);
     }
 
     public function getModels(): array
@@ -100,6 +100,128 @@ class OpenAICompatibleProvider extends AbstractProvider
     public function getProviderName(): string
     {
         return $this->providerName;
+    }
+
+    /**
+     * 将 Request 转换为 OpenAI 格式
+     */
+    protected function toOpenAIFormat(Request $request): array
+    {
+        $result = [
+            'model' => $request->model,
+            'messages' => array_map(fn ($m) => $m->toOpenAI(), $request->messages),
+        ];
+
+        if ($request->maxTokens !== null) {
+            $result['max_tokens'] = $request->maxTokens;
+        }
+        if ($request->temperature !== null) {
+            $result['temperature'] = $request->temperature;
+        }
+        if ($request->topP !== null) {
+            $result['top_p'] = $request->topP;
+        }
+        if ($request->stream) {
+            $result['stream'] = true;
+        }
+        if ($request->tools !== null) {
+            $result['tools'] = $request->tools;
+        }
+        if ($request->toolChoice !== null) {
+            $result['tool_choice'] = $request->toolChoice;
+        }
+        if ($request->user !== null) {
+            $result['user'] = $request->user;
+        }
+
+        return array_merge($result, $request->additionalParams);
+    }
+
+    /**
+     * 解析 OpenAI 响应
+     */
+    protected function parseOpenAIResponse(array $response): Response
+    {
+        $choices = [];
+        foreach ($response['choices'] ?? [] as $choice) {
+            $choices[] = [
+                'index' => $choice['index'] ?? 0,
+                'message' => $choice['message'] ?? [],
+                'finish_reason' => $choice['finish_reason'] ?? null,
+            ];
+        }
+
+        $usage = null;
+        if (isset($response['usage'])) {
+            $usage = \App\Services\Shared\DTO\Usage::fromOpenAI($response['usage']);
+        }
+
+        $finishReason = null;
+        if (isset($response['choices'][0]['finish_reason'])) {
+            $finishReason = \App\Services\Shared\Enums\FinishReason::fromOpenAI($response['choices'][0]['finish_reason']);
+        }
+
+        return new Response(
+            id: $response['id'] ?? '',
+            model: $response['model'] ?? '',
+            choices: $choices,
+            usage: $usage,
+            finishReason: $finishReason,
+            systemFingerprint: $response['system_fingerprint'] ?? null,
+            created: $response['created'] ?? 0,
+        );
+    }
+
+    /**
+     * 解析 OpenAI 流式响应块
+     */
+    protected function parseOpenAIStreamChunk(string $rawChunk): ?\App\Services\Shared\DTO\StreamChunk
+    {
+        // 处理 "data: " 前缀
+        if (str_starts_with($rawChunk, 'data: ')) {
+            $rawChunk = substr($rawChunk, 6);
+        }
+
+        // 跳过空行和 "[DONE]"
+        if (trim($rawChunk) === '' || trim($rawChunk) === '[DONE]') {
+            return null;
+        }
+
+        $data = json_decode($rawChunk, true);
+        if ($data === null) {
+            return null;
+        }
+
+        $id = $data['id'] ?? '';
+        $model = $data['model'] ?? '';
+        $choices = $data['choices'] ?? [];
+        $choice = $choices[0] ?? [];
+
+        $delta = $choice['delta'] ?? [];
+        $finishReason = isset($choice['finish_reason']) && $choice['finish_reason'] !== null
+            ? \App\Services\Shared\Enums\FinishReason::fromOpenAI($choice['finish_reason'])
+            : null;
+
+        $contentDelta = $delta['content'] ?? null;
+        $toolCalls = $delta['tool_calls'] ?? null;
+
+        $usage = null;
+        if (isset($data['usage'])) {
+            $usage = \App\Services\Shared\DTO\Usage::fromOpenAI($data['usage']);
+        }
+
+        return new \App\Services\Shared\DTO\StreamChunk(
+            id: $id,
+            model: $model,
+            contentDelta: $contentDelta,
+            finishReason: $finishReason,
+            index: $choice['index'] ?? 0,
+            usage: $usage,
+            event: '',
+            data: $data,
+            delta: $contentDelta ?? '',
+            toolCalls: $toolCalls,
+        );
     }
 
     public static function createDeepSeek(string $apiKey): self

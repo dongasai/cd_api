@@ -3,8 +3,10 @@
 namespace Tests\Unit\Provider;
 
 use App\Services\Provider\Driver\AnthropicProvider;
-use App\Services\Provider\DTO\ProviderRequest;
-use App\Services\Provider\DTO\ProviderResponse;
+use App\Services\Shared\DTO\Message;
+use App\Services\Shared\DTO\Request;
+use App\Services\Shared\DTO\Response;
+use App\Services\Shared\Enums\MessageRole;
 use PHPUnit\Framework\TestCase;
 
 class AnthropicProviderTest extends TestCase
@@ -34,12 +36,17 @@ class AnthropicProviderTest extends TestCase
 
     public function test_build_request_body(): void
     {
-        $request = new ProviderRequest(
+        $request = new Request(
             model: 'claude-3-5-sonnet-20241022',
-            messages: [['role' => 'user', 'content' => 'Hello']],
+            messages: [
+                new Message(
+                    role: MessageRole::User,
+                    content: 'Hello'
+                ),
+            ],
             temperature: 0.7,
             maxTokens: 1000,
-            systemPrompt: 'You are a helpful assistant.'
+            system: 'You are a helpful assistant.'
         );
 
         $body = $this->provider->buildRequestBody($request);
@@ -73,13 +80,13 @@ class AnthropicProviderTest extends TestCase
 
         $response = $this->provider->parseResponse($rawResponse);
 
-        $this->assertInstanceOf(ProviderResponse::class, $response);
+        $this->assertInstanceOf(Response::class, $response);
         $this->assertEquals('msg_123', $response->id);
         $this->assertEquals('claude-3-5-sonnet-20241022', $response->model);
-        $this->assertEquals('Hello! How can I help you?', $response->content);
-        $this->assertEquals('stop', $response->finishReason);
-        $this->assertEquals(10, $response->usage->promptTokens);
-        $this->assertEquals(20, $response->usage->completionTokens);
+        $this->assertEquals('Hello! How can I help you?', $response->getContent());
+        $this->assertEquals('end_turn', $response->finishReason?->value);
+        $this->assertEquals(10, $response->usage?->inputTokens);
+        $this->assertEquals(20, $response->usage?->outputTokens);
     }
 
     public function test_parse_response_with_tool_use(): void
@@ -100,10 +107,10 @@ class AnthropicProviderTest extends TestCase
 
         $response = $this->provider->parseResponse($rawResponse);
 
-        $this->assertTrue($response->hasToolCalls());
+        $this->assertNotNull($response->toolCalls);
         $this->assertCount(1, $response->toolCalls);
-        $this->assertEquals('toolu_123', $response->toolCalls[0]['id']);
-        $this->assertEquals('tool_calls', $response->finishReason);
+        $this->assertEquals('toolu_123', $response->toolCalls[0]->id);
+        $this->assertEquals('tool_use', $response->finishReason?->value);
     }
 
     public function test_default_base_url(): void
@@ -113,7 +120,10 @@ class AnthropicProviderTest extends TestCase
 
     public function test_get_endpoint(): void
     {
-        $request = new ProviderRequest(model: 'claude-3-5-sonnet-20241022', messages: []);
+        $request = new Request(
+            model: 'claude-3-5-sonnet-20241022',
+            messages: []
+        );
 
         $endpoint = $this->provider->getEndpoint($request);
 

@@ -6,8 +6,10 @@ use App\Models\Channel;
 use App\Services\Provider\Driver\AnthropicProvider;
 use App\Services\Provider\Driver\OpenAICompatibleProvider;
 use App\Services\Provider\Driver\OpenAIProvider;
-use App\Services\Provider\DTO\ProviderRequest;
+use App\Services\Shared\DTO\Message;
+use App\Services\Shared\DTO\Request;
 use App\Services\Provider\Exceptions\ProviderException;
+use App\Services\Shared\Enums\MessageRole;
 use Illuminate\Console\Command;
 
 class TestChannel extends Command
@@ -162,10 +164,13 @@ class TestChannel extends Command
 
             $startTime = microtime(true);
 
-            $request = new ProviderRequest(
+            $request = new Request(
                 model: $model,
                 messages: [
-                    ['role' => 'user', 'content' => 'Hi, please respond with "OK" to confirm you are working.'],
+                    new Message(
+                        role: MessageRole::User,
+                        content: 'Hi, please respond with "OK" to confirm you are working.'
+                    ),
                 ],
                 maxTokens: 10,
                 temperature: 0.1,
@@ -179,13 +184,14 @@ class TestChannel extends Command
                 $this->info('  ✓ 连接成功');
                 $this->info("  延迟: {$latency}ms");
 
-                if ($response->content) {
-                    $preview = mb_substr($response->content, 0, 100);
+                $content = $response->getContent();
+                if ($content) {
+                    $preview = mb_substr($content, 0, 100);
                     $this->info("  响应: {$preview}");
                 }
 
                 if ($response->usage) {
-                    $this->info("  Token使用: 输入 {$response->usage->promptTokens}, 输出 {$response->usage->completionTokens}");
+                    $this->info("  Token使用: 输入 {$response->usage->inputTokens}, 输出 {$response->usage->outputTokens}");
                 }
             } else {
                 $this->info("  ✓ [{$channel->id}] {$channel->name} - {$latency}ms");

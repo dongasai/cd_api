@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Models\ApiKey;
 use App\Models\AuditLog;
 use App\Models\RequestLog;
-use App\Services\Provider\DTO\ProviderRequest;
+use App\Services\Shared\DTO\Request;
 use App\Services\Provider\ProviderManager;
 use App\Services\Router\ChannelRouterService;
 use Illuminate\Console\Command;
@@ -298,13 +298,13 @@ class ReplayRequestChannel extends Command
     /**
      * 构建供应商请求
      */
-    protected function buildProviderRequest(array $body, string $actualModel): ProviderRequest
+    protected function buildProviderRequest(array $body, string $actualModel): Request
     {
-        // 使用 ProviderRequest::fromArray 来构建请求
+        // 使用 Request::fromArray 来构建请求
         // 先更新模型名称
         $body['model'] = $actualModel;
 
-        return ProviderRequest::fromArray($body);
+        return Request::fromArray($body);
     }
 
     protected function displayResponse(mixed $result, bool $isStream, $provider = null): void
@@ -344,43 +344,26 @@ class ReplayRequestChannel extends Command
                     }
                 }
             }
-        } elseif ($result instanceof \App\Services\Provider\DTO\ProviderResponse) {
+        } elseif ($result instanceof \App\Services\Shared\DTO\Response) {
             // 非流式响应
-            $data = $result->toArray();
+            $content = $result->getContent();
 
-            // 成功响应
-            if (isset($data['choices'])) {
-                $content = $data['choices'][0]['message']['content'] ?? '';
-                if ($content) {
-                    $this->displayContent($content);
-                }
-            } elseif (isset($data['content'])) {
-                $content = is_array($data['content'])
-                    ? ($data['content'][0]['text'] ?? '')
-                    : $data['content'];
-                if ($content) {
-                    $this->displayContent($content);
-                }
+            if ($content) {
+                $this->displayContent($content);
             }
 
             // 显示 token 使用情况
-            if (isset($data['usage'])) {
+            if ($result->usage) {
                 $this->newLine();
                 $this->info('Token 使用:');
-                $this->info("  输入：{$data['usage']['prompt_tokens']}");
-                $this->info("  输出：{$data['usage']['completion_tokens']}");
-                $this->info("  总计：{$data['usage']['total_tokens']}");
+                $this->info("  输入：{$result->usage->inputTokens}");
+                $this->info("  输出：{$result->usage->outputTokens}");
+                $this->info("  总计：{$result->usage->totalTokens}");
             }
 
             // 显示结束原因
-            if (isset($data['choices'][0]['finish_reason'])) {
-                $this->info("结束原因：{$data['choices'][0]['finish_reason']}");
-            }
-
-            // 显示错误信息
-            if (isset($data['error'])) {
-                $this->error('请求失败');
-                $this->error('详情：'.json_encode($data['error'], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            if ($result->finishReason) {
+                $this->info("结束原因：{$result->finishReason->value}");
             }
 
             // 显示实际请求信息（非流式响应）

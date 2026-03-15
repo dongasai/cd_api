@@ -258,7 +258,16 @@ class ReplayRequest extends Command
                         // 提取 usage (支持多种格式，需要合并)
                         if (isset($parsed['usage'])) {
                             // message_delta 事件的 usage (通常只有 output_tokens)
-                            $usage = array_merge($usage ?? [], $parsed['usage']);
+                            // 注意：后面的 delta 可能覆盖前面的值，所以只保留非零的 output_tokens
+                            if (isset($parsed['usage']['output_tokens']) && $parsed['usage']['output_tokens'] > 0) {
+                                $usage['output_tokens'] = $parsed['usage']['output_tokens'];
+                            }
+                            // 合并其他字段
+                            foreach (['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens'] as $key) {
+                                if (isset($parsed['usage'][$key])) {
+                                    $usage[$key] = $parsed['usage'][$key];
+                                }
+                            }
                         } elseif (isset($parsed['message']['usage'])) {
                             // message_start 事件的 usage (有 input_tokens 和 output_tokens)
                             $usage = array_merge($usage ?? [], $parsed['message']['usage']);
@@ -398,9 +407,13 @@ class ReplayRequest extends Command
             if (isset($result['usage'])) {
                 $this->newLine();
                 $this->info('Token 使用:');
-                $this->info("  输入：{$result['usage']['prompt_tokens']}");
-                $this->info("  输出：{$result['usage']['completion_tokens']}");
-                $this->info("  总计：{$result['usage']['total_tokens']}");
+                // 兼容 OpenAI 和 Anthropic 两种格式
+                $inputTokens = $result['usage']['prompt_tokens'] ?? $result['usage']['input_tokens'] ?? 0;
+                $outputTokens = $result['usage']['completion_tokens'] ?? $result['usage']['output_tokens'] ?? 0;
+                $totalTokens = $result['usage']['total_tokens'] ?? ($inputTokens + $outputTokens);
+                $this->info("  输入：{$inputTokens}");
+                $this->info("  输出：{$outputTokens}");
+                $this->info("  总计：{$totalTokens}");
             }
 
             // 显示结束原因

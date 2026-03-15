@@ -5,7 +5,8 @@ namespace App\Services;
 use App\Models\Channel;
 use App\Models\ModelTestLog;
 use App\Models\PresetPrompt;
-use App\Services\Provider\DTO\ProviderRequest;
+use App\Services\Shared\DTO\Message;
+use App\Services\Shared\DTO\Request;
 use App\Services\Provider\ProviderManager;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
@@ -74,14 +75,20 @@ class ModelTestService
             // 获取渠道 Provider
             $provider = $this->providerManager->getForChannel($channel, $headers);
 
-            // 构建 ProviderRequest
+            // 构建 Request
             $messages = [];
             if ($systemPrompt) {
-                $messages[] = ['role' => 'system', 'content' => $systemPrompt];
+                $messages[] = new Message(
+                    role: \App\Services\Shared\Enums\MessageRole::System,
+                    content: $systemPrompt
+                );
             }
-            $messages[] = ['role' => 'user', 'content' => $userMessage];
+            $messages[] = new Message(
+                role: \App\Services\Shared\Enums\MessageRole::User,
+                content: $userMessage
+            );
 
-            $providerRequest = new ProviderRequest(
+            $providerRequest = new Request(
                 model: $model,
                 messages: $messages,
                 stream: $isStream
@@ -102,10 +109,10 @@ class ModelTestService
                 $log->assistant_response = $response;
             } else {
                 $providerResponse = $provider->send($providerRequest);
-                $log->assistant_response = $providerResponse->content;
-                $log->prompt_tokens = $providerResponse->promptTokens;
-                $log->completion_tokens = $providerResponse->completionTokens;
-                $log->total_tokens = $providerResponse->totalTokens;
+                $log->assistant_response = $providerResponse->getContent();
+                $log->prompt_tokens = $providerResponse->usage?->inputTokens;
+                $log->completion_tokens = $providerResponse->usage?->outputTokens;
+                $log->total_tokens = $providerResponse->usage?->totalTokens;
             }
 
             // 获取实际模型(如果有模型映射)
@@ -313,14 +320,20 @@ class ModelTestService
             // 获取渠道 Provider
             $provider = $this->providerManager->getForChannel($channel, $headers);
 
-            // 构建 ProviderRequest
+            // 构建 Request
             $messages = [];
             if ($systemPrompt) {
-                $messages[] = ['role' => 'system', 'content' => $systemPrompt];
+                $messages[] = new Message(
+                    role: \App\Services\Shared\Enums\MessageRole::System,
+                    content: $systemPrompt
+                );
             }
-            $messages[] = ['role' => 'user', 'content' => $userMessage];
+            $messages[] = new Message(
+                role: \App\Services\Shared\Enums\MessageRole::User,
+                content: $userMessage
+            );
 
-            $providerRequest = new ProviderRequest(
+            $providerRequest = new Request(
                 model: $model,
                 messages: $messages,
                 stream: true

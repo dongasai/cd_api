@@ -2,12 +2,12 @@
 
 namespace App\Services\Provider\Driver;
 
-use App\Services\Provider\DTO\ActualRequestInfo;
-use App\Services\Provider\DTO\ProviderRequest;
-use App\Services\Provider\DTO\ProviderResponse;
-use App\Services\Provider\DTO\ProviderStreamChunk;
-use App\Services\Provider\DTO\TokenUsage;
 use App\Services\Provider\Exceptions\ProviderException;
+use App\Services\Shared\DTO\ActualRequestInfo;
+use App\Services\Shared\DTO\Request;
+use App\Services\Shared\DTO\Response;
+use App\Services\Shared\DTO\StreamChunk;
+use App\Services\Shared\DTO\Usage;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -138,22 +138,22 @@ abstract class AbstractProvider implements ProviderInterface
     /**
      * 构建请求体
      */
-    abstract public function buildRequestBody(ProviderRequest $request): array;
+    abstract public function buildRequestBody(Request $request): array;
 
     /**
      * 解析响应
      */
-    abstract public function parseResponse(array $response): ProviderResponse;
+    abstract public function parseResponse(array $response): Response;
 
     /**
      * 解析流式响应块
      */
-    abstract public function parseStreamChunk(string $rawChunk): ?ProviderStreamChunk;
+    abstract public function parseStreamChunk(string $rawChunk): ?StreamChunk;
 
     /**
      * 获取 API 端点
      */
-    abstract public function getEndpoint(ProviderRequest $request): string;
+    abstract public function getEndpoint(Request $request): string;
 
     abstract public function getHeaders(): array;
 
@@ -285,7 +285,7 @@ abstract class AbstractProvider implements ProviderInterface
      *
      * 包含重试机制和熔断器保护
      */
-    public function send(ProviderRequest $request): ProviderResponse
+    public function send(Request $request): Response
     {
         $this->checkCircuitBreaker();
 
@@ -332,9 +332,9 @@ abstract class AbstractProvider implements ProviderInterface
     /**
      * 发送流式请求
      *
-     * @return Generator<ProviderStreamChunk>
+     * @return Generator<StreamChunk>
      */
-    public function sendStream(ProviderRequest $request): Generator
+    public function sendStream(Request $request): Generator
     {
         $this->checkCircuitBreaker();
 
@@ -499,7 +499,7 @@ abstract class AbstractProvider implements ProviderInterface
      *
      * @param  string  $rawResponse  原始 JSON 响应
      */
-    protected function parseNonStreamAsChunk(string $rawResponse): ?ProviderStreamChunk
+    protected function parseNonStreamAsChunk(string $rawResponse): ?StreamChunk
     {
         $data = json_decode($rawResponse, true);
         if ($data === null) {
@@ -507,8 +507,8 @@ abstract class AbstractProvider implements ProviderInterface
         }
 
         // 从非流式响应提取信息
-        $id = $data['id'] ?? null;
-        $model = $data['model'] ?? null;
+        $id = $data['id'] ?? '';
+        $model = $data['model'] ?? '';
         $finishReason = null;
         $content = '';
         $usage = null;
@@ -529,25 +529,26 @@ abstract class AbstractProvider implements ProviderInterface
             $content = $data['content'];
         }
 
-        if (isset($choice['finish_reason'])) {
-            $finishReason = $choice['finish_reason'];
-        } elseif (isset($data['finish_reason'])) {
-            $finishReason = $data['finish_reason'];
+        if (isset($choice['finish_reason']) && $choice['finish_reason'] !== null) {
+            $finishReason = \App\Services\Shared\Enums\FinishReason::fromOpenAI($choice['finish_reason']);
+        } elseif (isset($data['finish_reason']) && $data['finish_reason'] !== null) {
+            $finishReason = \App\Services\Shared\Enums\FinishReason::fromOpenAI($data['finish_reason']);
         }
 
         // 提取 usage
         if (isset($data['usage'])) {
-            $usage = TokenUsage::fromOpenAI($data['usage']);
+            $usage = Usage::fromOpenAI($data['usage']);
         }
 
-        return new ProviderStreamChunk(
+        return new StreamChunk(
+            id: $id,
+            model: $model,
+            contentDelta: $content !== '' ? $content : null,
+            finishReason: $finishReason,
+            usage: $usage,
             event: 'done',
             data: $data,
             delta: $content,
-            id: $id,
-            model: $model,
-            finishReason: $finishReason,
-            usage: $usage,
             toolCalls: $toolCalls,
         );
     }
@@ -555,7 +556,7 @@ abstract class AbstractProvider implements ProviderInterface
     /**
      * 执行 HTTP 请求
      */
-    protected function executeRequest(ProviderRequest $request): ProviderResponse
+    protected function executeRequest(Request $request): Response
     {
         // 检查是否开启了 body 透传
         if ($request->rawBodyString !== null) {

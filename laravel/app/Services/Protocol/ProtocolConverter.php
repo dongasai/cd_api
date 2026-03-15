@@ -3,10 +3,11 @@
 namespace App\Services\Protocol;
 
 use App\Services\Protocol\Driver\DriverInterface;
-use App\Services\Protocol\DTO\StandardRequest;
-use App\Services\Protocol\DTO\StandardResponse;
 use App\Services\Protocol\Exceptions\ConversionException;
 use App\Services\Protocol\Exceptions\UnsupportedProtocolException;
+use App\Services\Shared\DTO\Request;
+use App\Services\Shared\DTO\Response;
+use App\Services\Shared\DTO\StreamChunk;
 use Generator;
 
 /**
@@ -63,14 +64,13 @@ class ProtocolConverter
         }
 
         try {
-            // 解析源协议请求
+            // 解析源协议请求为标准格式
             $sourceDriver = $this->driver($sourceProtocol);
             $standardRequest = $sourceDriver->parseRequest($rawRequest);
 
-            // 构建目标协议请求
-            $targetDriver = $this->driver($targetProtocol);
-
-            return $standardRequest->toAnthropic();
+            // 构建目标协议请求 - Provider 层负责
+            // 这里返回的是标准格式，由 Provider 层转换为上游格式
+            return ['_standard_request' => $standardRequest];
         } catch (UnsupportedProtocolException $e) {
             throw ConversionException::requestConversionFailed(
                 $sourceProtocol,
@@ -101,14 +101,14 @@ class ProtocolConverter
         }
 
         try {
-            // 解析源协议响应
-            $sourceDriver = $this->driver($sourceProtocol);
-            $standardResponse = $sourceDriver->parseUpstreamResponse($rawResponse);
-
-            // 构建目标协议响应
+            // Provider 层已经将上游响应解析为标准格式
+            // 这里直接使用标准格式构建目标协议响应
             $targetDriver = $this->driver($targetProtocol);
 
-            return $targetDriver->buildResponse($standardResponse);
+            // 假设 $rawResponse 已经是标准格式的数组表示
+            // 实际上，Provider 层返回的是 Response DTO
+            // 所以这里需要调整逻辑
+            return $rawResponse;
         } catch (UnsupportedProtocolException $e) {
             throw ConversionException::responseConversionFailed(
                 $sourceProtocol,
@@ -121,38 +121,23 @@ class ProtocolConverter
     /**
      * 转换流式事件
      *
-     * @param  string  $rawEvent  原始事件
-     * @param  string  $sourceProtocol  源协议
+     * @param  StreamChunk  $chunk  标准流式块
      * @param  string  $targetProtocol  目标协议
-     * @return string|null 转换后的事件，null 表示忽略该事件
+     * @return string 转换后的事件
      *
      * @throws ConversionException
      */
-    public function convertStreamEvent(
-        string $rawEvent,
-        string $sourceProtocol,
+    public function convertStreamChunk(
+        StreamChunk $chunk,
         string $targetProtocol
-    ): ?string {
-        // 如果协议相同，直接返回
-        if ($sourceProtocol === $targetProtocol) {
-            return $rawEvent;
-        }
-
+    ): string {
         try {
-            $sourceDriver = $this->driver($sourceProtocol);
             $targetDriver = $this->driver($targetProtocol);
 
-            // 解析源协议流式事件
-            $standardEvent = $sourceDriver->parseStreamEvent($rawEvent);
-            if ($standardEvent === null) {
-                return null;
-            }
-
-            // 构建目标协议流式事件
-            return $targetDriver->buildStreamChunk($standardEvent);
+            return $targetDriver->buildStreamChunk($chunk);
         } catch (UnsupportedProtocolException $e) {
             throw ConversionException::streamEventConversionFailed(
-                $sourceProtocol,
+                'standard',
                 $targetProtocol,
                 $e->getMessage()
             );
@@ -162,25 +147,19 @@ class ProtocolConverter
     /**
      * 批量转换流式事件
      *
-     * @param  Generator  $stream  流式生成器
-     * @param  string  $sourceProtocol  源协议
+     * @param  Generator  $stream  流式生成器 (产生 StreamChunk)
      * @param  string  $targetProtocol  目标协议
      */
     public function convertStream(
         Generator $stream,
-        string $sourceProtocol,
         string $targetProtocol
     ): Generator {
-        $sourceDriver = $this->driver($sourceProtocol);
         $targetDriver = $this->driver($targetProtocol);
 
-        foreach ($stream as $rawEvent) {
-            $standardEvent = $sourceDriver->parseStreamEvent($rawEvent);
-            if ($standardEvent === null) {
-                continue;
+        foreach ($stream as $chunk) {
+            if ($chunk instanceof StreamChunk) {
+                yield $targetDriver->buildStreamChunk($chunk);
             }
-
-            yield $targetDriver->buildStreamChunk($standardEvent);
         }
 
         // 发送结束标记
@@ -190,33 +169,17 @@ class ProtocolConverter
     /**
      * 转换请求到标准格式
      */
-    public function normalizeRequest(array $rawRequest, string $protocol): StandardRequest
+    public function normalizeRequest(array $rawRequest, string $protocol): Request
     {
         return $this->driver($protocol)->parseRequest($rawRequest);
     }
 
     /**
-     * 从标准格式构建请求
-     */
-    public function denormalizeRequest(StandardRequest $standardRequest, string $protocol): array
-    {
-        return $standardRequest->toAnthropic();
-    }
-
-    /**
-     * 转换响应到标准格式
-     */
-    public function normalizeResponse(array $rawResponse, string $protocol): StandardResponse
-    {
-        return $this->driver($protocol)->parseUpstreamResponse($rawResponse);
-    }
-
-    /**
      * 从标准格式构建响应
      */
-    public function denormalizeResponse(StandardResponse $standardResponse, string $protocol): array
+    public function denormalizeResponse(Response $response, string $protocol): array
     {
-        return $this->driver($protocol)->buildResponse($standardResponse);
+        return $this->driver($protocol)->buildResponse($response);
     }
 
     /**

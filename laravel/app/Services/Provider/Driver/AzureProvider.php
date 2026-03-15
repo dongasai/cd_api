@@ -2,9 +2,9 @@
 
 namespace App\Services\Provider\Driver;
 
-use App\Services\Provider\DTO\ProviderRequest;
-use App\Services\Provider\DTO\ProviderResponse;
-use App\Services\Provider\DTO\ProviderStreamChunk;
+use App\Services\Shared\DTO\Request;
+use App\Services\Shared\DTO\Response;
+use App\Services\Shared\DTO\StreamChunk;
 
 /**
  * Azure OpenAI 供应商
@@ -58,7 +58,7 @@ class AzureProvider extends AbstractProvider
     /**
      * 获取 API 端点
      */
-    public function getEndpoint(ProviderRequest $request): string
+    public function getEndpoint(Request $request): string
     {
         // 使用部署名称或请求中的模型名称
         $deployment = $this->deploymentName ?: $request->model;
@@ -80,25 +80,25 @@ class AzureProvider extends AbstractProvider
     /**
      * 构建请求体
      */
-    public function buildRequestBody(ProviderRequest $request): array
+    public function buildRequestBody(Request $request): array
     {
-        return $request->toOpenAIFormat();
+        return $this->toOpenAIFormat($request);
     }
 
     /**
      * 解析响应
      */
-    public function parseResponse(array $response): ProviderResponse
+    public function parseResponse(array $response): Response
     {
-        return ProviderResponse::fromOpenAI($response);
+        return $this->parseOpenAIResponse($response);
     }
 
     /**
      * 解析流式响应块
      */
-    public function parseStreamChunk(string $rawChunk): ?ProviderStreamChunk
+    public function parseStreamChunk(string $rawChunk): ?StreamChunk
     {
-        return ProviderStreamChunk::fromOpenAI($rawChunk);
+        return $this->parseOpenAIStreamChunk($rawChunk);
     }
 
     /**
@@ -122,7 +122,7 @@ class AzureProvider extends AbstractProvider
      *
      * Azure 需要特殊的 URL 格式，包含 api-version 参数
      */
-    protected function executeRequest(ProviderRequest $request): ProviderResponse
+    protected function executeRequest(Request $request): Response
     {
         // 检查是否开启了 body 透传
         if ($request->rawBodyString !== null) {
@@ -138,7 +138,7 @@ class AzureProvider extends AbstractProvider
         $url .= '?api-version='.$this->apiVersion;
 
         // 存储实际请求信息
-        $this->lastRequestInfo = new \App\Services\Provider\DTO\ActualRequestInfo(
+        $this->lastRequestInfo = new \App\Services\Shared\DTO\ActualRequestInfo(
             url: $url,
             path: $endpoint,
             headers: $this->getHeaders(),

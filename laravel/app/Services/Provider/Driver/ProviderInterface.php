@@ -2,10 +2,10 @@
 
 namespace App\Services\Provider\Driver;
 
-use App\Services\Provider\DTO\ActualRequestInfo;
-use App\Services\Provider\DTO\ProviderRequest;
-use App\Services\Provider\DTO\ProviderResponse;
-use App\Services\Provider\DTO\ProviderStreamChunk;
+use App\Services\Shared\DTO\ActualRequestInfo;
+use App\Services\Shared\DTO\Request;
+use App\Services\Shared\DTO\Response;
+use App\Services\Shared\DTO\StreamChunk;
 use Generator;
 
 /**
@@ -18,22 +18,22 @@ interface ProviderInterface
     /**
      * 发送同步请求
      *
-     * @param  ProviderRequest  $request  供应商请求对象
-     * @return ProviderResponse 供应商响应对象
+     * @param  Request  $request  统一请求对象
+     * @return Response 统一响应对象
      *
      * @throws \App\Services\Provider\Exceptions\ProviderException
      */
-    public function send(ProviderRequest $request): ProviderResponse;
+    public function send(Request $request): Response;
 
     /**
      * 发送流式请求
      *
-     * @param  ProviderRequest  $request  供应商请求对象
-     * @return Generator<ProviderStreamChunk> 流式响应生成器
+     * @param  Request  $request  统一请求对象
+     * @return Generator<StreamChunk> 流式响应生成器
      *
      * @throws \App\Services\Provider\Exceptions\ProviderException
      */
-    public function sendStream(ProviderRequest $request): Generator;
+    public function sendStream(Request $request): Generator;
 
     /**
      * 获取供应商支持的模型列表

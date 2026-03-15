@@ -3,8 +3,10 @@
 namespace Tests\Unit\Provider;
 
 use App\Services\Provider\Driver\OpenAIProvider;
-use App\Services\Provider\DTO\ProviderRequest;
-use App\Services\Provider\DTO\ProviderResponse;
+use App\Services\Shared\DTO\Message;
+use App\Services\Shared\DTO\Request;
+use App\Services\Shared\DTO\Response;
+use App\Services\Shared\Enums\MessageRole;
 use PHPUnit\Framework\TestCase;
 
 class OpenAIProviderTest extends TestCase
@@ -46,9 +48,14 @@ class OpenAIProviderTest extends TestCase
 
     public function test_build_request_body(): void
     {
-        $request = new ProviderRequest(
+        $request = new Request(
             model: 'gpt-4o',
-            messages: [['role' => 'user', 'content' => 'Hello']],
+            messages: [
+                new Message(
+                    role: MessageRole::User,
+                    content: 'Hello'
+                ),
+            ],
             temperature: 0.7,
             maxTokens: 1000
         );
@@ -87,14 +94,14 @@ class OpenAIProviderTest extends TestCase
 
         $response = $this->provider->parseResponse($rawResponse);
 
-        $this->assertInstanceOf(ProviderResponse::class, $response);
+        $this->assertInstanceOf(Response::class, $response);
         $this->assertEquals('chatcmpl-123', $response->id);
         $this->assertEquals('gpt-4o', $response->model);
-        $this->assertEquals('Hello! How can I help you?', $response->content);
-        $this->assertEquals('stop', $response->finishReason);
-        $this->assertEquals(10, $response->usage->promptTokens);
-        $this->assertEquals(20, $response->usage->completionTokens);
-        $this->assertEquals(30, $response->usage->totalTokens);
+        $this->assertEquals('Hello! How can I help you?', $response->getContent());
+        $this->assertEquals('stop', $response->finishReason?->value);
+        $this->assertEquals(10, $response->usage?->inputTokens);
+        $this->assertEquals(20, $response->usage?->outputTokens);
+        $this->assertEquals(30, $response->usage?->totalTokens);
     }
 
     public function test_parse_response_with_tool_calls(): void
@@ -125,10 +132,10 @@ class OpenAIProviderTest extends TestCase
 
         $response = $this->provider->parseResponse($rawResponse);
 
-        $this->assertTrue($response->hasToolCalls());
+        $this->assertNotNull($response->toolCalls);
         $this->assertCount(1, $response->toolCalls);
-        $this->assertEquals('call_123', $response->toolCalls[0]['id']);
-        $this->assertEquals('tool_calls', $response->finishReason);
+        $this->assertEquals('call_123', $response->toolCalls[0]->id);
+        $this->assertEquals('tool_calls', $response->finishReason?->toOpenAI());
     }
 
     public function test_default_base_url(): void
@@ -148,7 +155,10 @@ class OpenAIProviderTest extends TestCase
 
     public function test_get_endpoint(): void
     {
-        $request = new ProviderRequest(model: 'gpt-4o', messages: []);
+        $request = new Request(
+            model: 'gpt-4o',
+            messages: []
+        );
 
         $endpoint = $this->provider->getEndpoint($request);
 

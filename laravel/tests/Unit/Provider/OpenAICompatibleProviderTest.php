@@ -3,7 +3,9 @@
 namespace Tests\Unit\Provider;
 
 use App\Services\Provider\Driver\OpenAICompatibleProvider;
-use App\Services\Provider\DTO\ProviderRequest;
+use App\Services\Shared\DTO\Message;
+use App\Services\Shared\DTO\Request;
+use App\Services\Shared\Enums\MessageRole;
 use PHPUnit\Framework\TestCase;
 
 class OpenAICompatibleProviderTest extends TestCase
@@ -100,7 +102,10 @@ class OpenAICompatibleProviderTest extends TestCase
             'api_key' => 'test-key',
         ]);
 
-        $request = new ProviderRequest(model: 'custom-model', messages: []);
+        $request = new Request(
+            model: 'custom-model',
+            messages: []
+        );
         $endpoint = $provider->getEndpoint($request);
 
         $this->assertEquals('/v1/chat/completions', $endpoint);
@@ -114,9 +119,14 @@ class OpenAICompatibleProviderTest extends TestCase
             'api_key' => 'test-key',
         ]);
 
-        $request = new ProviderRequest(
+        $request = new Request(
             model: 'custom-model',
-            messages: [['role' => 'user', 'content' => 'Hello']],
+            messages: [
+                new Message(
+                    role: MessageRole::User,
+                    content: 'Hello'
+                ),
+            ],
             temperature: 0.5,
             maxTokens: 500
         );
