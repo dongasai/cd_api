@@ -52,6 +52,9 @@ Route::group([
     $router->get('json-preview/{table}/{id}/{field}', 'JsonPreviewController@show')->name('json-preview');
     $router->get('json-preview-embed/{table}/{id}/{field}', 'JsonPreviewController@embed')->name('json-preview-embed');
 
+    // SSE Chunks 预览
+    $router->get('sse-chunks-embed/{table}/{id}/{field}', 'JsonPreviewController@sseChunksEmbed')->name('sse-chunks-embed');
+
     // 预设提示词管理
     $router->resource('preset-prompts', 'PresetPromptController');
 

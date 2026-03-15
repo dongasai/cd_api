@@ -2,14 +2,15 @@
 
 namespace App\Console\Commands;
 
+use App\Models\ApiKey;
 use App\Models\AuditLog;
 use App\Models\ChannelRequestLog;
 use App\Models\RequestLog;
-use App\Models\ApiKey;
 use App\Services\Router\ProxyServer;
 use Illuminate\Console\Command;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log as FacadesLog;
 
 /**
  * 直接重放请求，不经过 HTTP，直接组装 Request 对象调用 ProxyServer
@@ -32,9 +33,8 @@ class ReplayRequestDirectly extends Command
 
     public function handle(): int
     {
-        // 临时禁用日志，避免只读文件系统错误
-        config(['logging.default' => 'null']);
 
+        FacadesLog::debug('直接重放请求');
         $requestId = $this->option('request-id');
         $auditId = $this->option('audit-id');
         $forceStream = $this->option('stream');
@@ -238,7 +238,7 @@ class ReplayRequestDirectly extends Command
 
         // 设置 headers 到 server 参数中
         foreach ($headers as $name => $value) {
-            $serverKey = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+            $serverKey = 'HTTP_'.strtoupper(str_replace('-', '_', $name));
             $request->server->set($serverKey, $value);
         }
 
@@ -311,6 +311,10 @@ class ReplayRequestDirectly extends Command
         if (is_array($result)) {
             $data = $result;
 
+            // 显示完整响应数据（调试用）
+            $this->info('响应数据：');
+            $this->line(json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+
             // 成功响应
             if (isset($data['choices'])) {
                 $content = $data['choices'][0]['message']['content'] ?? '';
@@ -328,7 +332,7 @@ class ReplayRequestDirectly extends Command
 
             // 显示 token 使用情况
             if (isset($data['usage'])) {
-                \dump($data['usage']);
+                // \dump($data['usage']);
                 $this->newLine();
                 $this->info('Token 使用:');
                 $this->info("  输入：{$data['usage']['input_tokens']}");
@@ -353,17 +357,78 @@ class ReplayRequestDirectly extends Command
             // 尝试收集流式内容
             $this->newLine();
             $this->info('---------- 流式内容预览 ----------');
-            $content = '';
+
+            $rawContent = '';
+            $assembledContent = '';
+            $reasoningContent = '';
+            $usage = null;
+            $finishReason = null;
+
             foreach ($result as $chunk) {
                 echo $chunk;
-                $content .= $chunk;
+                $rawContent .= $chunk;
+
+                // 解析 SSE 事件
+                $parsedEvent = $this->parseSSEChunk($chunk);
+                if ($parsedEvent) {
+                    // 提取文本增量
+                    if (isset($parsedEvent['delta']['text'])) {
+                        $assembledContent .= $parsedEvent['delta']['text'];
+                    }
+                    // 提取思考增量
+                    if (isset($parsedEvent['delta']['thinking'])) {
+                        $reasoningContent .= $parsedEvent['delta']['thinking'];
+                    }
+                    // 提取 usage
+                    if (isset($parsedEvent['usage'])) {
+                        $usage = $parsedEvent['usage'];
+                    }
+                    // 提取 finish_reason
+                    if (isset($parsedEvent['finish_reason'])) {
+                        $finishReason = $parsedEvent['finish_reason'];
+                    }
+                }
+
                 if (ob_get_level() > 0) {
                     ob_flush();
                 }
                 flush();
             }
+
+            $this->newLine(2);
+            $this->info('---------- 组装后的内容 ----------');
+            if ($reasoningContent) {
+                $this->newLine();
+                $this->comment('【思考过程】');
+                $this->displayContent($reasoningContent);
+            }
+            if ($assembledContent) {
+                $this->newLine();
+                $this->comment('【回复内容】');
+                $this->displayContent($assembledContent);
+            }
+            if (! $reasoningContent && ! $assembledContent) {
+                $this->warn('(无文本内容)');
+            }
+
+            // 显示 token 使用情况
+            if ($usage) {
+                $this->newLine();
+                $this->info('Token 使用:');
+                $this->info("  输入：{$usage['input_tokens']}");
+                $this->info("  输出：{$usage['output_tokens']}");
+                if (isset($usage['cache_read_input_tokens'])) {
+                    $this->info("  缓存：{$usage['cache_read_input_tokens']}");
+                }
+            }
+
+            // 显示结束原因
+            if ($finishReason) {
+                $this->info("结束原因：{$finishReason}");
+            }
+
             $this->newLine();
-            $this->info("\n流式内容总长度：".mb_strlen($content).' 字符');
+            $this->info("\n流式内容总长度：".mb_strlen($rawContent).' 字符');
         } else {
             $this->info('响应类型：'.gettype($result));
         }
@@ -387,5 +452,85 @@ class ReplayRequestDirectly extends Command
             ->first();
 
         return $newAuditLog?->id;
+    }
+
+    /**
+     * 解析 SSE 格式的数据块
+     *
+     * @param  string  $chunk  SSE 数据块
+     * @return array|null 解析后的数据
+     */
+    protected function parseSSEChunk(string $chunk): ?array
+    {
+        $lines = explode("\n", trim($chunk));
+        $event = '';
+        $data = '';
+
+        // 解析 SSE 格式
+        foreach ($lines as $line) {
+            if (str_starts_with($line, 'event:')) {
+                $event = trim(substr($line, 6));
+            } elseif (str_starts_with($line, 'data:')) {
+                $data = trim(substr($line, 5));
+            }
+        }
+
+        if (empty($data)) {
+            return null;
+        }
+
+        $parsed = json_decode($data, true);
+        if ($parsed === null) {
+            return null;
+        }
+
+        $result = [
+            'event' => $event,
+            'delta' => [],
+            'usage' => null,
+            'finish_reason' => null,
+        ];
+
+        // 解析 Anthropic 格式的事件
+        switch ($event) {
+            case 'content_block_delta':
+                // 先获取 delta 类型
+                $deltaType = $parsed['delta']['type'] ?? '';
+
+                // 处理文本增量 (text_delta)
+                if ($deltaType === 'text_delta' && isset($parsed['delta']['text'])) {
+                    $result['delta']['text'] = $parsed['delta']['text'];
+                }
+                // 处理思考增量 (thinking_delta)
+                if ($deltaType === 'thinking_delta' && isset($parsed['delta']['thinking'])) {
+                    $result['delta']['thinking'] = $parsed['delta']['thinking'];
+                }
+                break;
+
+            case 'message_delta':
+                if (isset($parsed['usage'])) {
+                    $result['usage'] = [
+                        'input_tokens' => $parsed['usage']['input_tokens'] ?? 0,
+                        'output_tokens' => $parsed['usage']['output_tokens'] ?? 0,
+                        'cache_read_input_tokens' => $parsed['usage']['cache_read_input_tokens'] ?? 0,
+                    ];
+                }
+                if (isset($parsed['delta']['stop_reason'])) {
+                    $result['finish_reason'] = $parsed['delta']['stop_reason'];
+                }
+                break;
+
+            case 'message_start':
+                if (isset($parsed['message']['usage'])) {
+                    $result['usage'] = [
+                        'input_tokens' => $parsed['message']['usage']['input_tokens'] ?? 0,
+                        'output_tokens' => $parsed['message']['usage']['output_tokens'] ?? 0,
+                        'cache_read_input_tokens' => $parsed['message']['usage']['cache_read_input_tokens'] ?? 0,
+                    ];
+                }
+                break;
+        }
+
+        return $result;
     }
 }

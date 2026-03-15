@@ -124,17 +124,42 @@ class AzureProvider extends AbstractProvider
      */
     protected function executeRequest(ProviderRequest $request): ProviderResponse
     {
-        $body = $this->buildRequestBody($request);
+        // 检查是否开启了 body 透传
+        if ($request->rawBodyString !== null) {
+            $body = $request->rawBodyString;
+        } else {
+            $body = $this->buildRequestBody($request);
+        }
+
         $endpoint = $this->getEndpoint($request);
 
         $url = rtrim($this->baseUrl, '/').'/'.ltrim($endpoint, '/');
         // Azure 需要在 URL 中添加 api-version 参数
         $url .= '?api-version='.$this->apiVersion;
 
-        $response = \Illuminate\Support\Facades\Http::withHeaders($this->getHeaders())
-            ->timeout($this->timeout)
-            ->connectTimeout($this->connectTimeout)
-            ->post($url, $body);
+        // 存储实际请求信息
+        $this->lastRequestInfo = new \App\Services\Provider\DTO\ActualRequestInfo(
+            url: $url,
+            path: $endpoint,
+            headers: $this->getHeaders(),
+            body: is_string($body) ? json_decode($body, true) ?? $body : $body,
+        );
+
+        // 根据 body 类型选择发送方式
+        if (is_string($body)) {
+            // Body 透传模式：使用原始字符串作为请求体
+            $response = \Illuminate\Support\Facades\Http::withHeaders($this->getHeaders())
+                ->timeout($this->timeout)
+                ->connectTimeout($this->connectTimeout)
+                ->withBody($body, 'application/json')
+                ->post($url);
+        } else {
+            // 正常模式：使用数组，Laravel会自动转为JSON
+            $response = \Illuminate\Support\Facades\Http::withHeaders($this->getHeaders())
+                ->timeout($this->timeout)
+                ->connectTimeout($this->connectTimeout)
+                ->post($url, $body);
+        }
 
         if (! $response->ok()) {
             throw $this->createErrorFromResponse($response);

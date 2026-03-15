@@ -350,6 +350,12 @@ class ChannelController extends AdminController
                     $form->switch('filter_thinking', '过滤 Thinking')
                         ->help('是否过滤模型响应中的 thinking 内容块')
                         ->default(false);
+                    $form->switch('filter_request_thinking', '过滤 Request-Thinking')
+                        ->help('是否过滤模型请求中的 thinking 内容块')
+                        ->default(false);
+                    $form->switch('body_passthrough', 'Body透传')
+                        ->help('开启后，来自客户端的请求体将不进行任何处理直接发送给上游渠道')
+                        ->default(false);
                 });
                 $form->list('forward_headers', '转发Headers')
                     ->help('需要转发到上游的请求头名称列表，支持通配符如 x-*');

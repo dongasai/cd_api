@@ -159,14 +159,8 @@ class ResponseLogController extends AdminController
                 return $value;
             })->unescape();
 
-            // 生成块使用代码高亮显示
-            // $show->field('generated_chunks', '生成块')->as(function ($value) {
-            //     if (empty($value)) {
-            //         return '-';
-            //     }
-
-            //     return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            // })->unescape();
+            // 生成块使用专用方法展示 SSE 流式响应
+            $show->field('generated_chunks', '生成块')->sseChunks();
 
             // 完成原因
             // $show->field('finish_reason', '完成原因');

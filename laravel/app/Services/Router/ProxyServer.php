@@ -163,8 +163,12 @@ class ProxyServer
         $rawRequest = $request->all();
         $isStream = $rawRequest['stream'] ?? false;
 
+        // 保存原始请求体字符串，用于 body 透传
+        $rawBodyString = $request->getContent();
+
         // 请求开始时就创建审计日志（初始状态）
-        $this->createInitialAuditLog($request, $rawRequest['model'] ?? null);
+        $isStream = $rawRequest['stream'] ?? false;
+        $this->createInitialAuditLog($request, $rawRequest['model'] ?? null, $isStream);
 
         $requestLog = $this->createRequestLog($request, $rawRequest, $protocol);
 
@@ -211,7 +215,7 @@ class ProxyServer
                 $channelProtocol = $this->getChannelProtocol($this->selectedChannel);
 
                 // 构建供应商请求
-                $providerRequest = $this->buildProviderRequest($standardRequest, $this->selectedChannel, $channelProtocol, $actualModel);
+                $providerRequest = $this->buildProviderRequest($standardRequest, $this->selectedChannel, $channelProtocol, $actualModel, $rawBodyString);
 
                 // 更新请求日志，记录渠道信息
                 $this->updateRequestLogForChannel($requestLog, $this->selectedChannel, $actualModel);
@@ -441,15 +445,29 @@ class ProxyServer
         $ttfbMs = null;
         $toolCalls = [];
         $reasoningContent = '';
-        Log::debug('handleStreamRequest  ', []);
+        $generatedChunks = []; // 收集流式分块数据
+        $chunkCount = 0; // 记录处理的 chunk 数量
+
+        Log::debug('handleStreamRequest', [
+            'request_id' => $this->requestId,
+            'channel_id' => $this->selectedChannel?->id,
+            'model' => $standardRequest->model,
+        ]);
 
         try {
             foreach ($stream as $chunk) {
+                $chunkCount++;
+
                 // 记录首个 Token 时间（TTFB）
                 if ($firstTokenTime === null) {
                     $this->firstTokenMs = (int) ((microtime(true) - $this->startTime) * 1000);
                     $firstTokenTime = microtime(true);
                     $ttfbMs = $this->firstTokenMs;
+
+                    Log::debug('Stream first chunk received', [
+                        'request_id' => $this->requestId,
+                        'ttfb_ms' => $ttfbMs,
+                    ]);
                 }
 
                 // 记录首个响应块时间用于 TTFB
@@ -489,53 +507,106 @@ class ProxyServer
 
                 $convertedChunk = $this->convertStreamChunk($standardEvent, $sourceProtocol);
 
+                $generatedChunks[] = $convertedChunk;
+
+                // 记录输出给客户端的内容块
+                Log::debug('Yielding chunk to client', [
+                    'request_id' => $this->requestId,
+                    'chunk_index' => count($generatedChunks),
+                    'event_type' => $standardEvent->type,
+                    'content_delta_length' => strlen($standardEvent->contentDelta ?? ''),
+                    'reasoning_delta_length' => strlen($standardEvent->reasoningDelta ?? ''),
+                    'has_tool_call' => ! empty($standardEvent->toolCall),
+                    'has_finish_reason' => ! empty($standardEvent->finishReason),
+                    'has_usage' => ! empty($standardEvent->usage),
+                    'chunk_length' => strlen($convertedChunk),
+                ]);
+
                 yield $convertedChunk;
             }
+
+            // 记录流式处理完成
+            Log::debug('Stream processing completed', [
+                'request_id' => $this->requestId,
+                'total_chunks' => $chunkCount,
+                'content_length' => strlen($fullContent),
+                'has_usage' => $usage !== null,
+                'finish_reason' => $finishReason,
+            ]);
         } catch (\Exception $e) {
+            // 记录流式处理异常
+            Log::error('Stream processing failed', [
+                'request_id' => $this->requestId,
+                'chunks_processed' => $chunkCount,
+                'error' => $e->getMessage(),
+                'error_class' => get_class($e),
+            ]);
+
             // 流式处理过程中的异常
             $this->handleError($e, $httpRequest, $requestLog);
             throw $e; // 重新抛出异常
+        } finally {
+            // 无论 Generator 是否完成，都执行清理和日志记录
+            // 这确保客户端提前断开连接时，审计日志也会被正确更新
+
+            Log::debug('Stream finally block executed', [
+                'request_id' => $this->requestId,
+                'chunks_processed' => $chunkCount,
+                'content_length' => strlen($fullContent),
+                'finish_reason' => $finishReason,
+                'has_usage' => $usage !== null,
+            ]);
+
+            // 如果 Generator 还没有完成（客户端提前断开），记录警告
+            if ($finishReason === null && $chunkCount > 0) {
+                Log::warning('Stream interrupted by client', [
+                    'request_id' => $this->requestId,
+                    'chunks_processed' => $chunkCount,
+                    'content_length' => strlen($fullContent),
+                ]);
+            }
+
+            // 始终更新审计日志（即使 chunkCount = 0），以避免状态码一直是 102
+            $latencyMs = $this->calculateLatency();
+
+            // 构建完整响应用于日志记录
+            $standardResponse = new StandardResponse(
+                id: uniqid('chatcmpl-'),
+                content: $fullContent,
+                model: $standardRequest->model,
+                usage: $usage,
+                finishReason: $finishReason ?? ($chunkCount > 0 ? 'client_disconnect' : 'no_response'),
+                toolCalls: ! empty($toolCalls) ? $toolCalls : null,
+                reasoningContent: $reasoningContent ?: null,
+            );
+
+            // 更新渠道请求日志，记录响应信息
+            $this->updateChannelRequestLogForResponse($standardResponse, $latencyMs, true, $ttfbMs, $generatedChunks);
+
+            $auditLog = $this->createAuditLog($httpRequest, $standardRequest, $standardResponse, $latencyMs, null, true);
+
+            $this->createResponseLog(
+                $requestLog,
+                ['stream' => true, 'content' => $fullContent],
+                null,
+                $latencyMs,
+                $auditLog?->id,
+                true,
+                $usage,
+                $finishReason ?? ($chunkCount > 0 ? 'client_disconnect' : 'no_response'),
+                $fullContent,
+                $generatedChunks // 传递流式分块数据
+            );
+
+            $this->recordUsage($standardRequest, $standardResponse);
+
+            $this->affinityService->recordAffinity(
+                $httpRequest,
+                $this->selectedChannel,
+                $standardRequest->model,
+                $this->currentGroup
+            );
         }
-
-        $latencyMs = $this->calculateLatency();
-
-        // 构建完整响应用于日志记录
-        $standardResponse = new StandardResponse(
-            id: uniqid('chatcmpl-'),
-            content: $fullContent,
-            model: $standardRequest->model,
-            usage: $usage,
-            finishReason: $finishReason,
-            toolCalls: ! empty($toolCalls) ? $toolCalls : null,
-            reasoningContent: $reasoningContent ?: null,
-        );
-
-        // 更新渠道请求日志，记录响应信息
-        $this->updateChannelRequestLogForResponse($standardResponse, $latencyMs, true, $ttfbMs);
-
-        $auditLog = $this->createAuditLog($httpRequest, $standardRequest, $standardResponse, $latencyMs, null, true);
-
-        $this->createResponseLog(
-            $requestLog,
-            ['stream' => true, 'content' => $fullContent],
-            null,
-            $latencyMs,
-            $auditLog?->id,
-            true,
-            $usage,
-            $finishReason,
-            $fullContent,
-            ! empty($toolCalls) ? $toolCalls : null
-        );
-
-        $this->recordUsage($standardRequest, $standardResponse);
-
-        $this->affinityService->recordAffinity(
-            $httpRequest,
-            $this->selectedChannel,
-            $standardRequest->model,
-            $this->currentGroup
-        );
     }
 
     /**
@@ -562,6 +633,81 @@ class ProxyServer
                 $toolCalls[$index]->name = $newCall->name;
             }
         }
+    }
+
+    /**
+     * 强制清理流式响应（用于处理客户端断开连接的情况）
+     */
+    protected function forceCleanupStream(
+        Request $httpRequest,
+        StandardRequest $standardRequest,
+        RequestLog $requestLog,
+        string $fullContent,
+        ?StandardUsage $usage,
+        ?string $finishReason,
+        int $chunkCount,
+        ?int $ttfbMs,
+        array $generatedChunks,
+        array $toolCalls,
+        string $reasoningContent,
+        bool &$auditLogCreated
+    ): void {
+        // 避免重复执行
+        if ($auditLogCreated) {
+            return;
+        }
+
+        Log::warning('Force cleanup stream due to client disconnect', [
+            'request_id' => $this->requestId,
+            'chunks_processed' => $chunkCount,
+            'content_length' => strlen($fullContent),
+        ]);
+
+        $latencyMs = $this->calculateLatency();
+
+        // 构建完整响应用于日志记录
+        $standardResponse = new StandardResponse(
+            id: uniqid('chatcmpl-'),
+            content: $fullContent,
+            model: $standardRequest->model,
+            usage: $usage,
+            finishReason: $finishReason ?? ($chunkCount > 0 ? 'client_disconnect' : 'no_response'),
+            toolCalls: ! empty($toolCalls) ? $toolCalls : null,
+            reasoningContent: $reasoningContent ?: null,
+        );
+
+        // 更新渠道请求日志
+        $this->updateChannelRequestLogForResponse($standardResponse, $latencyMs, true, $ttfbMs, $generatedChunks);
+
+        // 创建审计日志
+        $auditLog = $this->createAuditLog($httpRequest, $standardRequest, $standardResponse, $latencyMs, null, true);
+
+        // 创建响应日志
+        $this->createResponseLog(
+            $requestLog,
+            ['stream' => true, 'content' => $fullContent],
+            null,
+            $latencyMs,
+            $auditLog?->id,
+            true,
+            $usage,
+            $finishReason ?? ($chunkCount > 0 ? 'client_disconnect' : 'no_response'),
+            $fullContent,
+            $generatedChunks
+        );
+
+        // 记录使用量
+        $this->recordUsage($standardRequest, $standardResponse);
+
+        // 记录渠道亲和性
+        $this->affinityService->recordAffinity(
+            $httpRequest,
+            $this->selectedChannel,
+            $standardRequest->model,
+            $this->currentGroup
+        );
+
+        $auditLogCreated = true;
     }
 
     /**
@@ -655,7 +801,10 @@ class ProxyServer
         $headers = $this->getProviderHeaders($provider);
 
         // 根据渠道协议使用正确的格式保存请求体
-        if ($channelProtocol === 'anthropic') {
+        // 如果开启了 body 透传且有原始请求体字符串，直接使用
+        if ($channel->shouldPassthroughBody() && $providerRequest->rawBodyString !== null) {
+            $requestBody = json_decode($providerRequest->rawBodyString, true) ?? $providerRequest->rawBodyString;
+        } elseif ($channelProtocol === 'anthropic') {
             $requestBody = $providerRequest->toAnthropicFormat();
         } else {
             $requestBody = $providerRequest->toOpenAIFormat();
@@ -714,8 +863,9 @@ class ProxyServer
      * @param  int  $latencyMs  延迟毫秒数
      * @param  bool  $isSuccess  是否成功
      * @param  int|null  $ttfbMs  首字节时间
+     * @param  array  $streamChunks  流式响应分块数据
      */
-    protected function updateChannelRequestLogForResponse(ProviderResponse|StandardResponse $response, int $latencyMs, bool $isSuccess, ?int $ttfbMs = null): void
+    protected function updateChannelRequestLogForResponse(ProviderResponse|StandardResponse $response, int $latencyMs, bool $isSuccess, ?int $ttfbMs = null, array $streamChunks = []): void
     {
         if (! $this->channelRequestLog) {
             return;
@@ -733,13 +883,13 @@ class ProxyServer
             ) : null,
         ];
 
-        $this->channelRequestLog->update([
+        $updateData = [
             'response_status' => 200,
             'response_headers' => ['content-type' => 'application/json'],
             'response_body' => $responseData,
             'response_size' => strlen(json_encode($responseData)),
             'latency_ms' => $latencyMs,
-            'ttfb_ms' => $ttfbMs,
+            'ttfb_ms' => $ttfbMs ?? 0,
             'is_success' => $isSuccess,
             'usage' => $response->usage ? [
                 'prompt_tokens' => $response->usage->promptTokens ?? 0,
@@ -748,7 +898,14 @@ class ProxyServer
                 'cache_read_tokens' => $response->usage->cacheReadTokens ?? 0,
                 'cache_write_tokens' => $response->usage->cacheWriteTokens ?? 0,
             ] : null,
-        ]);
+        ];
+
+        // 如果有流式分块数据，记录到 response_body_chunks
+        if (! empty($streamChunks)) {
+            $updateData['response_body_chunks'] = $streamChunks;
+        }
+
+        $this->channelRequestLog->update($updateData);
     }
 
     /**
@@ -758,8 +915,9 @@ class ProxyServer
      *
      * @param  Request  $httpRequest  HTTP 请求
      * @param  string|null  $model  请求模型
+     * @param  bool  $isStream  是否流式请求
      */
-    protected function createInitialAuditLog(Request $httpRequest, ?string $model): void
+    protected function createInitialAuditLog(Request $httpRequest, ?string $model, bool $isStream = false): void
     {
         $user = $httpRequest->user();
         $apiKey = $httpRequest->attributes->get('api_key');
@@ -783,7 +941,7 @@ class ProxyServer
             'cost' => 0,
             'quota' => 0,
             'billing_source' => AuditLog::BILLING_SOURCE_QUOTA,
-            'is_stream' => false,
+            'is_stream' => $isStream,
             'client_ip' => $httpRequest->ip(),
             'user_agent' => $httpRequest->userAgent(),
             'created_at' => now(),
@@ -1009,14 +1167,28 @@ class ProxyServer
      * @param  Channel  $channel  渠道实例
      * @param  string  $targetProtocol  目标协议
      * @param  string  $actualModel  实际模型名称
+     * @param  string|null  $rawBodyString  原始请求体字符串（用于透传）
      * @return ProviderRequest 供应商请求实例
      */
-    protected function buildProviderRequest(StandardRequest $standardRequest, Channel $channel, string $targetProtocol, string $actualModel): ProviderRequest
+    protected function buildProviderRequest(StandardRequest $standardRequest, Channel $channel, string $targetProtocol, string $actualModel, ?string $rawBodyString = null): ProviderRequest
     {
+        // 检查是否开启了 body 透传
+        if ($channel->shouldPassthroughBody() && $rawBodyString !== null) {
+            // 直接使用原始请求体字符串，完全不做任何处理
+            $providerRequest = ProviderRequest::fromArray([]);
+            $providerRequest->rawBodyString = $rawBodyString;
+            // 传递客户端请求的 query_string
+            $providerRequest->queryString = request()->getQueryString();
+
+            return $providerRequest;
+        }
+
         if ($targetProtocol === 'anthropic') {
-            // 获取渠道的 filter_thinking 配置，默认过滤 thinking 块
+            // 获取渠道的 filter_thinking 配置，用于响应过滤
             $filterThinking = $channel->shouldFilterThinking();
-            $requestData = $standardRequest->toAnthropic(true, $filterThinking);
+            // 获取渠道的 filter_request_thinking 配置，用于请求过滤
+            $filterRequestThinking = $channel->shouldFilterRequestThinking();
+            $requestData = $standardRequest->toAnthropic(true, $filterThinking, $filterRequestThinking);
         } else {
             $requestData = $standardRequest->toOpenAI();
         }
@@ -1170,13 +1342,45 @@ class ProxyServer
             }
 
             // 确定事件类型
+            // 优先检查 chunk->event 字段 (Anthropic 事件类型)
             $eventType = 'delta';
-            if ($chunk->finishReason) {
-                $eventType = 'finish';
-            } elseif ($toolCall) {
-                $eventType = 'tool_use';
+            $shouldPassthrough = false; // 是否需要透传原始数据
+
+            if (! empty($chunk->event)) {
+                // 映射 Anthropic 事件类型到标准类型
+                $eventType = match ($chunk->event) {
+                    'message_start' => \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_START,
+                    'ping' => \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_PING,
+                    'content_block_start' => \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_CONTENT_BLOCK_START,
+                    'content_block_delta' => $chunk->reasoningDelta
+                        ? \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_REASONING_DELTA
+                        : \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_CONTENT_DELTA,
+                    'message_delta' => \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_MESSAGE_DELTA,
+                    'message_stop' => \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_MESSAGE_STOP,
+                    'error' => \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_ERROR,
+                    'content_block_stop' => \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_CONTENT_BLOCK_STOP,
+                    default => \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_CONTENT_DELTA,
+                };
+
+                // 这些事件需要透传原始数据
+                $shouldPassthrough = in_array($chunk->event, [
+                    'ping',
+                    'message_start',
+                    'content_block_start',
+                    'message_delta',
+                    'message_stop',
+                    'content_block_stop',
+                ]);
+            } elseif ($chunk->finishReason) {
+                $eventType = \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_FINISH;
+            } elseif ($toolCall && ! empty($toolCall->id)) {
+                // 工具调用开始（有 id 和 name）
+                $eventType = \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_TOOL_USE;
+            } elseif ($toolCall && ! empty($toolCall->arguments)) {
+                // 工具调用参数增量（有 arguments）
+                $eventType = \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_TOOL_USE;
             } elseif ($chunk->reasoningDelta) {
-                $eventType = 'reasoning_delta';
+                $eventType = \App\Services\Protocol\DTO\StandardStreamEvent::TYPE_REASONING_DELTA;
             }
 
             return new \App\Services\Protocol\DTO\StandardStreamEvent(
@@ -1192,6 +1396,9 @@ class ProxyServer
                     completionTokens: $chunk->usage->completionTokens,
                     totalTokens: $chunk->usage->totalTokens,
                 ) : null,
+                rawEvent: $shouldPassthrough
+                    ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE)
+                    : null,
             );
         }
 

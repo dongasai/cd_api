@@ -166,26 +166,31 @@ class StandardMessage
      * 转换为 Anthropic 格式
      *
      * @param  bool  $includeCacheControl  是否包含 cache_control 字段
-     * @param  bool  $filterThinking  是否过滤 thinking 内容块
+     * @param  bool  $filterThinking  是否过滤响应中的 thinking 内容块
+     * @param  bool  $filterRequestThinking  是否过滤请求中的 thinking 内容块
      */
-    public function toAnthropic(bool $includeCacheControl = true, bool $filterThinking = true): array
+    public function toAnthropic(bool $includeCacheControl = true, bool $filterThinking = true, bool $filterRequestThinking = false): array
     {
         // tool 角色需要转换为 user 角色的 tool_result content block
         if ($this->role === 'tool') {
-            $contentBlock = [
-                'tool_use_id' => $this->toolCallId,
-                'type' => 'tool_result',
-                'content' => $this->content,
-            ];
-
-            // 如果有 contentBlocks，从中提取 cache_control 字段
-            if ($includeCacheControl && $this->contentBlocks !== null) {
+            // 从 contentBlocks 中提取完整信息
+            if ($this->contentBlocks !== null) {
                 foreach ($this->contentBlocks as $block) {
-                    if ($block->type === 'tool_result' && $block->cacheControl !== null) {
-                        $contentBlock['cache_control'] = $block->cacheControl;
+                    if ($block->type === 'tool_result') {
+                        // 使用 ContentBlock 的 toAnthropic 方法，保证字段顺序和 is_error 正确输出
+                        $contentBlock = $block->toAnthropic($includeCacheControl);
                         break;
                     }
                 }
+            }
+
+            // 如果没有找到 contentBlock，手动构建
+            if (! isset($contentBlock)) {
+                $contentBlock = [
+                    'type' => 'tool_result',
+                    'tool_use_id' => $this->toolCallId,
+                    'content' => $this->content,
+                ];
             }
 
             return [
@@ -200,8 +205,9 @@ class StandardMessage
         if ($this->contentBlocks !== null) {
             $filteredBlocks = $this->contentBlocks;
 
-            // 根据配置过滤 thinking 内容块
-            if ($filterThinking) {
+            // filterRequestThinking: 过滤转发请求中的所有 thinking 块（无论哪个角色）
+            // filterThinking: 仅在过滤响应时使用（由上层响应处理逻辑控制）
+            if ($filterRequestThinking) {
                 $filteredBlocks = array_filter(
                     $filteredBlocks,
                     fn ($block) => $block->type !== 'thinking'

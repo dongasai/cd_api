@@ -24,6 +24,8 @@ class ProviderRequest
         public ?string $user = null,
         public ?array $rawRequest = null,
         public ?string $queryString = null,
+        // Body 透传：原始请求体字符串
+        public ?string $rawBodyString = null,
     ) {}
 
     /**

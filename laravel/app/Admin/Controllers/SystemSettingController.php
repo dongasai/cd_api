@@ -2,6 +2,7 @@
 
 namespace App\Admin\Controllers;
 
+use App\Admin\Actions\RefreshSettingCache;
 use App\Enums\SettingGroup;
 use App\Models\SystemSetting;
 use Dcat\Admin\Form;
@@ -87,6 +88,11 @@ class SystemSettingController extends AdminController
 
             // 快捷搜索
             $grid->quickSearch(['id', 'key', 'label', 'description']);
+
+            // 头部工具按钮
+            $grid->tools(function (Grid\Tools $tools) {
+                $tools->append(new RefreshSettingCache);
+            });
 
             // 启用导出
             $grid->export();

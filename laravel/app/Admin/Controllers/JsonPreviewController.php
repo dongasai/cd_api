@@ -147,6 +147,111 @@ class JsonPreviewController extends Controller
     }
 
     /**
+     * SSE Chunks 预览（纯内容，无侧边栏）
+     *
+     * 专用于 iframe 嵌入展示 generated_chunks 字段
+     *
+     * @param  string  $table  表名/路由名（如 response-logs）
+     * @param  int  $id  主键ID
+     * @param  string  $field  字段名
+     */
+    public function sseChunksEmbed(string $table, int $id, string $field)
+    {
+        // 将路由名转换为模型名
+        $model = $this->getModelNameFromTable($table);
+
+        // 获取模型类名
+        $modelClass = $this->getModelClass($model);
+
+        if (! $modelClass) {
+            abort(404, "模型 {$model} 不存在");
+        }
+
+        // 查找模型实例
+        $instance = $modelClass::find($id);
+
+        if (! $instance) {
+            abort(404, '记录不存在');
+        }
+
+        // 检查字段是否存在
+        if (! isset($instance->$field) && ! Schema::hasColumn($instance->getTable(), $field)) {
+            abort(404, "字段 {$field} 不存在");
+        }
+
+        // 获取字段值
+        $chunks = $instance->$field;
+
+        // 如果是字符串，尝试解析为 JSON
+        if (is_string($chunks)) {
+            $decoded = json_decode($chunks, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $chunks = $decoded;
+            }
+        }
+
+        // 如果不是数组或为空，显示错误
+        if (! is_array($chunks) || empty($chunks)) {
+            return view('admin.sse-chunks-embed', [
+                'totalChunks' => 0,
+                'eventTypes' => [],
+                'chunks' => [],
+                'fieldLabel' => $this->getFieldLabel($field),
+            ]);
+        }
+
+        // 解析 SSE 事件
+        $parseSSEEvent = function ($chunk) {
+            if (empty($chunk)) {
+                return null;
+            }
+
+            $event = [];
+
+            // 匹配 event: xxx
+            if (preg_match('/event:\s*(.+)/', $chunk, $matches)) {
+                $event['event'] = trim($matches[1]);
+            }
+
+            // 匹配 data: {...}
+            if (preg_match('/data:\s*(.+)/s', $chunk, $matches)) {
+                $dataStr = trim($matches[1]);
+                // 尝试解析 JSON
+                $jsonData = json_decode($dataStr, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $event['data'] = $jsonData;
+                } else {
+                    $event['data'] = $dataStr;
+                }
+            }
+
+            return ! empty($event) ? $event : null;
+        };
+
+        // 解析事件类型统计
+        $eventTypes = [];
+        $parsedChunks = [];
+        foreach ($chunks as $chunk) {
+            $event = $parseSSEEvent($chunk);
+            if ($event && isset($event['event'])) {
+                $eventType = $event['event'];
+                $eventTypes[$eventType] = ($eventTypes[$eventType] ?? 0) + 1;
+            }
+            $parsedChunks[] = [
+                'raw' => $chunk,
+                'parsed' => $event,
+            ];
+        }
+
+        return view('admin.sse-chunks-embed', [
+            'totalChunks' => count($chunks),
+            'eventTypes' => $eventTypes,
+            'chunks' => $parsedChunks,
+            'fieldLabel' => $this->getFieldLabel($field),
+        ]);
+    }
+
+    /**
      * 将路由名转换为模型名
      */
     protected function getModelNameFromTable(string $table): string

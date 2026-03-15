@@ -9,6 +9,7 @@ use Generator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\StreamedResponse;
+use Illuminate\Support\Facades\Log;
 
 class ProxyController extends Controller
 {
@@ -99,12 +100,29 @@ class ProxyController extends Controller
         }
 
         return response()->stream(function () use ($generator) {
-            foreach ($generator as $chunk) {
-                echo $chunk;
-                if (ob_get_level() > 0) {
-                    ob_flush();
+            try {
+                foreach ($generator as $chunk) {
+                    Log::debug('streamResponsetoClient '.$chunk);
+                    echo $chunk;
+                    if (ob_get_level() > 0) {
+                        ob_flush();
+                    }
+                    flush();
                 }
-                flush();
+            } finally {
+                // 确保 Generator 被关闭，触发 ProxyServer 中的 finally 块
+                // 这样即使客户端断开连接，审计日志也会被正确更新
+                if ($generator instanceof Generator) {
+                    // 如果 Generator 还没有完成，强制关闭它
+                    if ($generator->valid()) {
+                        try {
+                            // 尝试获取 Generator 的返回值（这会触发 finally 块）
+                            $generator->getReturn();
+                        } catch (\Exception $e) {
+                            // 忽略异常，重点是触发 finally 块
+                        }
+                    }
+                }
             }
         }, 200, $headers);
     }

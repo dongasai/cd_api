@@ -431,133 +431,173 @@ class AnalyzeRequestDiff extends Command
 
     /**
      * 比较内容块
+     * 智能匹配：跳过被过滤的内容块类型，建立正确的对应关系
      */
     private function compareContentBlocks(int $msgIndex, string $role, array $reqContent, array $chanContent, int $diffLimit): void
     {
         $reqCount = count($reqContent);
         $chanCount = count($chanContent);
 
-        if ($reqCount !== $chanCount && $this->diffCount < $diffLimit) {
+        // 建立内容块映射关系（跳过被过滤的类型）
+        $mapping = $this->buildContentBlockMapping($reqContent, $chanContent);
+
+        // 检查过滤后的数量是否匹配
+        $expectedChanCount = count($mapping);
+        if ($chanCount !== $expectedChanCount && $this->diffCount < $diffLimit) {
+            $filteredCount = $reqCount - $expectedChanCount;
             $this->printDiff(
                 "消息[{$msgIndex}]({$role}) 内容块数量",
                 "{$reqCount} 个",
-                "{$chanCount} 个",
+                "{$chanCount} 个 (过滤了 {$filteredCount} 个内容块后应为 {$expectedChanCount} 个)",
                 $diffLimit
             );
         }
 
-        $maxCount = max($reqCount, $chanCount);
+        // 按映射关系比较
+        foreach ($mapping as $reqIndex => $chanIndex) {
+            if ($this->diffCount >= $diffLimit) {
+                break;
+            }
 
-        for ($i = 0; $i < $maxCount && $this->diffCount < $diffLimit; $i++) {
-            $reqBlock = $reqContent[$i] ?? null;
-            $chanBlock = $chanContent[$i] ?? null;
+            $reqBlock = $reqContent[$reqIndex];
+            $chanBlock = $chanContent[$chanIndex];
 
-            if (! $reqBlock) {
-                $chanType = $chanBlock['type'] ?? 'unknown';
+            // 比较这两个内容块
+            $this->compareTwoContentBlocks($msgIndex, $reqIndex, $chanIndex, $reqBlock, $chanBlock, $diffLimit);
+        }
+
+        // 检查 Channel 中有但未被映射的内容块（可能是不应该存在的）
+        $mappedChanIndices = array_values($mapping);
+        for ($i = 0; $i < $chanCount; $i++) {
+            if (! in_array($i, $mappedChanIndices) && $this->diffCount < $diffLimit) {
+                $chanType = $chanContent[$i]['type'] ?? 'unknown';
                 $this->printDiff(
                     "消息[{$msgIndex}].content[{$i}]",
                     '不存在',
-                    "类型: {$chanType}",
+                    "类型: {$chanType} (未被映射)",
                     $diffLimit
                 );
-
-                continue;
             }
+        }
+    }
 
-            if (! $chanBlock) {
-                $reqType = $reqBlock['type'] ?? 'unknown';
-                $this->printDiff(
-                    "消息[{$msgIndex}].content[{$i}]",
-                    "类型: {$reqType}",
-                    '不存在',
-                    $diffLimit
-                );
+    /**
+     * 建立内容块映射关系
+     * 返回: [request索引 => channel索引]
+     */
+    private function buildContentBlockMapping(array $reqContent, array $chanContent): array
+    {
+        $mapping = [];
+        $chanIndex = 0;
+        $chanCount = count($chanContent);
 
-                continue;
-            }
+        // 被过滤的内容块类型（这些类型在 channel 中可能不存在）
+        $filteredTypes = ['thinking'];
 
-            // 比较类型
+        foreach ($reqContent as $reqIndex => $reqBlock) {
             $reqType = $reqBlock['type'] ?? 'unknown';
-            $chanType = $chanBlock['type'] ?? 'unknown';
 
-            if ($reqType !== $chanType && $this->diffCount < $diffLimit) {
-                $this->printDiff(
-                    "消息[{$msgIndex}].content[{$i}].type",
-                    $reqType,
-                    $chanType,
-                    $diffLimit
-                );
+            // 如果是被过滤的类型，跳过
+            if (in_array($reqType, $filteredTypes)) {
+                continue;
             }
 
-            // 比较键顺序
-            $reqBlockKeys = array_keys($reqBlock);
-            $chanBlockKeys = array_keys($chanBlock);
+            // 找到 channel 中对应的内容块
+            if ($chanIndex < $chanCount) {
+                $mapping[$reqIndex] = $chanIndex;
+                $chanIndex++;
+            }
+        }
 
-            if ($reqBlockKeys !== $chanBlockKeys && $this->diffCount < $diffLimit) {
-                $this->printDiff(
-                    "消息[{$msgIndex}].content[{$i}] 字段顺序",
-                    implode(' → ', $reqBlockKeys),
-                    implode(' → ', $chanBlockKeys),
-                    $diffLimit
-                );
+        return $mapping;
+    }
+
+    /**
+     * 比较两个内容块
+     */
+    private function compareTwoContentBlocks(int $msgIndex, int $reqIndex, int $chanIndex, array $reqBlock, array $chanBlock, int $diffLimit): void
+    {
+        // 比较类型
+        $reqType = $reqBlock['type'] ?? 'unknown';
+        $chanType = $chanBlock['type'] ?? 'unknown';
+
+        if ($reqType !== $chanType && $this->diffCount < $diffLimit) {
+            $this->printDiff(
+                "消息[{$msgIndex}].content[{$reqIndex}→{$chanIndex}].type",
+                $reqType,
+                $chanType,
+                $diffLimit
+            );
+        }
+
+        // 比较键顺序
+        $reqBlockKeys = array_keys($reqBlock);
+        $chanBlockKeys = array_keys($chanBlock);
+
+        if ($reqBlockKeys !== $chanBlockKeys && $this->diffCount < $diffLimit) {
+            $this->printDiff(
+                "消息[{$msgIndex}].content[{$reqIndex}→{$chanIndex}] 字段顺序",
+                implode(' → ', $reqBlockKeys),
+                implode(' → ', $chanBlockKeys),
+                $diffLimit
+            );
+        }
+
+        // 比较其他字段（按 request 的顺序遍历）
+        foreach ($reqBlock as $key => $value) {
+            if ($key === 'type') {
+                continue;
             }
 
-            // 比较其他字段（按 request 的顺序遍历）
-            foreach ($reqBlock as $key => $value) {
-                if ($key === 'type') {
-                    continue;
-                }
-
-                if ($this->diffCount >= $diffLimit) {
-                    break 2;
-                }
-
-                // 检查 channel 中是否存在该字段
-                if (! array_key_exists($key, $chanBlock)) {
-                    $this->printDiff(
-                        "消息[{$msgIndex}].content[{$i}].{$key}",
-                        $this->truncate(json_encode($value, JSON_UNESCAPED_UNICODE)),
-                        '不存在',
-                        $diffLimit
-                    );
-
-                    continue;
-                }
-
-                $chanValue = $chanBlock[$key];
-
-                if ($value !== $chanValue) {
-                    $isLargeText = is_string($value) && strlen($value) > 100;
-                    $isLargeChanText = is_string($chanValue) && strlen($chanValue) > 100;
-
-                    $this->printDiff(
-                        "消息[{$msgIndex}].content[{$i}].{$key}",
-                        ($isLargeText ? '[大型文本，见下方 diff]' : $this->truncate(json_encode($value, JSON_UNESCAPED_UNICODE))),
-                        ($isLargeChanText ? '[大型文本，见下方 diff]' : $this->truncate(json_encode($chanValue, JSON_UNESCAPED_UNICODE))),
-                        $diffLimit,
-                        is_string($value) ? $value : json_encode($value, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
-                        is_string($chanValue) ? $chanValue : json_encode($chanValue, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
-                    );
-                }
+            if ($this->diffCount >= $diffLimit) {
+                break;
             }
 
-            // 检查 channel 有但 request 没有的字段
-            foreach ($chanBlock as $key => $value) {
-                if ($key === 'type' || array_key_exists($key, $reqBlock)) {
-                    continue;
-                }
-
-                if ($this->diffCount >= $diffLimit) {
-                    break 2;
-                }
-
+            // 检查 channel 中是否存在该字段
+            if (! array_key_exists($key, $chanBlock)) {
                 $this->printDiff(
-                    "消息[{$msgIndex}].content[{$i}].{$key}",
-                    '不存在',
+                    "消息[{$msgIndex}].content[{$reqIndex}→{$chanIndex}].{$key}",
                     $this->truncate(json_encode($value, JSON_UNESCAPED_UNICODE)),
+                    '不存在',
                     $diffLimit
                 );
+
+                continue;
             }
+
+            $chanValue = $chanBlock[$key];
+
+            if ($value !== $chanValue) {
+                $isLargeText = is_string($value) && strlen($value) > 100;
+                $isLargeChanText = is_string($chanValue) && strlen($chanValue) > 100;
+
+                $this->printDiff(
+                    "消息[{$msgIndex}].content[{$reqIndex}→{$chanIndex}].{$key}",
+                    ($isLargeText ? '[大型文本，见下方 diff]' : $this->truncate(json_encode($value, JSON_UNESCAPED_UNICODE))),
+                    ($isLargeChanText ? '[大型文本，见下方 diff]' : $this->truncate(json_encode($chanValue, JSON_UNESCAPED_UNICODE))),
+                    $diffLimit,
+                    is_string($value) ? $value : json_encode($value, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
+                    is_string($chanValue) ? $chanValue : json_encode($chanValue, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)
+                );
+            }
+        }
+
+        // 检查 channel 有但 request 没有的字段
+        foreach ($chanBlock as $key => $value) {
+            if ($key === 'type' || array_key_exists($key, $reqBlock)) {
+                continue;
+            }
+
+            if ($this->diffCount >= $diffLimit) {
+                break;
+            }
+
+            $this->printDiff(
+                "消息[{$msgIndex}].content[{$reqIndex}→{$chanIndex}].{$key}",
+                '不存在',
+                $this->truncate(json_encode($value, JSON_UNESCAPED_UNICODE)),
+                $diffLimit
+            );
         }
     }
 

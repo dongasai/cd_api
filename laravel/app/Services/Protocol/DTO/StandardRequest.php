@@ -204,14 +204,15 @@ class StandardRequest
      * 转换为 Anthropic 格式
      *
      * @param  bool  $preserveCacheControl  是否保留 cache_control 字段（用于 Anthropic to Anthropic 转发）
-     * @param  bool  $filterThinking  是否过滤 thinking 内容块
+     * @param  bool  $filterThinking  是否过滤响应中的 thinking 内容块
+     * @param  bool  $filterRequestThinking  是否过滤请求中的 thinking 内容块
      */
-    public function toAnthropic(bool $preserveCacheControl = true, bool $filterThinking = true): array
+    public function toAnthropic(bool $preserveCacheControl = true, bool $filterThinking = true, bool $filterRequestThinking = false): array
     {
         $request = [
             'model' => $this->model,
             'max_tokens' => $this->maxTokens ?? 4096,
-            'messages' => $this->buildAnthropicMessages($preserveCacheControl, $filterThinking),
+            'messages' => $this->buildAnthropicMessages($preserveCacheControl, $filterThinking, $filterRequestThinking),
         ];
 
         // 系统提示
@@ -563,13 +564,14 @@ class StandardRequest
      * 构建 Anthropic 消息数组
      *
      * @param  bool  $preserveCacheControl  是否保留 cache_control 字段
-     * @param  bool  $filterThinking  是否过滤 thinking 内容块
+     * @param  bool  $filterThinking  是否过滤响应中的 thinking 内容块
+     * @param  bool  $filterRequestThinking  是否过滤请求中的 thinking 内容块
      */
-    private function buildAnthropicMessages(bool $preserveCacheControl = true, bool $filterThinking = true): array
+    private function buildAnthropicMessages(bool $preserveCacheControl = true, bool $filterThinking = true, bool $filterRequestThinking = false): array
     {
         // Anthropic 没有 system 消息在 messages 中
         return array_map(
-            fn ($msg) => $msg->toAnthropic($preserveCacheControl, $filterThinking),
+            fn ($msg) => $msg->toAnthropic($preserveCacheControl, $filterThinking, $filterRequestThinking),
             $this->messages
         );
     }

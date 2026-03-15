@@ -107,13 +107,31 @@ class ProviderResponse
         $content = $message['content'] ?? '';
         $finishReason = $choice['finish_reason'] ?? null;
 
+        // 兼容非标准格式：某些供应商直接返回 content 字段
+        if (empty($content) && isset($response['content'])) {
+            $content = $response['content'];
+        }
+
+        // 兼容非标准格式：某些供应商直接返回 finish_reason 字段
+        if ($finishReason === null && isset($response['finish_reason'])) {
+            $finishReason = $response['finish_reason'];
+        }
+
         // 提取推理内容（DeepSeek、Kimi 等思考模型）
         $reasoningContent = $message['reasoning_content'] ?? null;
+        // 兼容非标准格式：直接在顶层返回 reasoning_content
+        if ($reasoningContent === null && isset($response['reasoning_content'])) {
+            $reasoningContent = $response['reasoning_content'];
+        }
 
         // 处理工具调用
         $toolCalls = null;
         if (isset($message['tool_calls'])) {
             $toolCalls = $message['tool_calls'];
+        }
+        // 兼容非标准格式：直接在顶层返回 tool_calls
+        if ($toolCalls === null && isset($response['tool_calls'])) {
+            $toolCalls = $response['tool_calls'];
         }
 
         // 处理 Token 使用量

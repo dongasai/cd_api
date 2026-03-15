@@ -66,6 +66,7 @@ class ShowFieldMacro
     {
         return $this->json_view_iframe();
     }
+
     /**
      * JSON 字段 iframe 嵌入显示
      *
@@ -144,5 +145,71 @@ class ShowFieldMacro
                 ])->render();
             })->unescape();
         };
+    }
+
+    /**
+     * SSE Chunks 流式响应展示
+     *
+     * 专用于展示 generated_chunks 字段中的 SSE 流式响应数据
+     * 使用 iframe 嵌入独立页面进行渲染
+     *
+     * @return Field
+     */
+    public function sseChunks()
+    {
+        return function ($height = 600) {
+            // $this 是 Field 对象
+            $field = $this;
+
+            return $this->unescape()->as(function ($value) use ($field, $height) {
+                // 如果值为空，显示占位符
+                if (empty($value)) {
+                    return '<span class="text-muted">-</span>';
+                }
+
+                // $this 在闭包中是模型对象
+                $model = $this;
+
+                // 获取字段名
+                $fieldName = $field->getName();
+
+                // 获取表名并转换为路由格式
+                $tableName = $model->getTable();
+                $routeName = str_replace('_', '-', $tableName);
+
+                // 获取记录 ID
+                $id = $model->getKey();
+
+                // 生成 SSE Chunks 预览 URL
+                $url = admin_url("sse-chunks-embed/{$routeName}/{$id}/{$fieldName}");
+
+                // 返回 iframe
+                return '<iframe src="'.$url.'" '.
+                       'style="width: 100%; height: '.$height.'px; border: 1px solid #dee2e6; border-radius: 4px;" '.
+                       'frameborder="0"></iframe>';
+            });
+        };
+    }
+
+    /**
+     * 格式化 JSON 数据为紧凑的可读字符串
+     *
+     * @param  mixed  $data
+     * @return string
+     */
+    private function formatJson($data)
+    {
+        if (is_string($data)) {
+            return htmlspecialchars($data);
+        }
+
+        $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        // 如果太长，截断显示
+        if (strlen($json) > 200) {
+            return htmlspecialchars(substr($json, 0, 200)).' <span style="color: #5c6370;">...</span>';
+        }
+
+        return htmlspecialchars($json);
     }
 }

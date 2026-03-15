@@ -164,7 +164,14 @@ class ReplayRequest extends Command
         try {
             $startTime = microtime(true);
 
-            $this->sendSyncRequest($log, $body);
+            // 判断是否为流式请求
+            $isStream = $body['stream'] ?? false;
+
+            if ($isStream) {
+                $this->sendStreamRequest($log, $body);
+            } else {
+                $this->sendSyncRequest($log, $body);
+            }
 
             $latency = round((microtime(true) - $startTime) * 1000, 2);
 
@@ -179,6 +186,167 @@ class ReplayRequest extends Command
 
             return self::FAILURE;
         }
+    }
+
+    protected function sendStreamRequest(RequestLog $log, array $body): string
+    {
+        // 构建本系统的请求 URL
+        $baseUrl = config('app.url');
+        $path = $log->path;
+        $path = ltrim($path, '/');
+        $url = rtrim($baseUrl, '/').'/'.$path;
+
+        // 从请求日志中获取原始 headers
+        $headers = $this->getOriginalHeaders($log);
+
+        $this->newLine();
+        $this->info('---------- 发送流式请求 ----------');
+        $this->info("URL: {$url}");
+
+        $fullContent = '';
+        $reasoningContent = '';
+        $usage = null;
+        $finishReason = null;
+
+        try {
+            $response = Http::withHeaders($headers)
+                ->timeout((int) $this->option('timeout'))
+                ->connectTimeout(30)
+                ->post($url, $body);
+
+            $statusCode = $response->status();
+
+            $this->newLine();
+            $this->info('---------- 响应内容 ----------');
+            $this->info("状态码：{$statusCode}");
+
+            if ($statusCode >= 200 && $statusCode < 300) {
+                $rawContent = $response->body();
+                $this->info('流式响应');
+                $this->warn('注意：流式响应在命令行下无法完整查看');
+
+                $this->newLine();
+                $this->info('---------- 流式内容预览 ----------');
+
+                // 解析 SSE 流式内容
+                $lines = explode("\n", $rawContent);
+                foreach ($lines as $line) {
+                    if (str_starts_with($line, 'data:')) {
+                        $data = trim(substr($line, 5));
+
+                        if (empty($data) || $data === '[DONE]') {
+                            continue;
+                        }
+
+                        $parsed = json_decode($data, true);
+                        if ($parsed === null) {
+                            continue;
+                        }
+
+                        // 处理 Anthropic 格式
+                        if (isset($parsed['delta'])) {
+                            // 文本增量
+                            if (isset($parsed['delta']['text'])) {
+                                $fullContent .= $parsed['delta']['text'];
+                            }
+                            // 思考增量
+                            if (isset($parsed['delta']['thinking'])) {
+                                $reasoningContent .= $parsed['delta']['thinking'];
+                            }
+                        }
+
+                        // 提取 usage (支持多种格式，需要合并)
+                        if (isset($parsed['usage'])) {
+                            // message_delta 事件的 usage (通常只有 output_tokens)
+                            $usage = array_merge($usage ?? [], $parsed['usage']);
+                        } elseif (isset($parsed['message']['usage'])) {
+                            // message_start 事件的 usage (有 input_tokens 和 output_tokens)
+                            $usage = array_merge($usage ?? [], $parsed['message']['usage']);
+                        }
+
+                        // 提取 finish_reason
+                        if (isset($parsed['delta']['stop_reason'])) {
+                            $finishReason = $parsed['delta']['stop_reason'];
+                        }
+
+                        // 输出原始行（预览）
+                        echo $line."\n";
+                    } elseif (str_starts_with($line, 'event:')) {
+                        echo $line."\n";
+                    }
+                }
+
+                $this->newLine(2);
+                $this->info('---------- 组装后的内容 ----------');
+
+                if ($reasoningContent) {
+                    $this->newLine();
+                    $this->comment('【思考过程】');
+                    $this->displayContent($reasoningContent);
+                }
+
+                if ($fullContent) {
+                    $this->newLine();
+                    $this->comment('【回复内容】');
+                    $this->displayContent($fullContent);
+                }
+
+                if (! $reasoningContent && ! $fullContent) {
+                    $this->warn('(无文本内容)');
+                }
+
+                // 显示 token 使用情况
+                if ($usage) {
+                    $this->newLine();
+                    $this->info('Token 使用:');
+                    $hasInput = false;
+                    $hasOutput = false;
+
+                    // 输入 token
+                    if (array_key_exists('input_tokens', $usage)) {
+                        $this->info("  输入：{$usage['input_tokens']}");
+                        $hasInput = true;
+                    } elseif (array_key_exists('prompt_tokens', $usage)) {
+                        $this->info("  输入：{$usage['prompt_tokens']}");
+                        $hasInput = true;
+                    }
+
+                    // 输出 token
+                    if (array_key_exists('output_tokens', $usage)) {
+                        $this->info("  输出：{$usage['output_tokens']}");
+                        $hasOutput = true;
+                    } elseif (array_key_exists('completion_tokens', $usage)) {
+                        $this->info("  输出：{$usage['completion_tokens']}");
+                        $hasOutput = true;
+                    }
+
+                    // 缓存
+                    if (isset($usage['cache_read_input_tokens'])) {
+                        $this->info("  缓存：{$usage['cache_read_input_tokens']}");
+                    }
+
+                    // 如果没有 token 数据，提示
+                    if (! $hasInput && ! $hasOutput) {
+                        $this->warn('  (无 token 数据)');
+                    }
+                }
+
+                // 显示结束原因
+                if ($finishReason) {
+                    $this->info("结束原因：{$finishReason}");
+                }
+            } else {
+                // 错误响应
+                $this->error('请求失败');
+                $result = $response->json();
+                $this->error('详情：'.json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+            }
+
+        } catch (\Throwable $e) {
+            $this->error("流式请求异常：{$e->getMessage()}");
+        }
+
+        return $fullContent;
     }
 
     protected function sendSyncRequest(RequestLog $log, array $body): string

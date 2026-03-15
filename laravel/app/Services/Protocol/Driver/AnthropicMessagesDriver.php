@@ -40,6 +40,8 @@ class AnthropicMessagesDriver extends AbstractDriver
 
     public const EVENT_ERROR = 'error';
 
+    public const EVENT_PING = 'ping';
+
     /**
      * 获取协议名称
      */
@@ -88,6 +90,7 @@ class AnthropicMessagesDriver extends AbstractDriver
             self::EVENT_MESSAGE_DELTA => $this->parseMessageDelta($data),
             self::EVENT_MESSAGE_STOP => StandardStreamEvent::finish(id: $this->currentId ?? ''),
             self::EVENT_ERROR => $this->parseError($data),
+            self::EVENT_PING => $this->parsePingEvent($data),
             default => null,
         };
     }
@@ -99,10 +102,15 @@ class AnthropicMessagesDriver extends AbstractDriver
     {
         return match ($event->type) {
             StandardStreamEvent::TYPE_START => $this->buildMessageStartEvent($event),
-            StandardStreamEvent::TYPE_CONTENT_DELTA => $this->buildContentBlockDeltaEvent($event),
+            StandardStreamEvent::TYPE_CONTENT_DELTA, StandardStreamEvent::TYPE_REASONING_DELTA => $this->buildContentBlockDeltaEvent($event),
             StandardStreamEvent::TYPE_TOOL_USE => $this->buildToolUseEvent($event),
             StandardStreamEvent::TYPE_FINISH => $this->buildMessageStopEvent($event),
             StandardStreamEvent::TYPE_ERROR => $this->buildErrorEvent($event),
+            StandardStreamEvent::TYPE_PING => $this->buildPingEvent($event),
+            StandardStreamEvent::TYPE_CONTENT_BLOCK_START => $this->buildContentBlockStartEvent($event),
+            StandardStreamEvent::TYPE_MESSAGE_DELTA => $this->buildPassthroughEvent(self::EVENT_MESSAGE_DELTA, $event),
+            StandardStreamEvent::TYPE_MESSAGE_STOP => $this->buildPassthroughEvent(self::EVENT_MESSAGE_STOP, $event),
+            StandardStreamEvent::TYPE_CONTENT_BLOCK_STOP => $this->buildPassthroughEvent(self::EVENT_CONTENT_BLOCK_STOP, $event),
             default => '',
         };
     }
@@ -166,9 +174,24 @@ class AnthropicMessagesDriver extends AbstractDriver
     private int $currentBlockIndex = 0;
 
     /**
+     * 当前内容块类型（text/thinking）
+     */
+    private string $currentBlockType = 'text';
+
+    /**
      * 是否已发送内容块开始事件
      */
     private bool $contentBlockStarted = false;
+
+    /**
+     * 当前工具调用索引（流式处理）
+     */
+    private ?int $currentToolCallIndex = null;
+
+    /**
+     * 是否已发送当前工具调用的开始事件
+     */
+    private bool $toolCallBlockStarted = false;
 
     /**
      * 解析消息开始事件
@@ -179,6 +202,8 @@ class AnthropicMessagesDriver extends AbstractDriver
         $this->currentId = $message['id'] ?? '';
         $this->currentBlockIndex = 0;
         $this->contentBlockStarted = false;
+        $this->currentToolCallIndex = null;
+        $this->toolCallBlockStarted = false;
 
         return StandardStreamEvent::start(
             id: $this->currentId,
@@ -196,13 +221,20 @@ class AnthropicMessagesDriver extends AbstractDriver
         $contentBlock = $data['content_block'] ?? [];
         $this->currentBlockIndex = $index;
 
+        $blockType = $contentBlock['type'] ?? '';
+
         // 文本块开始，不产生事件
-        if (($contentBlock['type'] ?? '') === 'text') {
+        if ($blockType === 'text') {
+            return null;
+        }
+
+        // 思考块开始（thinking 类型），不产生事件
+        if ($blockType === 'thinking') {
             return null;
         }
 
         // 工具调用块开始
-        if (($contentBlock['type'] ?? '') === 'tool_use') {
+        if ($blockType === 'tool_use') {
             $toolCall = new StandardToolCall(
                 id: $contentBlock['id'] ?? '',
                 type: 'function',
@@ -225,8 +257,10 @@ class AnthropicMessagesDriver extends AbstractDriver
         $index = $data['index'] ?? 0;
         $delta = $data['delta'] ?? [];
 
+        $deltaType = $delta['type'] ?? '';
+
         // 文本增量
-        if (($delta['type'] ?? '') === 'text_delta') {
+        if ($deltaType === 'text_delta') {
             $text = $delta['text'] ?? '';
             if ($text === '') {
                 return null;
@@ -235,8 +269,18 @@ class AnthropicMessagesDriver extends AbstractDriver
             return StandardStreamEvent::delta($this->currentId, $text);
         }
 
+        // 思考内容增量（thinking_delta）
+        if ($deltaType === 'thinking_delta') {
+            $thinking = $delta['thinking'] ?? '';
+            if ($thinking === '') {
+                return null;
+            }
+
+            return StandardStreamEvent::reasoningDelta($this->currentId, $thinking);
+        }
+
         // 工具调用增量 (input_json_delta)
-        if (($delta['type'] ?? '') === 'input_json_delta') {
+        if ($deltaType === 'input_json_delta') {
             $partialJson = $delta['partial_json'] ?? '';
 
             // 工具调用参数增量，暂不处理
@@ -281,6 +325,20 @@ class AnthropicMessagesDriver extends AbstractDriver
         );
     }
 
+    /**
+     * 解析 ping 事件
+     * ping 事件用于保持连接活跃，需要透传
+     */
+    private function parsePingEvent(array $data): ?StandardStreamEvent
+    {
+        // 创建一个特殊的 ping 事件，使用 TYPE_PING 类型
+        return new StandardStreamEvent(
+            type: StandardStreamEvent::TYPE_PING,
+            id: $this->currentId,
+            rawEvent: json_encode($data)
+        );
+    }
+
     // ==================== 流式事件构建 ====================
 
     /**
@@ -315,27 +373,51 @@ class AnthropicMessagesDriver extends AbstractDriver
     {
         $output = '';
 
+        // 判断是推理内容还是普通文本内容
+        $isReasoning = $event->type === StandardStreamEvent::TYPE_REASONING_DELTA;
+        $blockType = $isReasoning ? 'thinking' : 'text';
+        $deltaType = $isReasoning ? 'thinking_delta' : 'text_delta';
+        $content = $isReasoning ? $event->reasoningDelta : $event->contentDelta;
+
+        // 如果内容为空，不发送任何事件
+        if (empty($content)) {
+            return '';
+        }
+
+        // 如果块类型发生变化，需要关闭旧块并开始新块
+        if ($this->contentBlockStarted && $this->currentBlockType !== $blockType) {
+            // 关闭旧块
+            $blockStop = [
+                'type' => self::EVENT_CONTENT_BLOCK_STOP,
+                'index' => $this->currentBlockIndex,
+            ];
+            $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_STOP, $this->safeJsonEncode($blockStop));
+            $this->contentBlockStarted = false;
+            $this->currentBlockIndex++;
+        }
+
         // 只在第一次发送内容块开始事件
         if (! $this->contentBlockStarted) {
             $blockStart = [
                 'type' => self::EVENT_CONTENT_BLOCK_START,
-                'index' => 0,
+                'index' => $this->currentBlockIndex,
                 'content_block' => [
-                    'type' => 'text',
-                    'text' => '',
+                    'type' => $blockType,
+                    $blockType === 'thinking' ? 'thinking' : 'text' => '',
                 ],
             ];
             $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_START, $this->safeJsonEncode($blockStart));
             $this->contentBlockStarted = true;
+            $this->currentBlockType = $blockType;
         }
 
         // 内容增量
         $delta = [
             'type' => self::EVENT_CONTENT_BLOCK_DELTA,
-            'index' => 0,
+            'index' => $this->currentBlockIndex,
             'delta' => [
-                'type' => 'text_delta',
-                'text' => $event->contentDelta,
+                'type' => $deltaType,
+                $isReasoning ? 'thinking' : 'text' => $content,
             ],
         ];
         $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_DELTA, $this->safeJsonEncode($delta));
@@ -353,19 +435,56 @@ class AnthropicMessagesDriver extends AbstractDriver
         }
 
         $output = '';
+        $toolIndex = $event->toolCall->index ?? 0;
 
-        // 内容块开始 (tool_use)
-        $blockStart = [
-            'type' => self::EVENT_CONTENT_BLOCK_START,
-            'index' => $event->toolCall->index ?? 0,
-            'content_block' => [
-                'type' => 'tool_use',
-                'id' => $event->toolCall->id,
-                'name' => $event->toolCall->name,
-                'input' => [],
-            ],
-        ];
-        $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_START, $this->safeJsonEncode($blockStart));
+        // 判断是否需要发送开始事件
+        // 条件：有 id 和 name，且是第一次遇到这个工具调用
+        $hasIdAndName = ! empty($event->toolCall->id) && ! empty($event->toolCall->name);
+        $isFirstTime = $this->currentToolCallIndex !== $toolIndex;
+
+        if ($hasIdAndName && $isFirstTime) {
+            // 如果之前有内容块没关闭，先关闭
+            if ($this->contentBlockStarted) {
+                $blockStop = [
+                    'type' => self::EVENT_CONTENT_BLOCK_STOP,
+                    'index' => $this->currentBlockIndex,
+                ];
+                $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_STOP, $this->safeJsonEncode($blockStop));
+                $this->contentBlockStarted = false;
+                $this->currentBlockIndex++;
+            }
+
+            // 发送工具调用开始事件
+            $blockStart = [
+                'type' => self::EVENT_CONTENT_BLOCK_START,
+                'index' => $this->currentBlockIndex,
+                'content_block' => [
+                    'type' => 'tool_use',
+                    'id' => $event->toolCall->id,
+                    'name' => $event->toolCall->name,
+                    'input' => [],
+                ],
+            ];
+            $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_START, $this->safeJsonEncode($blockStart));
+
+            // 标记状态
+            $this->currentToolCallIndex = $toolIndex;
+            $this->toolCallBlockStarted = true;
+            $this->contentBlockStarted = false; // 工具调用不是内容块
+        }
+
+        // 发送参数增量事件
+        if (! empty($event->toolCall->arguments)) {
+            $blockDelta = [
+                'type' => self::EVENT_CONTENT_BLOCK_DELTA,
+                'index' => $this->currentBlockIndex,
+                'delta' => [
+                    'type' => 'input_json_delta',
+                    'partial_json' => $event->toolCall->arguments,
+                ],
+            ];
+            $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_DELTA, $this->safeJsonEncode($blockDelta));
+        }
 
         return $output;
     }
@@ -377,13 +496,15 @@ class AnthropicMessagesDriver extends AbstractDriver
     {
         $output = '';
 
-        // 发送内容块停止事件
-        if ($this->contentBlockStarted) {
+        // 发送内容块停止事件（如果有未关闭的内容块或工具调用块）
+        if ($this->contentBlockStarted || $this->toolCallBlockStarted) {
             $blockStop = [
                 'type' => self::EVENT_CONTENT_BLOCK_STOP,
-                'index' => 0,
+                'index' => $this->currentBlockIndex,
             ];
             $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_STOP, $this->safeJsonEncode($blockStop));
+            $this->contentBlockStarted = false;
+            $this->toolCallBlockStarted = false;
         }
 
         // 消息增量
@@ -400,6 +521,61 @@ class AnthropicMessagesDriver extends AbstractDriver
         $output .= $this->buildSSEEvent(self::EVENT_MESSAGE_STOP, '{}');
 
         return $output;
+    }
+
+    /**
+     * 构建 ping 事件
+     */
+    private function buildPingEvent(StandardStreamEvent $event): string
+    {
+        return $this->buildSSEEvent(self::EVENT_PING, $event->rawEvent ?? '{}');
+    }
+
+    /**
+     * 构建内容块开始事件
+     */
+    private function buildContentBlockStartEvent(StandardStreamEvent $event): string
+    {
+        // 如果有原始事件数据,直接透传
+        if ($event->rawEvent !== null) {
+            $parsed = json_decode($event->rawEvent, true);
+            if ($parsed !== null) {
+                return $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_START, $this->safeJsonEncode($parsed));
+            }
+        }
+
+        // 否则构建默认的事件
+        return '';
+    }
+
+    /**
+     * 构建透传事件 (直接使用原始数据)
+     */
+    private function buildPassthroughEvent(string $eventType, StandardStreamEvent $event): string
+    {
+        // 如果有原始事件数据,直接透传
+        if ($event->rawEvent !== null) {
+            $parsed = json_decode($event->rawEvent, true);
+            if ($parsed !== null) {
+                return $this->buildSSEEvent($eventType, $this->safeJsonEncode($parsed));
+            }
+        }
+
+        // 没有原始数据,返回空
+        return '';
+    }
+
+    /**
+     * 重置流式状态
+     */
+    private function resetStreamState(): void
+    {
+        $this->currentId = '';
+        $this->currentBlockIndex = 0;
+        $this->currentBlockType = 'text';
+        $this->contentBlockStarted = false;
+        $this->currentToolCallIndex = null;
+        $this->toolCallBlockStarted = false;
     }
 
     /**

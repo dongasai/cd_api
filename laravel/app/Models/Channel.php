@@ -210,6 +210,27 @@ class Channel extends Model
     }
 
     /**
+     * 是否过滤请求中的 thinking 内容块
+     *
+     * 默认返回 false，即不过滤请求中的 thinking 块（保留 thinking 内容）
+     */
+    public function shouldFilterRequestThinking(): bool
+    {
+        return $this->getConfig('filter_request_thinking', false);
+    }
+
+    /**
+     * 是否透传请求体（body passthrough）
+     *
+     * 开启后，来自客户端的 body 将不进行任何处理直接发送给上游渠道
+     * 默认返回 false，即进行正常的协议转换处理
+     */
+    public function shouldPassthroughBody(): bool
+    {
+        return $this->getConfig('body_passthrough', false);
+    }
+
+    /**
      * 渠道支持的模型列表
      */
     public function channelModels(): HasMany

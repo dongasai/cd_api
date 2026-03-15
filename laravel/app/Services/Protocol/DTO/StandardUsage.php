@@ -114,11 +114,9 @@ class StandardUsage
         $result = [
             'input_tokens' => $this->promptTokens,
             'output_tokens' => $this->completionTokens,
+            // 缓存 Token 始终返回，默认为 0
+            'cache_read_input_tokens' => $this->cacheReadTokens ?? 0,
         ];
-
-        if ($this->cacheReadTokens !== null) {
-            $result['cache_read_input_tokens'] = $this->cacheReadTokens;
-        }
 
         if ($this->cacheWriteTokens !== null) {
             $result['cache_creation_input_tokens'] = $this->cacheWriteTokens;

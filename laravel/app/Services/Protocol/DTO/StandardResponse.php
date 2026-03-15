@@ -113,10 +113,13 @@ class StandardResponse
                 $response['content']
             );
 
-            // 提取文本
+            // 提取文本和思考内容
+            $reasoningContent = null;
             foreach ($contentBlocks as $block) {
                 if ($block->type === 'text') {
                     $content .= $block->text ?? '';
+                } elseif ($block->type === 'thinking') {
+                    $reasoningContent .= $block->thinking ?? '';
                 }
             }
 
@@ -148,6 +151,7 @@ class StandardResponse
             finishReason: self::mapStopReason($stopReason),
             usage: $usage,
             rawResponse: $response,
+            reasoningContent: $reasoningContent ?? null,
         );
     }
 
@@ -273,6 +277,15 @@ class StandardResponse
 
         $blocks = [];
 
+        // 先添加思考内容块（如果有）
+        if ($this->reasoningContent) {
+            $blocks[] = [
+                'type' => 'thinking',
+                'thinking' => $this->reasoningContent,
+            ];
+        }
+
+        // 再添加文本内容块
         if ($this->content) {
             $blocks[] = [
                 'type' => 'text',
@@ -280,6 +293,7 @@ class StandardResponse
             ];
         }
 
+        // 最后添加工具调用块
         if ($this->toolCalls !== null) {
             foreach ($this->toolCalls as $tc) {
                 $blocks[] = $tc->toAnthropic();

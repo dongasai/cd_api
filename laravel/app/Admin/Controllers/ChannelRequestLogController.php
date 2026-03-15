@@ -193,20 +193,20 @@ class ChannelRequestLogController extends AdminController
             // });
 
             // 性能指标
-            // $show->field('latency_ms', '延迟(ms)')->as(function ($value) {
-            //     if ($value === null) {
-            //         return '-';
-            //     }
+            $show->field('latency_ms', '延迟(ms)')->as(function ($value) {
+                if ($value === null) {
+                    return '-';
+                }
 
-            //     return number_format($value, 2);
-            // });
-            // $show->field('ttfb_ms', '首字节时间(ms)')->as(function ($value) {
-            //     if ($value === null) {
-            //         return '-';
-            //     }
+                return number_format($value, 2);
+            });
+            $show->field('ttfb_ms', '首字节时间(ms)')->as(function ($value) {
+                if ($value === null) {
+                    return '-';
+                }
 
-            //     return number_format($value, 2);
-            // });
+                return number_format($value, 2);
+            });
 
             // 状态信息
             $show->field('is_success', '是否成功')->using([
@@ -218,25 +218,9 @@ class ChannelRequestLogController extends AdminController
 
             // 使用链接跳转到独立页面查看
             // JSON 字段格式化显示
-            // $show->field('usage', '使用量')->as(function ($value) {
-            //     if (empty($value)) {
-            //         return '-';
-            //     }
+            $show->field('usage', '使用量')->json();
 
-            //     $url = admin_url('json-preview/channel-request-logs/'.$this->id.'/usage');
-
-            //     return '<a href="'.$url.'" class="btn btn-sm btn-primary"><i class="fa fa-eye"></i> 查看JSON</a>';
-            // })->unescape();
-
-            // $show->field('metadata', '元数据')->as(function ($value) {
-            //     if (empty($value)) {
-            //         return '-';
-            //     }
-
-            //     $url = admin_url('json-preview/channel-request-logs/'.$this->id.'/metadata');
-
-            //     return '<a href="'.$url.'" class="btn btn-sm btn-primary"><i class="fa fa-eye"></i> 查看JSON</a>';
-            // })->unescape();
+            $show->field('metadata', '元数据')->json();
 
             // // 时间信息
             // $show->field('sent_at', '发送时间');
@@ -244,8 +228,8 @@ class ChannelRequestLogController extends AdminController
             // $show->field('updated_at', '更新时间');
 
             // // 禁用编辑和删除按钮
-            // $show->disableEditButton();
-            // $show->disableDeleteButton();
+            $show->disableEditButton();
+            $show->disableDeleteButton();
 
             // // 分组显示字段
             // $show->divider('基本信息');

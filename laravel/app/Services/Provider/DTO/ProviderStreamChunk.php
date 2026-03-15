@@ -105,6 +105,7 @@ class ProviderStreamChunk
      */
     public static function fromAnthropic(string $rawEvent): ?self
     {
+        Log::debug('fromAnthropic渠道 :'.$rawEvent);
         $lines = explode("\n", trim($rawEvent));
         $event = '';
         $data = '';
@@ -132,6 +133,9 @@ class ProviderStreamChunk
         $model = null;
         $finishReason = null;
         $usage = null;
+        $reasoningDelta = null;
+        $toolCalls = null;
+        $isToolCallDelta = false; // 标记是否为工具调用增量
 
         // 根据事件类型解析数据
         switch ($event) {
@@ -144,8 +148,50 @@ class ProviderStreamChunk
                 }
                 break;
 
+            case 'ping':
+                // ping 事件用于保持连接活跃，需要透传
+                // 将原始数据保存在 data 中
+                $data = $parsed;
+                break;
+
+            case 'content_block_start':
+                // 处理工具调用开始
+                $contentBlock = $parsed['content_block'] ?? [];
+                if (($contentBlock['type'] ?? '') === 'tool_use') {
+                    $toolCalls = [[
+                        'id' => $contentBlock['id'] ?? '',
+                        'type' => 'function',
+                        'function' => [
+                            'name' => $contentBlock['name'] ?? '',
+                            'arguments' => '',
+                        ],
+                        'index' => $parsed['index'] ?? 0,
+                    ]];
+                }
+                break;
+
             case 'content_block_delta':
-                $delta = $parsed['delta']['text'] ?? '';
+                // 先获取 delta 类型
+                $deltaType = $parsed['delta']['type'] ?? '';
+
+                // 处理文本增量 (text_delta)
+                if ($deltaType === 'text_delta' && isset($parsed['delta']['text'])) {
+                    $delta = $parsed['delta']['text'];
+                }
+                // 处理思考增量 (thinking_delta)
+                if ($deltaType === 'thinking_delta' && isset($parsed['delta']['thinking'])) {
+                    $reasoningDelta = $parsed['delta']['thinking'];
+                }
+                // 处理工具调用参数增量 (input_json_delta)
+                if ($deltaType === 'input_json_delta' && isset($parsed['delta']['partial_json'])) {
+                    $toolCalls = [[
+                        'index' => $parsed['index'] ?? 0,
+                        'function' => [
+                            'arguments' => $parsed['delta']['partial_json'],
+                        ],
+                    ]];
+                    $isToolCallDelta = true;
+                }
                 break;
 
             case 'message_delta':
@@ -168,6 +214,8 @@ class ProviderStreamChunk
             model: $model,
             finishReason: $finishReason,
             usage: $usage,
+            toolCalls: $toolCalls,
+            reasoningDelta: $reasoningDelta,
         );
     }
 
@@ -221,9 +269,28 @@ class ProviderStreamChunk
 
     /**
      * 是否为空数据块
+     *
+     * 注意: ping、content_block_start、content_block_stop 等控制事件
+     * 虽然 delta 为空,但它们有重要的控制意义,不应被视为空事件
      */
     public function isEmpty(): bool
     {
+        // 有事件类型的不是空事件(包括 ping、content_block_start 等)
+        if (! empty($this->event)) {
+            return false;
+        }
+
+        // 有推理内容的不是空事件
+        if (! empty($this->reasoningDelta)) {
+            return false;
+        }
+
+        // 有工具调用的不是空事件
+        if (! empty($this->toolCalls)) {
+            return false;
+        }
+
+        // 其他情况:检查是否有实际内容
         return empty($this->delta) && empty($this->finishReason) && empty($this->usage);
     }
 

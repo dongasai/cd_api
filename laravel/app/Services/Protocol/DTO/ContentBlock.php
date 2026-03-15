@@ -29,6 +29,7 @@ class ContentBlock
         public ?bool $toolResultIsError = null,
 
         public ?string $thinking = null,
+        public ?string $signature = null,
 
         // Anthropic 特有字段，部分上游 API 不支持
         public ?array $cacheControl = null,
@@ -92,12 +93,13 @@ class ContentBlock
                 toolResultContent: is_array($block['content'] ?? null)
                     ? json_encode($block['content'])
                     : $block['content'],
-                toolResultIsError: $block['is_error'] ?? false,
+                toolResultIsError: $block['is_error'] ?? null,
                 cacheControl: $cacheControl,
             ),
             'thinking' => new self(
                 type: 'thinking',
                 thinking: $block['thinking'] ?? '',
+                signature: $block['signature'] ?? null,
                 cacheControl: $cacheControl,
             ),
             default => new self(type: $type, text: $block['text'] ?? null, cacheControl: $cacheControl),
@@ -177,14 +179,15 @@ class ContentBlock
                 'input' => $this->toolInput ?? [],
             ],
             'tool_result' => [
-                'tool_use_id' => $this->toolResultId,
                 'type' => 'tool_result',
                 'content' => $this->toolResultContent,
-                'is_error' => $this->toolResultIsError,
+                ...($this->toolResultIsError === true ? ['is_error' => true] : []),
+                'tool_use_id' => $this->toolResultId,
             ],
             'thinking' => [
                 'type' => 'thinking',
                 'thinking' => $this->thinking ?? '',
+                ...($this->signature !== null ? ['signature' => $this->signature] : []),
             ],
             default => [
                 'type' => $this->type,
@@ -220,6 +223,7 @@ class ContentBlock
             'tool_result_content' => $this->toolResultContent,
             'tool_result_is_error' => $this->toolResultIsError,
             'thinking' => $this->thinking,
+            'signature' => $this->signature,
         ];
     }
 }

@@ -339,7 +339,14 @@ abstract class AbstractProvider implements ProviderInterface
         $this->checkCircuitBreaker();
 
         $request->stream = true;
-        $body = $this->buildRequestBody($request);
+
+        // 检查是否开启了 body 透传
+        if ($request->rawBodyString !== null) {
+            $body = $request->rawBodyString;
+        } else {
+            $body = $this->buildRequestBody($request);
+        }
+
         $endpoint = $this->getEndpoint($request);
         $url = $this->buildUrl($endpoint, $request->queryString);
         $headers = $this->getHeaders();
@@ -349,15 +356,27 @@ abstract class AbstractProvider implements ProviderInterface
             url: $url,
             path: $endpoint,
             headers: $headers,
-            body: $body,
+            body: is_string($body) ? json_decode($body, true) ?? $body : $body,
         );
 
         try {
-            $response = Http::withHeaders($headers)
-                ->timeout($this->timeout)
-                ->connectTimeout($this->connectTimeout)
-                ->withOptions(['stream' => true])
-                ->post($url, $body);
+            // 根据 body 类型选择发送方式
+            if (is_string($body)) {
+                // Body 透传模式：使用原始字符串作为请求体
+                $response = Http::withHeaders($headers)
+                    ->timeout($this->timeout)
+                    ->connectTimeout($this->connectTimeout)
+                    ->withBody($body, 'application/json')
+                    ->withOptions(['stream' => true])
+                    ->post($url);
+            } else {
+                // 正常模式：使用数组，Laravel会自动转为JSON
+                $response = Http::withHeaders($headers)
+                    ->timeout($this->timeout)
+                    ->connectTimeout($this->connectTimeout)
+                    ->withOptions(['stream' => true])
+                    ->post($url, $body);
+            }
 
             // 检查响应状态码
             if (! $response->ok()) {
@@ -374,6 +393,13 @@ abstract class AbstractProvider implements ProviderInterface
             $contentType = $response->header('Content-Type') ?? '';
             $isJsonResponse = str_contains($contentType, 'application/json') &&
                               ! str_contains($contentType, 'text/event-stream');
+
+            // 记录流式响应开始
+            Log::debug('Stream response started', [
+                'url' => $url,
+                'content_type' => $contentType,
+                'is_json_response' => $isJsonResponse,
+            ]);
 
             // 如果是非流式 JSON 响应，直接读取完整内容并转换为流式块
             if ($isJsonResponse) {
@@ -395,10 +421,41 @@ abstract class AbstractProvider implements ProviderInterface
                 return;
             }
 
+            // 流式读取超时设置（秒）- 首个数据块的最大等待时间
+            $streamReadTimeout = 30;
+            $lastDataTime = microtime(true);
+            $firstChunkReceived = false;
+            $totalChunks = 0;
+
             // 逐块读取流式响应
             while (! $stream->eof()) {
+                // 检查读取超时
+                $elapsed = microtime(true) - $lastDataTime;
+                if ($elapsed > $streamReadTimeout) {
+                    Log::error('Stream read timeout', [
+                        'url' => $url,
+                        'timeout_seconds' => $streamReadTimeout,
+                        'first_chunk_received' => $firstChunkReceived,
+                        'total_chunks' => $totalChunks,
+                        'buffer_length' => strlen($buffer),
+                    ]);
+                    throw ProviderException::networkError(
+                        "Stream read timeout after {$streamReadTimeout} seconds without data"
+                    );
+                }
+
                 $chunk = $stream->read(1024);
                 $buffer .= $chunk;
+
+                // 记录首个数据块
+                if (! $firstChunkReceived && strlen($chunk) > 0) {
+                    $firstChunkReceived = true;
+                    Log::debug('Stream first chunk received', [
+                        'url' => $url,
+                        'chunk_size' => strlen($chunk),
+                        'wait_time_ms' => round((microtime(true) - $lastDataTime) * 1000, 2),
+                    ]);
+                }
 
                 // 按双换行符分割事件
                 while (($pos = strpos($buffer, "\n\n")) !== false) {
@@ -407,6 +464,8 @@ abstract class AbstractProvider implements ProviderInterface
 
                     $parsed = $this->parseStreamChunk($rawChunk);
                     if ($parsed !== null) {
+                        $totalChunks++;
+                        $lastDataTime = microtime(true); // 更新最后数据时间
                         yield $parsed;
                     }
                 }
@@ -416,9 +475,17 @@ abstract class AbstractProvider implements ProviderInterface
             if (! empty($buffer)) {
                 $parsed = $this->parseStreamChunk($buffer);
                 if ($parsed !== null) {
+                    $totalChunks++;
                     yield $parsed;
                 }
             }
+
+            // 记录流式响应结束
+            Log::debug('Stream response completed', [
+                'url' => $url,
+                'total_chunks' => $totalChunks,
+                'first_chunk_received' => $firstChunkReceived,
+            ]);
         } catch (ConnectionException $e) {
             $this->recordFailure();
             throw ProviderException::networkError($e->getMessage(), $e);
@@ -490,7 +557,13 @@ abstract class AbstractProvider implements ProviderInterface
      */
     protected function executeRequest(ProviderRequest $request): ProviderResponse
     {
-        $body = $this->buildRequestBody($request);
+        // 检查是否开启了 body 透传
+        if ($request->rawBodyString !== null) {
+            $body = $request->rawBodyString;
+        } else {
+            $body = $this->buildRequestBody($request);
+        }
+
         $endpoint = $this->getEndpoint($request);
         $url = $this->buildUrl($endpoint, $request->queryString);
         $headers = $this->getHeaders();
@@ -500,13 +573,24 @@ abstract class AbstractProvider implements ProviderInterface
             url: $url,
             path: $endpoint,
             headers: $headers,
-            body: $body,
+            body: is_string($body) ? json_decode($body, true) ?? $body : $body,
         );
 
-        $response = Http::withHeaders($headers)
-            ->timeout($this->timeout)
-            ->connectTimeout($this->connectTimeout)
-            ->post($url, $body);
+        // 根据 body 类型选择发送方式
+        if (is_string($body)) {
+            // Body 透传模式：使用原始字符串作为请求体
+            $response = Http::withHeaders($headers)
+                ->timeout($this->timeout)
+                ->connectTimeout($this->connectTimeout)
+                ->withBody($body, 'application/json')
+                ->post($url);
+        } else {
+            // 正常模式：使用数组，Laravel会自动转为JSON
+            $response = Http::withHeaders($headers)
+                ->timeout($this->timeout)
+                ->connectTimeout($this->connectTimeout)
+                ->post($url, $body);
+        }
 
         if (! $response->ok()) {
             throw $this->createErrorFromResponse($response);

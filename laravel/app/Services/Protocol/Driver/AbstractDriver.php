@@ -3,6 +3,7 @@
 namespace App\Services\Protocol\Driver;
 
 use App\Services\Protocol\Exceptions\ProtocolException;
+use Illuminate\Support\Facades\Log;
 
 /**
  * 抽象协议驱动基类
@@ -78,6 +79,7 @@ abstract class AbstractDriver implements DriverInterface
      */
     protected function parseSSEEvent(string $rawEvent): ?array
     {
+        Log::debug('parseSSEEvent', $rawEvent);
         $lines = explode("\n", trim($rawEvent));
         $event = [];
         $data = '';

@@ -20,6 +20,17 @@ class StandardStreamEvent
 
     public const TYPE_ERROR = 'error';           // 错误
 
+    public const TYPE_PING = 'ping';             // 心跳保活
+
+    // Anthropic 特定事件类型 (透传)
+    public const TYPE_MESSAGE_DELTA = 'message_delta';           // 消息增量
+
+    public const TYPE_MESSAGE_STOP = 'message_stop';             // 消息停止
+
+    public const TYPE_CONTENT_BLOCK_START = 'content_block_start'; // 内容块开始
+
+    public const TYPE_CONTENT_BLOCK_STOP = 'content_block_stop';   // 内容块停止
+
     public function __construct(
         // 事件类型
         public string $type,

@@ -83,21 +83,30 @@ class AuditLogController extends AdminController
 
                 return "首字: {$first} / 总计: {$total}";
             });
-            $grid->column('status_code', '状态码')->display(function ($value) {
-                if (is_null($value)) {
-                    return '-';
-                }
-                if ($value >= 200 && $value < 300) {
-                    return "<span class='badge bg-success'>$value</span>";
-                }
-                if ($value >= 400 && $value < 500) {
-                    return "<span class='badge bg-warning'>$value</span>";
-                }
-                if ($value >= 500) {
-                    return "<span class='badge bg-danger'>$value</span>";
+            $grid->column('status_stream', '状态码/流')->display(function () {
+                $statusCode = $this->status_code;
+                $isStream = $this->is_stream;
+
+                // 状态码徽章
+                $statusBadge = '-';
+                if (! is_null($statusCode)) {
+                    if ($statusCode >= 200 && $statusCode < 300) {
+                        $statusBadge = "<span class='badge bg-success'>{$statusCode}</span>";
+                    } elseif ($statusCode >= 400 && $statusCode < 500) {
+                        $statusBadge = "<span class='badge bg-warning'>{$statusCode}</span>";
+                    } elseif ($statusCode >= 500) {
+                        $statusBadge = "<span class='badge bg-danger'>{$statusCode}</span>";
+                    } else {
+                        $statusBadge = $statusCode;
+                    }
                 }
 
-                return $value;
+                // 流式徽章
+                $streamBadge = $isStream
+                    ? "<span class='badge bg-primary'>流</span>"
+                    : "<span class='badge bg-secondary'>非流</span>";
+
+                return "{$statusBadge} {$streamBadge}";
             });
             $grid->column('created_at', '创建时间')->sortable();
 

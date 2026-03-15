@@ -14,4 +14,5 @@ use Dcat\Admin\Show\Field;
 // - json_view_link(): $show->field('field_name', '字段标签')->json_view_link()
 // - json_view_iframe(): $show->field('field_name', '字段标签')->json_view_iframe($height = 400)
 // - copyable(): $show->field('field_name', '字段标签')->copyable($buttonText = null, $successText = null)
+// - sseChunks(): $show->field('field_name', '字段标签')->sseChunks($height = 600)
 Field::mixin(new ShowFieldMacro);
