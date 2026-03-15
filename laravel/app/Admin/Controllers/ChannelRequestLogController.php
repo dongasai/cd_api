@@ -164,33 +164,17 @@ class ChannelRequestLogController extends AdminController
             // 响应信息
             $show->field('response_status', '响应状态');
             // 使用链接跳转到独立页面查看
-            // $show->field('response_headers', '响应头')->as(function ($value) {
-            //     if (empty($value)) {
-            //         return '-';
-            //     }
+            $show->field('response_headers', '响应头')->json();
 
-            //     $url = admin_url('json-preview/channel-request-logs/'.$this->id.'/response_headers');
+            $show->field('response_body', '响应体')->json_view();
 
-            //     return '<a href="'.$url.'" class="btn btn-sm btn-primary"><i class="fa fa-eye"></i> 查看JSON</a>';
-            // })->unescape();
+            $show->field('response_size', '响应大小')->display(function ($value) {
+                if ($value === null) {
+                    return '-';
+                }
 
-            // $show->field('response_body', '响应体')->as(function ($value) {
-            //     if (empty($value)) {
-            //         return '-';
-            //     }
-
-            //     $url = admin_url('json-preview/channel-request-logs/'.$this->id.'/response_body');
-
-            //     return '<a href="'.$url.'" class="btn btn-sm btn-primary"><i class="fa fa-eye"></i> 查看JSON</a>';
-            // })->unescape();
-
-            // $show->field('response_size', '响应大小')->display(function ($value) {
-            //     if ($value === null) {
-            //         return '-';
-            //     }
-
-            //     return $this->formatFileSize($value);
-            // });
+                return $this->formatFileSize($value);
+            });
 
             // 性能指标
             $show->field('latency_ms', '延迟(ms)')->as(function ($value) {
