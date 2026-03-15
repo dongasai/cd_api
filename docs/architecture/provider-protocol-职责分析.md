@@ -140,11 +140,11 @@ class StreamChunk
     public string $id;
     public string $model;
     public ?string $contentDelta = null;      // 增量文本（原 delta）
-    public ?string $finishReason = null;
+    public ?FinishReason $finishReason = null; // 使用枚举
     public ?int $index = 0;
 
     // 事件类型（原 event）
-    public string $type = 'content_delta';    // start, content_delta, reasoning_delta, tool_use, finish, error, ping, ...
+    public StreamEventType $type = StreamEventType::ContentDelta;
 
     // 工具调用相关（单数，因为每次只有一个增量）
     public ?ToolCall $toolCall = null;
@@ -161,7 +161,7 @@ class StreamChunk
 
     // 错误信息
     public ?string $error = null;
-    public ?string $errorType = null;         // rate_limit, context_length_exceeded, invalid_request, ...
+    public ?ErrorType $errorType = null;      // 使用枚举
 
     // 解析状态
     public bool $isPartial = false;           // 是否为部分解析结果
@@ -171,7 +171,7 @@ class StreamChunk
 // Message.php - 统一消息格式
 class Message
 {
-    public string $role; // system, user, assistant, tool
+    public MessageRole $role;                 // 使用枚举
     public ?string $content = null;
     public ?array $toolCalls = null; // ToolCall[]
     public ?string $toolCallId = null;
@@ -182,7 +182,7 @@ class Message
 class ToolCall
 {
     public ?string $id = null;
-    public string $type = 'function';
+    public ToolType $type = ToolType::Function; // 使用枚举
     public ?string $name = null;
     public ?string $arguments = null;         // 字符串形式
     public ?int $index = null;                // 流式场景中的索引
@@ -213,27 +213,384 @@ class ContentBlock
 
 ---
 
+## 枚举定义
+
+### StreamEventType - 流式事件类型
+
+**文件**: `app/Services/Shared/Enums/StreamEventType.php`
+
+```php
+<?php
+
+namespace App\Services\Shared\Enums;
+
+/**
+ * 流式事件类型枚举
+ */
+enum StreamEventType: string
+{
+    case Start = 'start';                        // 流开始
+    case ContentDelta = 'content_delta';         // 内容增量
+    case ReasoningDelta = 'reasoning_delta';     // 推理内容增量（Claude/DeepSeek）
+    case ToolUse = 'tool_use';                   // 工具调用
+    case ToolUseInputDelta = 'tool_use_input_delta'; // 工具调用输入增量
+    case Finish = 'finish';                      // 流结束
+    case Error = 'error';                        // 错误
+    case Ping = 'ping';                          // 心跳
+
+    /**
+     * 判断是否为内容类型事件
+     */
+    public function isContent(): bool
+    {
+        return in_array($this, [
+            self::ContentDelta,
+            self::ReasoningDelta,
+            self::ToolUse,
+            self::ToolUseInputDelta,
+        ]);
+    }
+
+    /**
+     * 判断是否为控制类型事件
+     */
+    public function isControl(): bool
+    {
+        return in_array($this, [
+            self::Start,
+            self::Finish,
+            self::Error,
+            self::Ping,
+        ]);
+    }
+}
+```
+
+### FinishReason - 结束原因
+
+**文件**: `app/Services/Shared/Enums/FinishReason.php`
+
+```php
+<?php
+
+namespace App\Services\Shared\Enums;
+
+/**
+ * 结束原因枚举
+ */
+enum FinishReason: string
+{
+    case Stop = 'stop';                         // 自然结束（遇到 stop 序列）
+    case EndTurn = 'end_turn';                  // 轮次结束（Anthropic）
+    case MaxTokens = 'max_tokens';              // 达到最大 token 限制
+    case ToolUse = 'tool_use';                  // 调用工具
+    case StopSequence = 'stop_sequence';        // 遇到停止序列（Anthropic）
+
+    /**
+     * 转换为 OpenAI 格式
+     */
+    public function toOpenAI(): string
+    {
+        return match ($this) {
+            self::EndTurn => 'stop',
+            self::ToolUse => 'tool_calls',
+            self::StopSequence => 'stop',
+            default => $this->value,
+        };
+    }
+
+    /**
+     * 转换为 Anthropic 格式
+     */
+    public function toAnthropic(): string
+    {
+        return match ($this) {
+            self::Stop => 'end_turn',
+            self::ToolUse => 'tool_use',
+            self::MaxTokens => 'max_tokens',
+            default => $this->value,
+        };
+    }
+
+    /**
+     * 从 OpenAI 格式创建
+     */
+    public static function fromOpenAI(string $reason): self
+    {
+        return match ($reason) {
+            'stop' => self::Stop,
+            'tool_calls' => self::ToolUse,
+            'length' => self::MaxTokens,
+            default => self::Stop,
+        };
+    }
+
+    /**
+     * 从 Anthropic 格式创建
+     */
+    public static function fromAnthropic(string $reason): self
+    {
+        return match ($reason) {
+            'end_turn' => self::EndTurn,
+            'max_tokens' => self::MaxTokens,
+            'stop_sequence' => self::StopSequence,
+            'tool_use' => self::ToolUse,
+            default => self::EndTurn,
+        };
+    }
+}
+```
+
+### ErrorType - 错误类型
+
+**文件**: `app/Services/Shared/Enums/ErrorType.php`
+
+```php
+<?php
+
+namespace App\Services\Shared\Enums;
+
+/**
+ * 错误类型枚举
+ */
+enum ErrorType: string
+{
+    // 认证错误
+    case AuthenticationError = 'authentication_error';
+    case InvalidApiKey = 'invalid_api_key';
+    case InsufficientQuota = 'insufficient_quota';
+
+    // 请求错误
+    case InvalidRequest = 'invalid_request_error';
+    case ContextLengthExceeded = 'context_length_exceeded';
+    case RateLimitExceeded = 'rate_limit_exceeded';
+    case ModelNotFound = 'model_not_found';
+
+    // 服务器错误
+    case InternalError = 'internal_error';
+    case ServiceUnavailable = 'service_unavailable';
+    case GatewayTimeout = 'gateway_timeout';
+
+    // 内容错误
+    case ContentPolicyViolation = 'content_policy_violation';
+
+    /**
+     * 获取错误类型的HTTP状态码
+     */
+    public function getHttpStatusCode(): int
+    {
+        return match ($this) {
+            self::AuthenticationError,
+            self::InvalidApiKey => 401,
+
+            self::InsufficientQuota,
+            self::RateLimitExceeded => 429,
+
+            self::InvalidRequest,
+            self::ContextLengthExceeded,
+            self::ModelNotFound,
+            self::ContentPolicyViolation => 400,
+
+            self::InternalError => 500,
+            self::ServiceUnavailable => 503,
+            self::GatewayTimeout => 504,
+        };
+    }
+
+    /**
+     * 获取错误类型的可读描述
+     */
+    public function getDescription(): string
+    {
+        return match ($this) {
+            self::AuthenticationError => 'Authentication failed',
+            self::InvalidApiKey => 'Invalid API key provided',
+            self::InsufficientQuota => 'You exceeded your current quota',
+            self::InvalidRequest => 'Invalid request parameters',
+            self::ContextLengthExceeded => 'Context length exceeded limit',
+            self::RateLimitExceeded => 'Rate limit exceeded',
+            self::ModelNotFound => 'Model not found',
+            self::InternalError => 'Internal server error',
+            self::ServiceUnavailable => 'Service temporarily unavailable',
+            self::GatewayTimeout => 'Gateway timeout',
+            self::ContentPolicyViolation => 'Content policy violation',
+        };
+    }
+
+    /**
+     * 从 OpenAI 错误类型创建
+     */
+    public static function fromOpenAI(string $type): self
+    {
+        return match ($type) {
+            'invalid_api_key' => self::InvalidApiKey,
+            'insufficient_quota' => self::InsufficientQuota,
+            'rate_limit_exceeded' => self::RateLimitExceeded,
+            'context_length_exceeded' => self::ContextLengthExceeded,
+            'model_not_found' => self::ModelNotFound,
+            default => self::InvalidRequest,
+        };
+    }
+
+    /**
+     * 从 Anthropic 错误类型创建
+     */
+    public static function fromAnthropic(string $type): self
+    {
+        return match ($type) {
+            'authentication_error' => self::AuthenticationError,
+            'rate_limit_error' => self::RateLimitExceeded,
+            'context_length_exceeded' => self::ContextLengthExceeded,
+            'not_found_error' => self::ModelNotFound,
+            'overloaded_error' => self::ServiceUnavailable,
+            default => self::InvalidRequest,
+        };
+    }
+
+    /**
+     * 转换为 OpenAI 格式
+     */
+    public function toOpenAI(): string
+    {
+        return match ($this) {
+            self::AuthenticationError => 'invalid_api_key',
+            self::InsufficientQuota => 'insufficient_quota',
+            self::RateLimitExceeded => 'rate_limit_exceeded',
+            self::ContextLengthExceeded => 'context_length_exceeded',
+            self::ModelNotFound => 'model_not_found',
+            self::ServiceUnavailable => 'server_error',
+            default => 'invalid_request_error',
+        };
+    }
+
+    /**
+     * 转换为 Anthropic 格式
+     */
+    public function toAnthropic(): string
+    {
+        return match ($this) {
+            self::AuthenticationError => 'authentication_error',
+            self::RateLimitExceeded => 'rate_limit_error',
+            self::ContextLengthExceeded => 'context_length_exceeded',
+            self::ModelNotFound => 'not_found_error',
+            self::ServiceUnavailable => 'overloaded_error',
+            default => 'invalid_request_error',
+        };
+    }
+}
+```
+
+### MessageRole - 消息角色
+
+**文件**: `app/Services/Shared/Enums/MessageRole.php`
+
+```php
+<?php
+
+namespace App\Services\Shared\Enums;
+
+/**
+ * 消息角色枚举
+ */
+enum MessageRole: string
+{
+    case System = 'system';
+    case User = 'user';
+    case Assistant = 'assistant';
+    case Tool = 'tool';
+
+    /**
+     * 判断是否为系统角色
+     */
+    public function isSystem(): bool
+    {
+        return $this === self::System;
+    }
+
+    /**
+     * 判断是否为用户角色
+     */
+    public function isUser(): bool
+    {
+        return $this === self::User;
+    }
+
+    /**
+     * 判断是否为助手角色
+     */
+    public function isAssistant(): bool
+    {
+        return $this === self::Assistant;
+    }
+
+    /**
+     * 判断是否为工具角色
+     */
+    public function isTool(): bool
+    {
+        return $this === self::Tool;
+    }
+}
+```
+
+### ToolType - 工具类型
+
+**文件**: `app/Services/Shared/Enums/ToolType.php`
+
+```php
+<?php
+
+namespace App\Services\Shared\Enums;
+
+/**
+ * 工具类型枚举
+ */
+enum ToolType: string
+{
+    case Function = 'function';
+
+    /**
+     * 获取所有可用的工具类型
+     */
+    public static function available(): array
+    {
+        return [
+            self::Function,
+        ];
+    }
+}
+```
+
+---
+
 ## 文件结构-新（重构后）
 
 ### Shared 层（新增）
 
 ```
 app/Services/Shared/
-└── DTO/
-    ├── Request.php              # 统一请求 DTO（合并 ProviderRequest + StandardRequest）
-    ├── Response.php             # 统一响应 DTO（合并 ProviderResponse + StandardResponse）
-    ├── StreamChunk.php          # 统一流式块 DTO（合并 ProviderStreamChunk + StandardStreamEvent）
-    ├── Message.php              # 消息 DTO（来自 StandardMessage）
-    ├── ToolCall.php             # 工具调用 DTO（合并部分 TokenUsage + StandardToolCall）
-    ├── Usage.php                # 使用量 DTO（合并 TokenUsage + StandardUsage）
-    ├── ContentBlock.php         # 内容块 DTO（来自 Protocol）
-    └── ActualRequestInfo.php    # 实际请求信息 DTO（来自 Provider）
+├── DTO/
+│   ├── Request.php              # 统一请求 DTO（合并 ProviderRequest + StandardRequest）
+│   ├── Response.php             # 统一响应 DTO（合并 ProviderResponse + StandardResponse）
+│   ├── StreamChunk.php          # 统一流式块 DTO（合并 ProviderStreamChunk + StandardStreamEvent）
+│   ├── Message.php              # 消息 DTO（来自 StandardMessage）
+│   ├── ToolCall.php             # 工具调用 DTO（合并部分 TokenUsage + StandardToolCall）
+│   ├── Usage.php                # 使用量 DTO（合并 TokenUsage + StandardUsage）
+│   ├── ContentBlock.php         # 内容块 DTO（来自 Protocol）
+│   └── ActualRequestInfo.php    # 实际请求信息 DTO（来自 Provider）
+└── Enums/                       # 枚举定义 ⭐ 新增
+    ├── StreamEventType.php      # 流式事件类型枚举
+    ├── FinishReason.php         # 结束原因枚举
+    ├── ErrorType.php            # 错误类型枚举
+    ├── MessageRole.php          # 消息角色枚举
+    └── ToolType.php             # 工具类型枚举
 ```
 
 **重要原则**：
 - 所有 DTO 都是**纯数据容器**，不包含任何业务逻辑
 - DTO 不包含 `from*()` 解析方法（由 Provider 层负责）
 - DTO 不包含 `to*()` 转换方法（由 Protocol 层负责）
+- 所有枚举使用 PHP 8.1+ Enum 特性，提供类型安全和IDE自动补全
 
 ### Protocol 层
 
@@ -695,6 +1052,12 @@ app/Services/Shared/
 
 **任务清单**：
 - [ ] 创建 `app/Services/Shared/DTO/` 目录
+- [ ] 创建 `app/Services/Shared/Enums/` 目录
+- [ ] 实现 `StreamEventType.php` 枚举
+- [ ] 实现 `FinishReason.php` 枚举
+- [ ] 实现 `ErrorType.php` 枚举
+- [ ] 实现 `MessageRole.php` 枚举
+- [ ] 实现 `ToolType.php` 枚举
 - [ ] 实现 `Usage.php`（合并 TokenUsage + StandardUsage）
 - [ ] 实现 `ToolCall.php`（合并相关字段）
 - [ ] 实现 `Message.php`
@@ -704,6 +1067,7 @@ app/Services/Shared/
 - [ ] 实现 `StreamChunk.php`（合并 ProviderStreamChunk + StandardStreamEvent）
 - [ ] 实现 `ActualRequestInfo.php`
 - [ ] 编写单元测试验证 DTO 字段正确性
+- [ ] 编写单元测试验证枚举转换逻辑
 
 **验收标准**：
 - 所有 DTO 类创建完成
@@ -1096,17 +1460,19 @@ class EdgeCasesTest extends TestCase
 ```php
 // app/Services/Shared/DTO/StreamChunk.php
 
+use App\Services\Shared\Enums\ErrorType;
+
 class StreamChunk
 {
     // ... 其他字段 ...
 
     // 错误信息
     public ?string $error = null;
-    public ?string $errorType = null;    // rate_limit, context_length_exceeded, invalid_request, ...
+    public ?ErrorType $errorType = null;    // 使用枚举替代字符串
 
     // 解析状态
-    public bool $isPartial = false;       // 是否为部分解析结果
-    public ?string $parseError = null;    // 解析失败原因
+    public bool $isPartial = false;         // 是否为部分解析结果
+    public ?string $parseError = null;      // 解析失败原因
 }
 ```
 
@@ -1120,8 +1486,13 @@ class StreamChunk
 │ Provider 层: parseResponse() / parseStreamChunk()   │
 │                                                     │
 │ 1. 捕获上游错误格式                                  │
-│ 2. 填充 StreamChunk->error 和 errorType            │
+│ 2. 使用 ErrorType 枚举填充 errorType               │
 │ 3. 记录错误日志                                      │
+│                                                     │
+│ 示例:                                               │
+│ $chunk->errorType = ErrorType::fromOpenAI(         │
+│     $data['error']['type']                          │
+│ );                                                  │
 └─────────────────────────────────────────────────────┘
       │
       ▼
@@ -1129,8 +1500,12 @@ class StreamChunk
 │ Protocol 层: buildStreamChunk()                     │
 │                                                     │
 │ 1. 检查 StreamChunk->error                         │
-│ 2. 转换为目标协议的错误格式                          │
+│ 2. 使用 ErrorType::toOpenAI() 或 toAnthropic()     │
+│    转换为目标协议的错误格式                          │
 │ 3. 添加必要的错误详情                                │
+│                                                     │
+│ 示例:                                               │
+│ 'type' => $chunk->errorType->toOpenAI()            │
 └─────────────────────────────────────────────────────┘
       │
       ▼
@@ -1141,6 +1516,10 @@ class StreamChunk
 
 ```php
 // app/Services/Provider/Driver/AbstractProvider.php
+
+use App\Services\Shared\DTO\StreamChunk;
+use App\Services\Shared\Enums\StreamEventType;
+use App\Services\Shared\Enums\ErrorType;
 
 protected function handleParseError(string $rawEvent, \Throwable $e): ?StreamChunk
 {
@@ -1153,6 +1532,7 @@ protected function handleParseError(string $rawEvent, \Throwable $e): ?StreamChu
     return new StreamChunk(
         id: uniqid(),
         model: '',
+        type: StreamEventType::Error,
         isPartial: true,
         parseError: $e->getMessage(),
     );
@@ -1172,19 +1552,32 @@ protected function handleParseError(string $rawEvent, \Throwable $e): ?StreamChu
 
 ```php
 // OpenAI 格式
-{
-    "error": {
-        "message": "Rate limit exceeded",
-        "type": "rate_limit_error",
-        "code": "rate_limit_exceeded"
-    }
-}
+use App\Services\Shared\Enums\ErrorType;
+
+$errorType = ErrorType::RateLimitExceeded;
+
+[
+    'error' => [
+        'message' => 'Rate limit exceeded',
+        'type' => $errorType->toOpenAI(),        // 'rate_limit_exceeded'
+        'code' => $errorType->value,              // 'rate_limit_exceeded'
+    ]
+]
 
 // Anthropic 格式
-{
-    "type": "error",
-    "error": {
-        "type": "rate_limit_error",
-        "message": "Rate limit exceeded"
-    }
-}
+[
+    'type' => 'error',
+    'error' => [
+        'type' => $errorType->toAnthropic(),      // 'rate_limit_error'
+        'message' => 'Rate limit exceeded',
+    ]
+]
+```
+
+### 使用枚举的优势
+
+1. **类型安全**：IDE 自动补全，避免拼写错误
+2. **集中管理**：所有错误类型定义在一处，易于维护
+3. **转换逻辑**：内置 `toOpenAI()` / `toAnthropic()` 方法，避免散落的转换代码
+4. **扩展性强**：添加新错误类型只需修改枚举类
+5. **文档友好**：枚举本身就是文档，包含所有可能的值
