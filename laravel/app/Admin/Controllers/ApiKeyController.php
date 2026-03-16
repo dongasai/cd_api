@@ -3,10 +3,10 @@
 namespace App\Admin\Controllers;
 
 use App\Admin\Actions\RefreshModelCache;
+use App\Admin\Actions\ResetApiKey;
 use App\Admin\Grids\ChannelSelectGrid;
 use App\Models\ApiKey;
 use App\Models\Channel;
-use App\Services\ModelService;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
@@ -35,8 +35,12 @@ class ApiKeyController extends AdminController
         return Grid::make(ApiKey::query()->orderBy('id', 'desc'), function (Grid $grid) {
             // 列表字段
             $grid->column('id', 'ID')->sortable();
-            $grid->column('name', '名称');
-            $grid->column('key_prefix', '密钥前缀')->copyable();
+            $grid->column('name', '名称')->copyableValue('key');  // 显示名称，点击复制图标可复制密钥
+            $grid->column('key', '密钥')
+                ->display(function ($value) {
+                    return substr($value, 0, 15).'...';  // 显示部分密钥
+                })
+                ->copyableValue();  // 复制完整密钥
             $grid->column('status', '状态')->using([
                 'active' => '激活',
                 'revoked' => '已撤销',
@@ -62,15 +66,15 @@ class ApiKeyController extends AdminController
                     'expired' => '已过期',
                 ]);
                 $filter->like('name', '名称');
-                $filter->like('key_prefix', '密钥前缀');
+                $filter->like('key', '密钥');
             });
 
             // 快速搜索
-            $grid->quickSearch(['id', 'name', 'key_prefix']);
+            $grid->quickSearch(['id', 'name', 'key']);
 
             // 操作按钮
             $grid->actions([
-                // 可以添加自定义操作
+                new ResetApiKey,
             ]);
 
             // 批量操作
@@ -91,7 +95,9 @@ class ApiKeyController extends AdminController
         return Show::make($id, new ApiKey, function (Show $show) {
             $show->field('id', 'ID');
             $show->field('name', '名称');
-            $show->field('key_prefix', '密钥前缀');
+            $show->field('key', '密钥')->display(function ($value) {
+                return substr($value, 0, 10).'...';
+            });
             $show->field('status', '状态')->using([
                 'active' => '激活',
                 'revoked' => '已撤销',
@@ -237,19 +243,13 @@ class ApiKeyController extends AdminController
                 ->maxLength(100)
                 ->help('API密钥的名称，方便识别');
 
-            // 密钥字段
-            if ($form->isCreating()) {
-                // 创建时自动生成密钥并显示
-                $form->display('generated_key', '密钥')
-                    ->default($this->generateApiKey())
-                    ->help('创建时自动生成，请妥善保存。密钥只会显示一次！');
-                $form->hidden('key_hash');
-                $form->hidden('key_prefix');
-            } else {
-                // 编辑时只显示前缀
-                $form->display('key_prefix', '密钥前缀')
-                    ->help('密钥已隐藏，仅显示前缀');
-            }
+            // 密钥字段 - 生成一次
+            $defaultKey = $this->generateApiKey();
+            $form->text('key', '密钥')
+                ->default($defaultKey)
+                ->required()
+                ->help('API密钥，创建后请妥善保存')
+                ->readOnly();
 
             // 状态
             $form->select('status', '状态')
@@ -299,28 +299,6 @@ class ApiKeyController extends AdminController
             // 时间戳
             $form->display('created_at', '创建时间');
             $form->display('updated_at', '更新时间');
-
-            // 保存前回调
-            $form->saving(function (Form $form) {
-                // 创建时生成密钥
-                if ($form->isCreating()) {
-                    // 从 generated_key 字段获取密钥
-                    $key = request('generated_key', $this->generateApiKey());
-                    $form->key_hash = hash('sha256', $key);
-                    $form->key_prefix = substr($key, 0, 10);
-
-                    // 删除临时字段
-                    $form->deleteInput('generated_key');
-                }
-            });
-
-            // 保存后回调 - 清除模型缓存
-            $form->saved(function (Form $form) {
-                $id = $form->model()->id;
-                if ($id) {
-                    ModelService::clearCache((int) $id);
-                }
-            });
         });
     }
 
@@ -329,7 +307,10 @@ class ApiKeyController extends AdminController
      */
     protected function generateApiKey(): string
     {
-        return 'sk-'.Str::random(48);
+        // 获取系统配置的密钥前缀，默认为 cdapi-
+        $prefix = app(\App\Services\SettingService::class)->get('security.api_key_prefix', 'cdapi-');
+
+        return $prefix.Str::random(48);
     }
 
     /**

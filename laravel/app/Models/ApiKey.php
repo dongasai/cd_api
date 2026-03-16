@@ -15,8 +15,6 @@ class ApiKey extends Model
     protected $fillable = [
         'name',
         'key',
-        'key_hash',
-        'key_prefix',
         'allowed_models',
         'model_mappings',
         'allowed_channels',
@@ -64,11 +62,11 @@ class ApiKey extends Model
 
     public function getMaskedKey(): string
     {
-        if (empty($this->key_prefix)) {
+        if (empty($this->key)) {
             return '未设置';
         }
 
-        return $this->key_prefix.'...';
+        return substr($this->key, 0, 10).'...';
     }
 
     /**

@@ -28,9 +28,7 @@ class AuthenticateApiKey
             ], 401);
         }
 
-        $keyRecord = ApiKey::where('key', $apiKey)
-            ->orWhere('key_hash', hash('sha256', $apiKey))
-            ->first();
+        $keyRecord = ApiKey::where('key', $apiKey)->first();
 
         if (! $keyRecord) {
             return response()->json([

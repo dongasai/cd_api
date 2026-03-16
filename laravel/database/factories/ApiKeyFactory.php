@@ -25,8 +25,6 @@ class ApiKeyFactory extends Factory
         return [
             'name' => fake()->name(),
             'key' => $key,
-            'key_hash' => hash('sha256', $key),
-            'key_prefix' => substr($key, 0, 8),
             'permissions' => null,
             'allowed_models' => null,
             'model_mappings' => null,

@@ -1,6 +1,8 @@
 <?php
 
+use App\Admin\Extensions\Grid\Displayers\CopyableValue;
 use App\Admin\Extensions\ShowFieldMacro;
+use Dcat\Admin\Grid\Column;
 use Dcat\Admin\Show\Field;
 
 /**
@@ -8,6 +10,12 @@ use Dcat\Admin\Show\Field;
  *
  * 在此文件中注册自定义的扩展功能
  */
+
+// 注册 Grid Column 扩展方法
+// 使用方式：
+// - copyableValue(): $grid->column('display_field')->copyableValue('copy_field')
+// - copyableValue(): $grid->column('display_field')->copyableValue(function() { return $this->id; })
+Column::extend('copyableValue', CopyableValue::class);
 
 // 注册 Show Field 宏方法
 // 使用方式：

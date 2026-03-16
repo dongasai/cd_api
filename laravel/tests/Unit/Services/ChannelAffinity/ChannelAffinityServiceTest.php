@@ -78,8 +78,6 @@ class ChannelAffinityServiceTest extends TestCase
         $apiKey = ApiKey::create([
             'name' => 'Test Key',
             'key' => 'sk-test123',
-            'key_hash' => 'hash123',
-            'key_prefix' => 'sk-',
             'status' => 'active',
         ]);
 
@@ -125,8 +123,6 @@ class ChannelAffinityServiceTest extends TestCase
         $apiKey = ApiKey::create([
             'name' => 'Test Key',
             'key' => 'sk-test123',
-            'key_hash' => 'hash123',
-            'key_prefix' => 'sk-',
             'status' => 'active',
         ]);
 
@@ -168,8 +164,6 @@ class ChannelAffinityServiceTest extends TestCase
         $apiKey = ApiKey::create([
             'name' => 'Test Key',
             'key' => 'sk-test123',
-            'key_hash' => 'hash123',
-            'key_prefix' => 'sk-',
             'status' => 'active',
         ]);
 
