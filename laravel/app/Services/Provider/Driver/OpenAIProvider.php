@@ -8,6 +8,7 @@ use App\Services\Shared\DTO\StreamChunk;
 use App\Services\Shared\DTO\ToolCall;
 use App\Services\Shared\DTO\Usage;
 use App\Services\Shared\Enums\FinishReason;
+use Illuminate\Support\Facades\Log;
 
 /**
  * OpenAI 供应商
@@ -218,6 +219,7 @@ class OpenAIProvider extends AbstractProvider
      */
     protected function parseOpenAIStreamChunk(string $rawChunk): ?StreamChunk
     {
+        Log::debug("parseOpenAIStreamChunk \n".$rawChunk);
         // 处理 "data: " 前缀
         if (str_starts_with($rawChunk, 'data: ')) {
             $rawChunk = substr($rawChunk, 6);
@@ -244,6 +246,7 @@ class OpenAIProvider extends AbstractProvider
             : null;
 
         $contentDelta = $delta['content'] ?? null;
+        $reasoningDelta = $delta['reasoning_content'] ?? null;
         $toolCalls = $delta['tool_calls'] ?? null;
 
         $usage = null;
@@ -262,6 +265,7 @@ class OpenAIProvider extends AbstractProvider
             data: $data,
             delta: $contentDelta ?? '',
             toolCalls: $toolCalls,
+            reasoningDelta: $reasoningDelta,
         );
     }
 }

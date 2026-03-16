@@ -64,10 +64,30 @@ class Message
                 fn ($block) => ! in_array($block->type, ['tool_use', 'tool_result'])
             );
             if (! empty($nonToolBlocks)) {
-                $result['content'] = array_map(
-                    fn ($block) => $block->toOpenAI(),
-                    $nonToolBlocks
-                );
+                // 重新索引数组,确保 JSON 编码为数组而不是对象
+                $nonToolBlocks = array_values($nonToolBlocks);
+
+                // 检查是否全是纯文本块，如果是则合并成单个字符串（兼容更多上游API）
+                $allText = true;
+                $textContent = '';
+                foreach ($nonToolBlocks as $block) {
+                    if ($block->type !== 'text') {
+                        $allText = false;
+                        break;
+                    }
+                    $textContent .= $block->text ?? '';
+                }
+
+                if ($allText) {
+                    // 全是文本，直接使用合并后的字符串
+                    $result['content'] = $textContent;
+                } else {
+                    // 包含非文本内容，使用数组格式
+                    $result['content'] = array_map(
+                        fn ($block) => $block->toOpenAI(),
+                        $nonToolBlocks
+                    );
+                }
             } else {
                 $result['content'] = null;
             }

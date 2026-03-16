@@ -104,7 +104,7 @@ class ContentBlock
      */
     public function toOpenAI(): array
     {
-        return match ($this->type) {
+        $result = match ($this->type) {
             'text' => [
                 'type' => 'text',
                 'text' => $this->text ?? '',
@@ -144,6 +144,9 @@ class ContentBlock
                 'text' => $this->text ?? '',
             ],
         };
+
+        // 只保留必要的字段,过滤掉null值,避免上游API误判
+        return array_filter($result, fn ($v) => $v !== null && $v !== []);
     }
 
     /**

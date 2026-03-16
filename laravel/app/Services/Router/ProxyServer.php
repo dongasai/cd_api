@@ -7,6 +7,7 @@ use App\Models\RequestLog;
 use App\Services\ChannelAffinity\ChannelAffinityService;
 use App\Services\CodingStatus\ChannelCodingStatusService;
 use App\Services\Protocol\ProtocolConverter;
+use App\Services\Provider\Exceptions\ProviderException;
 use App\Services\Provider\ProviderManager;
 use App\Services\Router\Handler\NonStreamHandler;
 use App\Services\Router\Handler\StreamHandler;
@@ -62,6 +63,8 @@ class ProxyServer
     protected float $startTime;
 
     protected ?Channel $selectedChannel = null;
+
+    protected ?\App\Models\ChannelRequestLog $channelRequestLog = null;
 
     protected ?string $currentGroup = null;
 
@@ -278,6 +281,27 @@ class ProxyServer
             'error_type' => get_class($e),
             'error_message' => $e->getMessage(),
         ]);
+
+        // 更新渠道请求日志（记录渠道返回的错误）
+        if ($this->channelRequestLog) {
+            $updateData = [
+                'response_status' => $statusCode,
+                'latency_ms' => $latencyMs,
+                'is_success' => false,
+                'error_type' => get_class($e),
+                'error_message' => $e->getMessage(),
+            ];
+
+            // 如果是 ProviderException，记录原始错误信息
+            if ($e instanceof \App\Services\Provider\Exceptions\ProviderException) {
+                $rawError = $e->getRawError();
+                if ($rawError !== null) {
+                    $updateData['response_body'] = $rawError;
+                }
+            }
+
+            $this->channelRequestLog->update($updateData);
+        }
 
         Log::error('Proxy request failed', [
             'request_id' => $this->requestId,

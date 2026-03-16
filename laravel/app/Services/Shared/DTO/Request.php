@@ -285,12 +285,36 @@ class Request
             if ($msg instanceof Message) {
                 $messages[] = $msg;
             } elseif (is_array($msg)) {
+                // 处理 content 字段：可能是字符串或数组（多模态）
+                $content = null;
+                $contentBlocks = null;
+
+                if (isset($msg['content'])) {
+                    if (is_array($msg['content'])) {
+                        // 多模态内容：转换为 ContentBlock 数组
+                        $contentBlocks = [];
+                        foreach ($msg['content'] as $block) {
+                            if (is_array($block)) {
+                                $contentBlocks[] = \App\Services\Shared\DTO\ContentBlock::fromOpenAI($block);
+                            }
+                        }
+                    } else {
+                        // 纯文本内容
+                        $content = (string) $msg['content'];
+                    }
+                }
+
+                // 优先使用已有的 content_blocks
+                if (isset($msg['content_blocks'])) {
+                    $contentBlocks = $msg['content_blocks'];
+                }
+
                 $messages[] = new Message(
                     role: \App\Services\Shared\Enums\MessageRole::from($msg['role'] ?? 'user'),
-                    content: $msg['content'] ?? null,
+                    content: $content,
                     toolCalls: $msg['tool_calls'] ?? null,
                     toolCallId: $msg['tool_call_id'] ?? null,
-                    contentBlocks: $msg['content_blocks'] ?? null,
+                    contentBlocks: $contentBlocks,
                 );
             }
         }

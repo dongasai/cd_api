@@ -240,4 +240,30 @@ class ProviderException extends \RuntimeException
             self::TYPE_CONTENT_FILTER,
         ]);
     }
+
+    /**
+     * 获取 HTTP 状态码
+     */
+    public function getStatusCode(): int
+    {
+        return $this->code;
+    }
+
+    /**
+     * 是否为渠道错误（应该对客户端隐藏详细错误信息）
+     */
+    public function isChannelError(): bool
+    {
+        // 认证错误、无效请求、模型未找到等属于渠道返回的错误
+        // 这些错误应该记录日志，但返回 500 给客户端
+        return in_array($this->errorType, [
+            self::TYPE_AUTH_ERROR,
+            self::TYPE_INVALID_REQUEST,
+            self::TYPE_MODEL_NOT_FOUND,
+            self::TYPE_CONTEXT_LENGTH,
+            self::TYPE_CONTENT_FILTER,
+            self::TYPE_RATE_LIMIT,
+            self::TYPE_SERVER_ERROR,
+        ]);
+    }
 }

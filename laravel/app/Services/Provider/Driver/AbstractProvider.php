@@ -371,6 +371,26 @@ abstract class AbstractProvider implements ProviderInterface
                     ->post($url);
             } else {
                 // 正常模式：使用数组，Laravel会自动转为JSON
+                // DEBUG: 记录实际发送的 JSON
+                $encodedBody = json_encode($body, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                Log::debug('Provider request body', [
+                    'url' => $url,
+                    'body_type' => gettype($body),
+                    'body_json' => $encodedBody,
+                ]);
+
+                // 调试：检查 messages[0].content 的类型
+                if (isset($body['messages'][0]['content'])) {
+                    Log::debug('Provider request message[0] check', [
+                        'content_type' => gettype($body['messages'][0]['content']),
+                        'content_is_object' => is_object($body['messages'][0]['content']),
+                        'content_is_array' => is_array($body['messages'][0]['content']),
+                        'content_preview' => is_string($body['messages'][0]['content'])
+                            ? mb_substr($body['messages'][0]['content'], 0, 100)
+                            : json_encode($body['messages'][0]['content']),
+                    ]);
+                }
+
                 $response = Http::withHeaders($headers)
                     ->timeout($this->timeout)
                     ->connectTimeout($this->connectTimeout)
@@ -587,6 +607,26 @@ abstract class AbstractProvider implements ProviderInterface
                 ->post($url);
         } else {
             // 正常模式：使用数组，Laravel会自动转为JSON
+            // DEBUG: 记录实际发送的 JSON
+            $encodedBody = json_encode($body, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            Log::debug('Provider request body', [
+                'url' => $url,
+                'body_type' => gettype($body),
+                'body_json' => $encodedBody,
+            ]);
+
+            // 调试：检查 messages[0].content 的类型
+            if (isset($body['messages'][0]['content'])) {
+                Log::debug('Provider request message[0] check', [
+                    'content_type' => gettype($body['messages'][0]['content']),
+                    'content_is_object' => is_object($body['messages'][0]['content']),
+                    'content_is_array' => is_array($body['messages'][0]['content']),
+                    'content_preview' => is_string($body['messages'][0]['content'])
+                        ? mb_substr($body['messages'][0]['content'], 0, 100)
+                        : json_encode($body['messages'][0]['content']),
+                ]);
+            }
+
             $response = Http::withHeaders($headers)
                 ->timeout($this->timeout)
                 ->connectTimeout($this->connectTimeout)

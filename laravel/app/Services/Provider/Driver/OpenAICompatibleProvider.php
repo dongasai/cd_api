@@ -5,6 +5,7 @@ namespace App\Services\Provider\Driver;
 use App\Services\Shared\DTO\Request;
 use App\Services\Shared\DTO\Response;
 use App\Services\Shared\DTO\StreamChunk;
+use Illuminate\Support\Facades\Log;
 
 /**
  * OpenAI 兼容供应商
@@ -177,6 +178,8 @@ class OpenAICompatibleProvider extends AbstractProvider
      */
     protected function parseOpenAIStreamChunk(string $rawChunk): ?\App\Services\Shared\DTO\StreamChunk
     {
+        Log::debug("parseOpenAIStreamChunk \n".$rawChunk);
+
         // 处理 "data: " 前缀
         if (str_starts_with($rawChunk, 'data: ')) {
             $rawChunk = substr($rawChunk, 6);
@@ -203,6 +206,7 @@ class OpenAICompatibleProvider extends AbstractProvider
             : null;
 
         $contentDelta = $delta['content'] ?? null;
+        $reasoningDelta = $delta['reasoning_content'] ?? null;
         $toolCalls = $delta['tool_calls'] ?? null;
 
         $usage = null;
@@ -221,6 +225,7 @@ class OpenAICompatibleProvider extends AbstractProvider
             data: $data,
             delta: $contentDelta ?? '',
             toolCalls: $toolCalls,
+            reasoningDelta: $reasoningDelta,
         );
     }
 

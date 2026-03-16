@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Services\ModelService;
+use App\Services\Provider\Exceptions\ProviderException;
 use App\Services\Router\ProxyServer;
 use Generator;
 use Illuminate\Http\JsonResponse;
@@ -102,7 +103,7 @@ class ProxyController extends Controller
         return response()->stream(function () use ($generator) {
             try {
                 foreach ($generator as $chunk) {
-                    Log::debug('streamResponsetoClient '.$chunk);
+                    Log::debug("streamResponsetoClient \n".$chunk);
                     echo $chunk;
                     if (ob_get_level() > 0) {
                         ob_flush();
@@ -129,11 +130,50 @@ class ProxyController extends Controller
 
     protected function handleException(\Exception $e, string $protocol = 'openai'): JsonResponse
     {
+        // 如果是 ProviderException（渠道错误），记录详细日志，返回通用错误
+        if ($e instanceof ProviderException && $e->isChannelError()) {
+            Log::error('Channel error', [
+                'error_type' => $e->getErrorType(),
+                'error_message' => $e->getMessage(),
+                'raw_error' => $e->getRawError(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            // 返回通用的渠道错误信息，不暴露具体错误细节
+            $error = $this->buildChannelErrorResponse($protocol);
+
+            return response()->json($error, 500);
+        }
+
         $statusCode = $this->getStatusCode($e);
 
         $error = $this->buildErrorResponse($e, $protocol);
 
         return response()->json($error, $statusCode);
+    }
+
+    /**
+     * 构建渠道错误的通用响应（不暴露具体错误细节）
+     */
+    protected function buildChannelErrorResponse(string $protocol): array
+    {
+        if ($protocol === 'anthropic') {
+            return [
+                'type' => 'error',
+                'error' => [
+                    'type' => 'api_error',
+                    'message' => 'An error occurred while processing your request. Please try again later.',
+                ],
+            ];
+        }
+
+        return [
+            'error' => [
+                'message' => 'An error occurred while processing your request. Please try again later.',
+                'type' => 'api_error',
+                'code' => null,
+            ],
+        ];
     }
 
     protected function getStatusCode(\Exception $e): int

@@ -288,7 +288,7 @@ class AnthropicProvider extends AbstractProvider
      */
     protected function parseAnthropicStreamChunk(string $rawEvent): ?StreamChunk
     {
-        Log::debug("parseAnthropicStreamChunk " .$rawEvent);
+        Log::debug("parseAnthropicStreamChunk \n".$rawEvent);
 
         $lines = explode("\n", trim($rawEvent));
         $event = '';

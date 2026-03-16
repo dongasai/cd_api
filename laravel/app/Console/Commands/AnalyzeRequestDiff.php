@@ -407,8 +407,8 @@ class AnalyzeRequestDiff extends Command
                 $isLargeDiff = strlen($reqContent) > 100 || strlen($chanContent) > 100;
                 $this->printDiff(
                     "消息[{$index}].content",
-                    $isLargeDiff ? '[大型文本，见下方 diff]' : $reqContent,
-                    $isLargeDiff ? '[大型文本，见下方 diff]' : $chanContent,
+                    $isLargeDiff ? ($this->showDiff ? '[大型文本，见下方 diff]' : '[大型文本，使用 --show-diff 查看详情]') : $reqContent,
+                    $isLargeDiff ? ($this->showDiff ? '[大型文本，见下方 diff]' : '[大型文本，使用 --show-diff 查看详情]') : $chanContent,
                     $diffLimit,
                     $reqContent,
                     $chanContent

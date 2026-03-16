@@ -33,9 +33,29 @@ class OpenAiChatCompletionsDriver extends AbstractDriver
     {
         $messages = [];
         foreach ($rawRequest['messages'] ?? [] as $msg) {
+            // 处理 content 字段：可能是字符串或数组（多模态）
+            $content = null;
+            $contentBlocks = null;
+
+            if (isset($msg['content'])) {
+                if (is_array($msg['content'])) {
+                    // 多模态内容：转换为 ContentBlock 数组
+                    $contentBlocks = [];
+                    foreach ($msg['content'] as $block) {
+                        if (is_array($block)) {
+                            $contentBlocks[] = \App\Services\Shared\DTO\ContentBlock::fromOpenAI($block);
+                        }
+                    }
+                } else {
+                    // 纯文本内容
+                    $content = (string) $msg['content'];
+                }
+            }
+
             $messages[] = new Message(
                 role: MessageRole::from($msg['role'] ?? 'user'),
-                content: $msg['content'] ?? null,
+                content: $content,
+                contentBlocks: $contentBlocks,
                 toolCalls: $msg['tool_calls'] ?? null,
                 toolCallId: $msg['tool_call_id'] ?? null,
             );
