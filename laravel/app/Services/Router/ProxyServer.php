@@ -91,13 +91,15 @@ class ProxyServer
             $protocolConverter,
             $providerManager,
             $this->auditLogger,
-            $this->responseLogger
+            $this->responseLogger,
+            $affinityService  // 注入亲和性服务
         );
         $this->nonStreamHandler = new NonStreamHandler(
             $protocolConverter,
             $providerManager,
             $this->auditLogger,
-            $this->responseLogger
+            $this->responseLogger,
+            $affinityService  // 注入亲和性服务
         );
 
         $this->startTime = microtime(true);
@@ -157,13 +159,6 @@ class ProxyServer
                         $this->currentGroup,
                         $this->channelSelector->getFailedChannels()
                     );
-
-                    // 更新审计日志渠道信息
-                    $this->auditLogger->update($auditLog, [
-                        'channel_id' => $this->selectedChannel?->id,
-                        'channel_name' => $this->selectedChannel?->name,
-                        'model' => $standardRequest->model,
-                    ]);
                 }
 
                 if ($this->selectedChannel === null) {
@@ -175,6 +170,16 @@ class ProxyServer
 
                 // 获取渠道协议
                 $channelProtocol = $this->getChannelProtocol($this->selectedChannel);
+
+                // 更新审计日志渠道信息和实际模型
+                $this->auditLogger->update($auditLog, [
+                    'channel_id' => $this->selectedChannel?->id,
+                    'channel_name' => $this->selectedChannel?->name,
+                    'model' => $standardRequest->model,
+                    'actual_model' => $actualModel,  // 添加实际模型
+                    'channel_affinity' => $this->affinityService->getAffinityInfo($request),  // 记录渠道亲和性信息
+                    'metadata' => $rawRequest['metadata'] ?? null,  // 记录请求元数据
+                ]);
 
                 // 构建供应商请求
                 $providerRequest = $this->buildProviderRequest(
@@ -191,7 +196,7 @@ class ProxyServer
                 $provider = $this->providerManager->getForChannel($this->selectedChannel, $request->headers->all());
 
                 // 创建渠道请求日志
-                $this->createChannelRequestLog($requestLog, $this->selectedChannel, $providerRequest, $channelProtocol, $provider);
+                $this->createChannelRequestLog($requestLog, $this->selectedChannel, $providerRequest, $channelProtocol, $provider, $auditLog);
 
                 // 根据是否流式请求分别处理
                 if ($isStream) {
@@ -203,7 +208,9 @@ class ProxyServer
                         $protocol,
                         $channelProtocol,
                         $requestLog,
-                        (int) $this->startTime
+                        $this->startTime,  // 保持浮点数精度
+                        $auditLog,  // 传递已创建的审计日志
+                        $this->selectedChannel  // 传递选中的渠道
                     );
                 }
 
@@ -215,7 +222,9 @@ class ProxyServer
                     $protocol,
                     $channelProtocol,
                     $requestLog,
-                    (int) $this->startTime
+                    $this->startTime,  // 保持浮点数精度
+                    $auditLog,  // 传递已创建的审计日志
+                    $this->selectedChannel  // 传递选中的渠道
                 );
             } catch (Exception $e) {
                 $lastException = $e;
@@ -334,7 +343,8 @@ class ProxyServer
         Channel $channel,
         SharedRequest $providerRequest,
         string $channelProtocol,
-        $provider
+        $provider,
+        $auditLog = null  // 接收审计日志
     ): void {
         $baseUrl = rtrim($channel->base_url, '/');
         $path = $this->buildEndpointPath($channelProtocol);
@@ -354,6 +364,7 @@ class ProxyServer
         $this->channelRequestLog = \App\Models\ChannelRequestLog::create([
             'request_log_id' => $requestLog->id,
             'request_id' => $this->requestId,
+            'audit_log_id' => $auditLog?->id,  // 添加审计日志ID
             'channel_id' => $channel->id,
             'channel_name' => $channel->name,
             'provider' => $channel->provider,

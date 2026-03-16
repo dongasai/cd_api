@@ -22,10 +22,9 @@ class AuditLogger
             'api_key_id' => $apiKey?->id,
             'api_key_name' => $apiKey?->name,
             'model' => $model,
-            'ip' => $request->ip(),
+            'client_ip' => $request->ip(),
             'user_agent' => $request->userAgent(),
             'is_stream' => $isStream,
-            'status' => 'pending',
         ]);
     }
 

@@ -23,16 +23,22 @@ class NonStreamHandler
 
     protected ResponseLogger $responseLogger;
 
+    protected $affinityService = null;  // 渠道亲和性服务
+
+    protected $selectedChannel = null;  // 当前选中的渠道
+
     public function __construct(
         ProtocolConverter $protocolConverter,
         ProviderManager $providerManager,
         AuditLogger $auditLogger,
-        ResponseLogger $responseLogger
+        ResponseLogger $responseLogger,
+        $affinityService = null
     ) {
         $this->protocolConverter = $protocolConverter;
         $this->providerManager = $providerManager;
         $this->auditLogger = $auditLogger;
         $this->responseLogger = $responseLogger;
+        $this->affinityService = $affinityService ?? app(\App\Services\ChannelAffinity\ChannelAffinityService::class);
     }
 
     /**
@@ -46,15 +52,27 @@ class NonStreamHandler
         string $sourceProtocol,
         string $targetProtocol,
         RequestLog $requestLog,
-        float $startTime
+        float $startTime,  // 保持浮点数精度
+        $auditLog = null,  // 接收已创建的审计日志
+        $selectedChannel = null  // 接收选中的渠道
     ): array {
+        $this->selectedChannel = $selectedChannel;  // 保存渠道引用
         $providerResponse = $provider->send($providerRequest);
 
         $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
 
-        // 记录审计日志
-        $auditLog = $this->auditLogger->createInitial($httpRequest, $standardRequest->model, false);
-        $this->auditLogger->markSuccess($auditLog, $latencyMs, $latencyMs);
+        // 使用传入的审计日志（如果已创建），否则创建新的
+        if ($auditLog === null) {
+            $auditLog = $this->auditLogger->createInitial($httpRequest, $standardRequest->model, false);
+        }
+
+        // 更新审计日志
+        $auditLog->update([
+            'status_code' => 200,
+            'latency_ms' => $latencyMs,
+            'first_token_ms' => $latencyMs,  // 非流式请求，首字延迟=总延迟
+            'finish_reason' => $providerResponse->finishReason?->value,
+        ]);
 
         // 构建响应
         $response = $this->protocolConverter->denormalizeResponse($providerResponse, $sourceProtocol);
@@ -72,6 +90,19 @@ class NonStreamHandler
             $providerResponse->getContent()
         );
 
+        // 记录渠道亲和性（成功请求后更新缓存）
+        $this->recordAffinity($httpRequest, $standardRequest->model);
+
         return $response;
+    }
+
+    /**
+     * 记录渠道亲和性
+     */
+    protected function recordAffinity(HttpRequest $request, string $model): void
+    {
+        if ($this->affinityService !== null && $this->selectedChannel !== null) {
+            $this->affinityService->recordAffinity($request, $this->selectedChannel, $model);
+        }
     }
 }

@@ -135,7 +135,8 @@ class AnthropicMessagesDriver extends AbstractDriver
 
         if ($chunk->event === self::EVENT_PING) {
             // 使用原始数据，如果没有则使用默认格式
-            $data = !empty($chunk->data) ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE) : '{}';
+            $data = ! empty($chunk->data) ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE) : '{}';
+
             return $this->buildSSEEvent(self::EVENT_PING, $data);
         }
 
@@ -145,11 +146,12 @@ class AnthropicMessagesDriver extends AbstractDriver
             $this->currentBlockIndex = $chunk->index ?? $this->currentBlockIndex;
 
             // 从原始数据中提取块类型
-            if (!empty($chunk->data['content_block']['type'])) {
+            if (! empty($chunk->data['content_block']['type'])) {
                 $this->currentBlockType = $chunk->data['content_block']['type'];
             }
 
-            $data = !empty($chunk->data) ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE) : '{}';
+            $data = ! empty($chunk->data) ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE) : '{}';
+
             return $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_START, $data);
         }
 
@@ -158,14 +160,30 @@ class AnthropicMessagesDriver extends AbstractDriver
             $this->contentBlockStarted = false;
             $this->currentBlockIndex++;
 
-            $data = !empty($chunk->data) ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE) : '{}';
+            $data = ! empty($chunk->data) ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE) : '{}';
+
             return $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_STOP, $data);
         }
 
         // 内容块增量事件 - 直接透传
         if ($chunk->event === self::EVENT_CONTENT_BLOCK_DELTA) {
-            $data = !empty($chunk->data) ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE) : '{}';
+            $data = ! empty($chunk->data) ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE) : '{}';
+
             return $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_DELTA, $data);
+        }
+
+        // 消息增量事件 - 直接透传
+        if ($chunk->event === self::EVENT_MESSAGE_DELTA) {
+            $data = ! empty($chunk->data) ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE) : '{}';
+
+            return $this->buildSSEEvent(self::EVENT_MESSAGE_DELTA, $data);
+        }
+
+        // 消息停止事件 - 直接透传
+        if ($chunk->event === self::EVENT_MESSAGE_STOP) {
+            $data = ! empty($chunk->data) ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE) : '{}';
+
+            return $this->buildSSEEvent(self::EVENT_MESSAGE_STOP, $data);
         }
 
         // 内容增量（来自标准转换）
@@ -183,8 +201,8 @@ class AnthropicMessagesDriver extends AbstractDriver
             return $this->buildToolUseEvent($chunk);
         }
 
-        // 结束
-        if ($chunk->finishReason !== null || $chunk->event === self::EVENT_MESSAGE_STOP) {
+        // 结束（用于协议转换场景，如 OpenAI 转 Anthropic）
+        if ($chunk->finishReason !== null) {
             return $this->buildMessageStopEvent($chunk);
         }
 

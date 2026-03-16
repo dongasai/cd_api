@@ -1,4 +1,4 @@
-# Provider 驱动与 Protocol 驱动职责分析
+# Provider 驱动与 Protocol 驱动职责分析与重构方案
 
 ## 问题背景
 
@@ -140,7 +140,7 @@ class StreamChunk
     public string $id;
     public string $model;
     public ?string $contentDelta = null;      // 增量文本（原 delta）
-    public ?FinishReason $finishReason = null; // 使用枚举
+    public ?FinishReason $finishReason = null; // ⭐ 使用枚举替代字符串
     public ?int $index = 0;
 
     // 事件类型（原 event）
@@ -161,7 +161,7 @@ class StreamChunk
 
     // 错误信息
     public ?string $error = null;
-    public ?ErrorType $errorType = null;      // 使用枚举
+    public ?ErrorType $errorType = null;      // ⭐ 使用枚举替代字符串
 
     // 解析状态
     public bool $isPartial = false;           // 是否为部分解析结果
@@ -601,15 +601,34 @@ app/Services/Protocol/
 │   ├── AbstractDriver.php         # 抽象驱动基类
 │   ├── OpenAiChatCompletionsDriver.php  # OpenAI 协议驱动
 │   └── AnthropicMessagesDriver.php      # Anthropic 协议驱动
+├── DTO/                           # ⭐ 协议特定结构体
+│   ├── OpenAI/
+│   │   ├── ChatRequest.php        # OpenAI Chat Completions 请求结构体
+│   │   ├── ChatResponse.php       # OpenAI Chat Completions 响应结构体
+│   │   ├── ChatChunk.php          # OpenAI 流式响应块结构体
+│   │   ├── Message.php            # OpenAI 消息结构体
+│   │   ├── ToolCall.php           # OpenAI 工具调用结构体
+│   │   └── StreamOptions.php      # OpenAI 流式选项结构体
+│   └── Anthropic/
+│       ├── MessagesRequest.php    # Anthropic Messages 请求结构体
+│       ├── MessagesResponse.php   # Anthropic Messages 响应结构体
+│       ├── MessagesEvent.php      # Anthropic 流式事件结构体
+│       ├── Message.php            # Anthropic 消息结构体
+│       ├── ContentBlock.php       # Anthropic 内容块结构体
+│       └── Thinking.php           # Anthropic 思考配置结构体
 ├── Exceptions/
 │   ├── ProtocolException.php
 │   ├── UnsupportedProtocolException.php
 │   └── ConversionException.php
 ├── DriverManager.php
 └── ProtocolConverter.php
-
-注：DTO 目录已移至 Shared 层，不引入额外的 Entity 层
 ```
+
+**协议结构体说明**：
+- **用途**：定义各协议的请求/响应结构，提供强类型支持和输入验证
+- **位置**：`Protocol\DTO\{协议名}\` 目录下
+- **职责**：JSON 序列化/反序列化、字段验证、协议文档化
+- **与 Shared\DTO 关系**：协议结构体 → Shared\DTO（单向转换）
 
 ### 依赖关系（重构后）
 
@@ -619,6 +638,14 @@ app/Services/Protocol/
 │              （协议无关的中间格式）                        │
 └─────────────────────────────────────────────────────────┘
                           ▲
+                          │ 转换
+                          │
+┌─────────────────────────┴───────────────────────────────┐
+│                  Protocol\DTO（协议结构体）               │
+│              OpenAI / Anthropic 特定格式                  │
+│         （强类型、验证、JSON 序列化）                      │
+└─────────────────────────────────────────────────────────┘
+                          ▲
                           │
             ┌─────────────┴─────────────┐
             │                           │
@@ -626,12 +653,16 @@ app/Services/Protocol/
 ┌───────────┴───────────┐   ┌───────────┴───────────┐
 │    Provider 层        │   │    Protocol 层        │
 │  （供应商适配）         │   │  （协议转换）          │
+│                       │   │                       │
+│  解析上游响应          │   │  解析客户端请求        │
+│  构建上游请求          │   │  构建客户端响应        │
 └───────────────────────┘   └───────────────────────┘
 ```
 
 **关键变化**：
 - Provider 和 Protocol 互不依赖
-- 两者都依赖 Shared\DTO
+- Protocol\DTO 提供**协议特定结构体**，增强类型安全
+- Protocol 层负责：JSON ↔ 协议结构体 ↔ Shared\DTO
 - DTO 不再属于任何一层，成为独立的中间格式
 
 ---
@@ -757,11 +788,19 @@ app/Services/Protocol/
               ▼
 ┌─────────────────────────────────────────────────────┐
 │ Protocol 层: parseRequest()                         │
-│ JSON → Shared\DTO\Request                           │
 │                                                     │
-│ OpenAI: 解析 OpenAI JSON 格式                       │
-│ Anthropic: 解析 Anthropic JSON 格式                 │
+│ 步骤 1: JSON → 协议结构体                            │
+│   OpenAI: json_decode() → Protocol\DTO\OpenAI\ChatRequest │
+│   Anthropic: json_decode() → Protocol\DTO\Anthropic\MessagesRequest │
+│   （利用结构体进行字段验证、类型检查）                 │
+│                                                     │
+│ 步骤 2: 协议结构体 → Shared\DTO\Request              │
+│   OpenAI: ChatRequest::toSharedRequest()            │
+│   Anthropic: MessagesRequest::toSharedRequest()     │
 └─────────────────────────────────────────────────────┘
+              │
+              ▼
+        Shared\DTO\Request
               │
               ▼
 ┌─────────────────────────────────────────────────────┐
@@ -779,12 +818,19 @@ app/Services/Protocol/
 └─────────────────────────────────────────────────────┘
               │
               ▼
+        Shared\DTO\Response
+              │
+              ▼
 ┌─────────────────────────────────────────────────────┐
 │ Protocol 层: buildResponse()                        │
-│ Shared\DTO\Response → JSON                          │
 │                                                     │
-│ OpenAI: 构建 OpenAI JSON 格式                       │
-│ Anthropic: 构建 Anthropic JSON 格式                 │
+│ 步骤 1: Shared\DTO\Response → 协议结构体             │
+│   OpenAI: Protocol\DTO\OpenAI\ChatResponse::fromShared() │
+│   Anthropic: Protocol\DTO\Anthropic\MessagesResponse::fromShared() │
+│                                                     │
+│ 步骤 2: 协议结构体 → JSON                            │
+│   OpenAI: ChatResponse::toJson()                    │
+│   Anthropic: MessagesResponse::toJson()             │
 └─────────────────────────────────────────────────────┘
               │
               ▼
@@ -813,11 +859,14 @@ app/Services/Protocol/
               ▼
 ┌─────────────────────────────────────────────────────┐
 │ Protocol 层: buildStreamChunk()                     │
-│ Shared\DTO\StreamChunk → 客户端 SSE 格式            │
 │                                                     │
-│ OpenAiChatCompletionsDriver 构建 OpenAI 格式        │
-│ AnthropicMessagesDriver 构建 Anthropic 格式         │
-│ （构建逻辑在 Protocol 中，不在 DTO 中）              │
+│ 步骤 1: Shared\DTO\StreamChunk → 协议结构体          │
+│   OpenAI: Protocol\DTO\OpenAI\ChatChunk::fromShared() │
+│   Anthropic: Protocol\DTO\Anthropic\MessagesEvent::fromShared() │
+│                                                     │
+│ 步骤 2: 协议结构体 → SSE 格式                        │
+│   OpenAI: ChatChunk::toSSE()                        │
+│   Anthropic: MessagesEvent::toSSE()                 │
 └─────────────────────────────────────────────────────┘
               │
               ▼
@@ -826,6 +875,7 @@ app/Services/Protocol/
 
 **重构改进**：
 - 使用统一的 `Shared\DTO`，消除两套 DTO 的冗余
+- 引入**协议结构体**，提供强类型支持和输入验证
 - 删除 Protocol 层的 `parseStreamEvent()` 方法（职责清晰）
 - 删除 StreamChunk 中的 `toOpenAIChunk()`/`toAnthropicEvent()` 方法（职责清晰）
 - Provider 层专注"解析上游"，Protocol 层专注"构建客户端"
@@ -866,14 +916,26 @@ public function parseStreamEvent(string $rawEvent): ?StandardStreamEvent { ... }
 
 ### 2. ProviderStreamChunk 中的转换方法未使用
 
+**代码验证结果**（2026-03-15）：
+
+```bash
+# 搜索方法调用
+grep -r "->toOpenAIChunk\(" laravel/app/     # 结果：No files found
+grep -r "->toAnthropicEvent\(" laravel/app/  # 结果：No files found
+```
+
+**结论**：`toOpenAIChunk()` 和 `toAnthropicEvent()` 方法确实**未被任何代码调用**，属于冗余代码。
+
 ```php
 class ProviderStreamChunk
 {
-    // 有转换方法，但没有被调用（grep 搜索结果为 0）
+    // ❌ 以下方法未被调用，应删除（grep 搜索结果为 0）
     public function toOpenAIChunk(string $id, string $model): string { ... }
     public function toAnthropicEvent(): string { ... }
 }
 ```
+
+**原因分析**：当前流式转换通过 `ProxyServer::convertStreamChunk()` 调用 `Protocol::buildStreamChunk()` 实现，未直接使用 DTO 的转换方法。
 
 ### 3. Protocol 层职责不清晰
 
@@ -980,23 +1042,133 @@ app/Services/
 
 ---
 
+## 完整职责流程
+
+### 四步流程图
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           完整请求-响应流程                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+【请求阶段 - 从客户端到上游】
+                              客户端请求 (JSON)
+                              OpenAI/Anthropic 协议
+                                     │
+                                     │ ① Protocol 层: parseRequest()
+                                     │    解析客户端格式 → 中间格式
+                                     ▼
+                         ┌───────────────────────┐
+                         │  Shared\DTO\Request   │
+                         │    （中间格式）        │
+                         └───────────────────────┘
+                                     │
+                                     │ ② Provider 层: buildRequestBody()
+                                     │    中间格式 → 上游格式
+                                     ▼
+                              上游请求 (JSON)
+                              OpenAI/Anthropic API
+                                     │
+                                     │ 发送到上游供应商
+                                     ▼
+                              ┌─────────────┐
+                              │  上游 AI    │
+                              │   供应商    │
+                              └─────────────┘
+
+【响应阶段 - 从上游到客户端】
+                              ┌─────────────┐
+                              │  上游 AI    │
+                              │   供应商    │
+                              └─────────────┘
+                                     │
+                                     │ ③ Provider 层: parseResponse()
+                                     │    上游格式 → 中间格式
+                                     ▼
+                         ┌───────────────────────┐
+                         │  Shared\DTO\Response  │
+                         │    （中间格式）        │
+                         └───────────────────────┘
+                                     │
+                                     │ ④ Protocol 层: buildResponse()
+                                     │    中间格式 → 客户端格式
+                                     ▼
+                              客户端响应 (JSON)
+                              OpenAI/Anthropic 协议
+```
+
+### 核心方法职责对照表
+
+| 步骤 | 层级 | 方法 | 方向 | 输入 | 输出 | 职责说明 |
+|:---:|:---:|------|:---:|------|------|---------|
+| ① | Protocol | `parseRequest()` | 客户端 → 中间 | 客户端 JSON | `Shared\DTO\Request` | **解析客户端请求**，理解客户端协议格式 |
+| ② | Provider | `buildRequestBody()` | 中间 → 上游 | `Shared\DTO\Request` | 上游 JSON 数组 | **构建上游请求**，适配目标供应商 API |
+| ③ | Provider | `parseResponse()` | 上游 → 中间 | 上游 JSON 数组 | `Shared\DTO\Response` | **解析上游响应**，理解供应商响应格式 |
+| ④ | Protocol | `buildResponse()` | 中间 → 客户端 | `Shared\DTO\Response` | 客户端 JSON | **构建客户端响应**，匹配客户端期望格式 |
+
+### 流式处理流程
+
+```
+【流式请求阶段】
+   客户端 SSE 请求
+         │
+         │ Protocol::parseRequest()
+         ▼
+   Shared\DTO\Request (stream=true)
+         │
+         │ Provider::buildRequestBody()
+         ▼
+   上游 SSE 请求
+
+【流式响应阶段】
+   上游 SSE 流
+         │
+         │ ③ Provider::parseStreamChunk()
+         │    循环解析每个原始 SSE 块
+         ▼
+   ┌───────────────────────┐
+   │ Shared\DTO\StreamChunk │ ← 纯数据容器
+   └───────────────────────┘
+         │
+         │ ④ Protocol::buildStreamChunk()
+         │    构建 SSE 输出格式
+         ▼
+   客户端 SSE 流
+         │
+         │ Protocol::buildStreamDone()
+         ▼
+   流结束标记
+```
+
+### 职责核心原则
+
+| 层级 | 核心职责 | 理解的方向 | 关键能力 |
+|------|---------|-----------|---------|
+| **Provider 层** | 适配上游供应商 | 理解上游 | 知道如何与不同供应商通信<br>知道如何解析不同供应商的响应格式 |
+| **Protocol 层** | 适配客户端协议 | 理解客户端 | 知道不同协议的请求/响应格式<br>知道如何构建符合协议规范的输出 |
+| **Shared\DTO** | 中间格式 | 协议无关 | 统一的数据结构<br>消除两层之间的耦合 |
+
+---
+
 ## 推荐的职责划分
 
 ### Provider 层职责
 
-| 职责 | 说明 |
-|------|------|
-| HTTP 通信 | 发送请求到上游 |
-| 重试/熔断 | 容错机制 |
-| 构建请求体 | 中间格式 → 上游格式 |
-| **解析响应** | 上游格式 → 中间格式（包括流式） |
+| 职责 | 方法示例 | 说明 |
+|------|---------|------|
+| HTTP 通信 | `send()`, `sendStream()` | 发送请求到上游，处理连接、超时 |
+| 重试/熔断 | 内部机制 | 容错机制，提升稳定性 |
+| 构建请求体 | `buildRequestBody()` | 中间格式 → 上游格式 |
+| **解析响应** | `parseResponse()`, `parseStreamChunk()` | 上游格式 → 中间格式（包括流式） |
 
 ### Protocol 层职责
 
-| 职责 | 说明 |
-|------|------|
-| 解析请求 | 客户端格式 → 中间格式 |
-| **构建响应** | 中间格式 → 客户端格式（包括流式） |
+| 职责 | 方法示例 | 说明 |
+|------|---------|------|
+| **解析请求** | `parseRequest()` | 客户端格式 → 中间格式 |
+| 构建响应 | `buildResponse()`, `buildStreamChunk()` | 中间格式 → 客户端格式（包括流式） |
+| 构建结束标记 | `buildStreamDone()` | 流式结束标记 |
+| 错误处理 | `buildErrorResponse()` | 构建协议规范的错误响应 |
 
 ### 数据流（重构后）
 
@@ -1450,6 +1622,72 @@ class EdgeCasesTest extends TestCase
 | Provider\Driver | ≥90% | ≥85% |
 | Protocol\Driver | ≥90% | ≥85% |
 | ProxyServer | ≥80% | ≥75% |
+
+---
+
+## 类型安全改进
+
+### 枚举字段替代字符串
+
+**当前问题**：DTO 中部分字段使用字符串类型，存在类型不安全的风险。
+
+```php
+// ❌ 当前实现（类型不安全）
+class StandardStreamEvent
+{
+    public ?string $errorType = null;      // 可能是任意字符串
+    public ?string $finishReason = null;   // 可能是任意字符串
+}
+
+// 风险示例
+$event->errorType = 'invalid_type';        // 编译通过，但运行时可能出错
+$event->finishReason = 'unknown_reason';   // IDE 无法提示可用值
+```
+
+**改进方案**：使用枚举类型替代字符串。
+
+```php
+// ✅ 改进实现（类型安全）
+class StreamChunk
+{
+    public ?ErrorType $errorType = null;       // 枚举类型
+    public ?FinishReason $finishReason = null; // 枚举类型
+}
+
+// 优势示例
+$chunk->errorType = ErrorType::RateLimitExceeded;  // IDE 自动补全
+$chunk->finishReason = FinishReason::ToolUse;      // 编译时类型检查
+
+// 错误示例会被 IDE 和静态分析工具检测
+$chunk->errorType = 'invalid';  // ❌ 类型错误
+```
+
+### 枚举使用示例
+
+```php
+use App\Services\Shared\Enums\ErrorType;
+use App\Services\Shared\Enums\FinishReason;
+
+// Provider 层解析上游响应
+$chunk = new StreamChunk(
+    errorType: ErrorType::fromOpenAI($data['error']['type']),
+    finishReason: FinishReason::fromAnthropic($data['stop_reason']),
+);
+
+// Protocol 层构建客户端响应
+$errorType = $chunk->errorType?->toOpenAI();      // 'rate_limit_exceeded'
+$finishReason = $chunk->finishReason?->toAnthropic(); // 'tool_use'
+```
+
+### 类型安全对比
+
+| 方面 | 字符串类型 | 枚举类型 |
+|------|-----------|---------|
+| IDE 自动补全 | ❌ 无 | ✅ 支持 |
+| 编译时检查 | ❌ 无 | ✅ 有 |
+| 运行时错误 | ⚠️ 可能 | ✅ 避免 |
+| 重构友好 | ❌ 困难 | ✅ 容易 |
+| 文档化 | ❌ 需要额外注释 | ✅ 枚举本身就是文档 |
 
 ---
 

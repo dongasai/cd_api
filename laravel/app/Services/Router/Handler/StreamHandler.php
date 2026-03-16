@@ -25,16 +25,22 @@ class StreamHandler
 
     protected ResponseLogger $responseLogger;
 
+    protected $affinityService = null;  // 渠道亲和性服务
+
+    protected $selectedChannel = null;  // 当前选中的渠道
+
     public function __construct(
         ProtocolConverter $protocolConverter,
         ProviderManager $providerManager,
         AuditLogger $auditLogger,
-        ResponseLogger $responseLogger
+        ResponseLogger $responseLogger,
+        $affinityService = null
     ) {
         $this->protocolConverter = $protocolConverter;
         $this->providerManager = $providerManager;
         $this->auditLogger = $auditLogger;
         $this->responseLogger = $responseLogger;
+        $this->affinityService = $affinityService ?? app(\App\Services\ChannelAffinity\ChannelAffinityService::class);
     }
 
     /**
@@ -48,12 +54,17 @@ class StreamHandler
         string $sourceProtocol,
         string $targetProtocol,
         RequestLog $requestLog,
-        float $startTime
+        float $startTime,  // 保持浮点数精度，用于计算首字延迟
+        $auditLog = null,  // 接收已创建的审计日志
+        $selectedChannel = null  // 接收选中的渠道
     ): Generator {
+        $this->selectedChannel = $selectedChannel;  // 保存渠道引用，用于记录亲和性
         $stream = $provider->sendStream($providerRequest);
 
-        // 记录审计日志
-        $auditLog = $this->auditLogger->createInitial($httpRequest, $standardRequest->model, true);
+        // 使用传入的审计日志（如果已创建），否则创建新的
+        if ($auditLog === null) {
+            $auditLog = $this->auditLogger->createInitial($httpRequest, $standardRequest->model, true);
+        }
 
         $firstTokenMs = null;
         $streamChunks = [];
@@ -62,8 +73,12 @@ class StreamHandler
 
         foreach ($stream as $chunk) {
             if ($chunk instanceof StreamChunk) {
-                // 记录首字延迟
-                if ($firstTokenMs === null && ($chunk->delta !== '' || $chunk->contentDelta !== null)) {
+                // 记录首字延迟（包括文本内容、推理内容或工具调用）
+                if ($firstTokenMs === null &&
+                    ($chunk->delta !== '' ||
+                     $chunk->contentDelta !== null ||
+                     $chunk->reasoningDelta !== null ||
+                     $chunk->toolCalls !== null)) {
                     $firstTokenMs = (int) ((microtime(true) - $startTime) * 1000);
                 }
 
@@ -87,11 +102,14 @@ class StreamHandler
 
         $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
 
-        // 发送结束标记
-        yield $this->protocolConverter->driver($sourceProtocol)->buildStreamDone();
+        // 注意：上游已经发送了 message_stop 事件，透传模式下不需要额外发送结束标记
+        // yield $this->protocolConverter->driver($sourceProtocol)->buildStreamDone();
 
         // 更新审计日志（包含 token 使用信息）
-        $this->updateAuditLogWithUsage($auditLog, $latencyMs, $firstTokenMs, $collectedUsage);
+        $this->updateAuditLogWithUsage($auditLog, $latencyMs, $firstTokenMs, $collectedUsage, $collectedFinishReason);
+
+        // 记录渠道亲和性（成功请求后更新缓存）
+        $this->recordAffinity($httpRequest, $standardRequest->model);
 
         // 记录响应日志
         $this->responseLogger->create(
@@ -109,33 +127,40 @@ class StreamHandler
     }
 
     /**
-     * 更新审计日志，包含 token 使用信息
+     * 更新审计日志（包含 token 使用信息）
      */
     protected function updateAuditLogWithUsage(
         $auditLog,
         int $latencyMs,
         ?int $firstTokenMs,
-        ?\App\Services\Shared\DTO\Usage $usage
+        $usage,
+        $finishReason
     ): void {
         $data = [
-            'status' => 'success',
+            'status_code' => 200,
             'latency_ms' => $latencyMs,
         ];
 
-        // first_token_ms 字段不允许 null，只有非 null 才设置
+        // 首字延迟（只有非 null 才设置）
         if ($firstTokenMs !== null) {
             $data['first_token_ms'] = $firstTokenMs;
         }
 
-        // 更新 token 使用信息
-        if ($usage !== null) {
-            $data['prompt_tokens'] = $usage->inputTokens ?? 0;
-            $data['completion_tokens'] = $usage->outputTokens ?? 0;
-            $data['total_tokens'] = $usage->totalTokens ?? 0;
-            $data['cache_read_tokens'] = $usage->cacheReadInputTokens ?? 0;
-            $data['cache_write_tokens'] = $usage->cacheWriteInputTokens ?? 0;
+        // 完成原因
+        if ($finishReason !== null) {
+            $data['finish_reason'] = $finishReason->value;
         }
 
         $auditLog->update($data);
+    }
+
+    /**
+     * 记录渠道亲和性
+     */
+    protected function recordAffinity(HttpRequest $request, string $model): void
+    {
+        if ($this->affinityService !== null) {
+            $this->affinityService->recordAffinity($request, $this->selectedChannel ?? null, $model);
+        }
     }
 }
