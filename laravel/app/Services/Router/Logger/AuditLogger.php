@@ -13,7 +13,7 @@ class AuditLogger
     /**
      * 创建初始审计日志
      */
-    public function createInitial(Request $request, ?string $model, bool $isStream): AuditLog
+    public function createInitial(Request $request, ?string $model, bool $isStream, ?string $sourceProtocol = null): AuditLog
     {
         $apiKey = $request->attributes->get('api_key');
 
@@ -22,6 +22,7 @@ class AuditLogger
             'api_key_id' => $apiKey?->id,
             'api_key_name' => $apiKey?->name,
             'model' => $model,
+            'source_protocol' => $sourceProtocol,
             'client_ip' => $request->ip(),
             'user_agent' => $request->userAgent(),
             'is_stream' => $isStream,

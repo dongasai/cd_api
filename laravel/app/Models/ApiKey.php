@@ -92,12 +92,16 @@ class ApiKey extends Model
 
     public function getAllowedChannelIds(): array
     {
-        return $this->allowed_channels ?? [];
+        $ids = $this->allowed_channels ?? [];
+
+        return array_map('intval', $ids);
     }
 
     public function getNotAllowedChannelIds(): array
     {
-        return $this->not_allowed_channels ?? [];
+        $ids = $this->not_allowed_channels ?? [];
+
+        return array_map('intval', $ids);
     }
 
     public function hasChannelWhitelist(): bool

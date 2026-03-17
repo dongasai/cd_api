@@ -210,22 +210,26 @@ class ChannelAffinityRuleController extends AdminController
                     $form->model()->key_combine_strategy = 'first';
                 }
 
-                // 验证 key_sources JSON 格式
+                // 解码 key_sources JSON 字符串为数组
                 $keySources = $form->input('key_sources');
                 if (! empty($keySources) && is_string($keySources)) {
                     $decoded = json_decode($keySources, true);
                     if (json_last_error() !== JSON_ERROR_NONE) {
                         return $form->response()->error('键来源配置必须是有效的 JSON 格式');
                     }
+                    // 将解码后的数组赋值回模型，避免双重编码
+                    $form->model()->key_sources = $decoded;
                 }
 
-                // 验证 param_override_template JSON 格式
+                // 解码 param_override_template JSON 字符串为数组
                 $paramOverride = $form->input('param_override_template');
                 if (! empty($paramOverride) && is_string($paramOverride)) {
                     $decoded = json_decode($paramOverride, true);
                     if (json_last_error() !== JSON_ERROR_NONE) {
                         return $form->response()->error('参数覆盖模板必须是有效的 JSON 格式');
                     }
+                    // 将解码后的数组赋值回模型，避免双重编码
+                    $form->model()->param_override_template = $decoded;
                 }
             });
 

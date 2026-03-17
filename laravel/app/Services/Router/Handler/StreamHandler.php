@@ -63,7 +63,7 @@ class StreamHandler
 
         // 使用传入的审计日志（如果已创建），否则创建新的
         if ($auditLog === null) {
-            $auditLog = $this->auditLogger->createInitial($httpRequest, $standardRequest->model, true);
+            $auditLog = $this->auditLogger->createInitial($httpRequest, $standardRequest->model, true, $sourceProtocol);
         }
 
         $firstTokenMs = null;
@@ -111,17 +111,23 @@ class StreamHandler
         // 记录渠道亲和性（成功请求后更新缓存）
         $this->recordAffinity($httpRequest, $standardRequest->model);
 
+        // 从流式块中提取完整文本内容
+        $generatedText = $this->extractTextFromChunks($streamChunks);
+
+        // 组装完整的响应数据（用于记录 body_text）
+        $completeResponse = $this->buildCompleteResponse($streamChunks, $standardRequest->model, $collectedUsage, $collectedFinishReason);
+
         // 记录响应日志
         $this->responseLogger->create(
             $requestLog,
-            [],
+            $completeResponse,
             null,
             $latencyMs,
             $auditLog->id,
             true,
             $collectedUsage,
             $collectedFinishReason,
-            null,
+            $generatedText,
             $streamChunks
         );
     }
@@ -151,6 +157,15 @@ class StreamHandler
             $data['finish_reason'] = $finishReason->value;
         }
 
+        // 更新 token 使用信息
+        if ($usage !== null) {
+            $data['prompt_tokens'] = $usage->inputTokens ?? 0;
+            $data['completion_tokens'] = $usage->outputTokens ?? 0;
+            $data['total_tokens'] = ($usage->inputTokens ?? 0) + ($usage->outputTokens ?? 0);
+            $data['cache_read_tokens'] = $usage->cacheReadInputTokens ?? 0;
+            $data['cache_write_tokens'] = $usage->cacheCreationInputTokens ?? 0;
+        }
+
         $auditLog->update($data);
     }
 
@@ -162,5 +177,88 @@ class StreamHandler
         if ($this->affinityService !== null) {
             $this->affinityService->recordAffinity($request, $this->selectedChannel ?? null, $model);
         }
+    }
+
+    /**
+     * 从流式块中提取完整文本内容
+     */
+    protected function extractTextFromChunks(array $streamChunks): string
+    {
+        $text = '';
+
+        foreach ($streamChunks as $chunk) {
+            // 优先使用 content_delta
+            if (! empty($chunk['content_delta'])) {
+                $text .= $chunk['content_delta'];
+            }
+            // 兼容旧字段 delta
+            elseif (! empty($chunk['delta'])) {
+                $text .= $chunk['delta'];
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * 从流式块组装完整的响应数据
+     */
+    protected function buildCompleteResponse(array $streamChunks, string $model, $usage, $finishReason): array
+    {
+        // 提取 ID（从第一个有效的 chunk）
+        $id = '';
+        foreach ($streamChunks as $chunk) {
+            if (! empty($chunk['id'])) {
+                $id = $chunk['id'];
+                break;
+            }
+        }
+
+        // 提取完整文本
+        $content = $this->extractTextFromChunks($streamChunks);
+
+        // 提取推理内容
+        $reasoningContent = '';
+        foreach ($streamChunks as $chunk) {
+            if (! empty($chunk['reasoning_delta'])) {
+                $reasoningContent .= $chunk['reasoning_delta'];
+            }
+        }
+
+        // 构建标准 OpenAI 格式响应
+        $response = [
+            'id' => $id ?: 'chatcmpl-'.uniqid(),
+            'object' => 'chat.completion',
+            'created' => time(),
+            'model' => $model,
+            'choices' => [
+                [
+                    'index' => 0,
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => $content,
+                    ],
+                    'finish_reason' => $finishReason?->value,
+                ],
+            ],
+        ];
+
+        // 添加推理内容（如果有）
+        if ($reasoningContent) {
+            $response['choices'][0]['message']['reasoning_content'] = $reasoningContent;
+        }
+
+        // 添加 usage
+        if ($usage !== null) {
+            $response['usage'] = [
+                'prompt_tokens' => $usage->inputTokens ?? 0,
+                'completion_tokens' => $usage->outputTokens ?? 0,
+                'total_tokens' => ($usage->inputTokens ?? 0) + ($usage->outputTokens ?? 0),
+                'cache_read_tokens' => $usage->cacheReadInputTokens ?? 0,
+                'cache_write_tokens' => $usage->cacheWriteInputTokens ?? 0,
+            ];
+        }
+
+        return $response;
     }
 }

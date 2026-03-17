@@ -82,7 +82,11 @@ class AnthropicMessagesDriver extends AbstractDriver
             $contentBlocks = null;
             if (isset($msg['content'])) {
                 if (is_array($msg['content'])) {
-                    $contentBlocks = $msg['content'];
+                    // 将 Anthropic 格式的 content blocks 转换为 ContentBlock 对象
+                    $contentBlocks = array_map(
+                        fn ($block) => \App\Services\Shared\DTO\ContentBlock::fromAnthropic($block),
+                        $msg['content']
+                    );
                 } else {
                     $content = $msg['content'];
                 }

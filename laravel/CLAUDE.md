@@ -106,7 +106,7 @@ cd laravel && php artisan test --compact --filter=testName
 ### 请求重放命令
 
 - **`request:replay`** - 复现请求(重新发送真实HTTP请求到本系统)
-    - 支持: `--request-id=ID` 或 `--audit-id=ID`
+    - 支持: `--request-id=ID` 或 `--audit-id=ID` 或 `--latest` (使用最新审计日志)
     - 支持: `--timeout=超时时间` 和 `--dry-run` (仅显示请求信息)
 
 - **`request:replay-curl`** - 使用 PHP curl 重放请求(直接发送到上游)

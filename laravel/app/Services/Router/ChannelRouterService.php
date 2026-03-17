@@ -38,24 +38,52 @@ class ChannelRouterService
      * 为指定模型选择渠道
      *
      * @param  string  $model  模型名称
-     * @param  array  $context  上下文信息（可包含负载均衡算法、API Key 等）
+     * @param  array  $context  上下文信息（可包含负载均衡算法、API Key、源协议等）
      * @return Channel 选中的渠道
      *
-     * @throws \RuntimeException 当没有可用渠道时
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException 当没有可用渠道时
      */
     public function selectChannel(string $model, array $context = []): Channel
     {
         $channels = $this->getAvailableChannels($model);
 
-        // 应用 API Key 的渠道限制
-        $apiKey = $context['api_key'] ?? null;
-        $channels = $this->applyApiKeyChannelRestrictions($channels, $apiKey);
-
+        // 模型不存在：没有配置支持该模型的渠道
         if ($channels->isEmpty()) {
-            throw new \RuntimeException("No available channel for model: {$model}");
+            throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException("Model '{$model}' is not available");
         }
 
-        $channel = $this->applyLoadBalancing($channels, $context);
+        // 应用 API Key 的渠道限制
+        $apiKey = $context['api_key'] ?? null;
+        $channelsAfterKeyRestriction = $this->applyApiKeyChannelRestrictions($channels, $apiKey);
+
+        // API Key 限制导致没有可用渠道
+        if ($channelsAfterKeyRestriction->isEmpty()) {
+            throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException("No available channel for model '{$model}' with current API key restrictions");
+        }
+
+        // 应用透传协议匹配过滤
+        $sourceProtocol = $context['source_protocol'] ?? 'openai';
+        $channelsAfterProtocol = $this->applyPassthroughProtocolFilter($channelsAfterKeyRestriction, $sourceProtocol);
+
+        // 协议不匹配导致没有可用渠道
+        if ($channelsAfterProtocol->isEmpty()) {
+            throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException("No available channel for model '{$model}' with protocol '{$sourceProtocol}'");
+        }
+
+        // 排除已失败的渠道
+        $excludeChannels = $context['exclude_channels'] ?? [];
+        if (! empty($excludeChannels)) {
+            $channelsAfterProtocol = $channelsAfterProtocol->reject(function ($channel) use ($excludeChannels) {
+                return in_array($channel->id, $excludeChannels, true);
+            });
+        }
+
+        // 所有渠道都失败了
+        if ($channelsAfterProtocol->isEmpty()) {
+            throw new \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException("All channels failed for model: {$model}");
+        }
+
+        $channel = $this->applyLoadBalancing($channelsAfterProtocol, $context);
 
         Log::info('Channel selected', [
             'model' => $model,
@@ -63,6 +91,8 @@ class ChannelRouterService
             'channel_name' => $channel->name,
             'provider' => $channel->provider,
             'api_key_id' => $apiKey?->id,
+            'source_protocol' => $sourceProtocol,
+            'is_passthrough' => $channel->shouldPassthroughBody(),
         ]);
 
         return $channel;
@@ -123,6 +153,59 @@ class ChannelRouterService
         }
 
         return $channels;
+    }
+
+    /**
+     * 应用透传协议匹配过滤
+     *
+     * 当渠道开启 body 透传时，只选择与源请求协议一致的渠道
+     * 例如：Anthropic 渠道开启透传后，只能处理 Anthropic 格式的请求
+     *
+     * @param  \Illuminate\Database\Eloquent\Collection  $channels  渠道集合
+     * @param  string  $sourceProtocol  源请求协议（openai/anthropic）
+     * @return \Illuminate\Database\Eloquent\Collection 过滤后的渠道集合
+     */
+    protected function applyPassthroughProtocolFilter(\Illuminate\Database\Eloquent\Collection $channels, string $sourceProtocol): \Illuminate\Database\Eloquent\Collection
+    {
+        return $channels->filter(function ($channel) use ($sourceProtocol) {
+            // 如果渠道未开启透传，则允许选择（会进行协议转换）
+            if (! $channel->shouldPassthroughBody()) {
+                return true;
+            }
+
+            // 如果开启透传，则检查协议是否匹配
+            $channelProtocol = $this->getChannelProtocol($channel);
+            $isMatch = ($channelProtocol === $sourceProtocol);
+
+            // 记录过滤日志
+            if (! $isMatch) {
+                Log::debug('Channel excluded due to passthrough protocol mismatch', [
+                    'channel_id' => $channel->id,
+                    'channel_name' => $channel->name,
+                    'channel_protocol' => $channelProtocol,
+                    'source_protocol' => $sourceProtocol,
+                ]);
+            }
+
+            return $isMatch;
+        });
+    }
+
+    /**
+     * 获取渠道的协议类型
+     *
+     * @param  Channel  $channel  渠道实例
+     * @return string 协议类型（openai/anthropic）
+     */
+    protected function getChannelProtocol(Channel $channel): string
+    {
+        $provider = $channel->provider;
+
+        if (in_array($provider, ['anthropic', 'claude'])) {
+            return 'anthropic';
+        }
+
+        return 'openai';
     }
 
     /**

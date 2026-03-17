@@ -31,18 +31,39 @@ class ModelService
         $cacheKey = self::getCacheKey('models', $apiKey?->id);
 
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($apiKey) {
-            $allowedModels = $apiKey?->allowed_models;
-            $modelMappings = $apiKey?->model_mappings ?? [];
+            $modelNames = collect();
 
-            // 查询启用的模型
-            $query = ModelList::where('is_enabled', true);
+            // 如果提供了 API Key，基于渠道权限获取可用模型
+            if ($apiKey) {
+                // 获取 API Key 可访问的活跃渠道
+                $channels = $apiKey->getAllowedChannels();
 
-            // 如果有允许的模型列表，只查询这些模型
-            if (! empty($allowedModels) && is_array($allowedModels)) {
-                $query->whereIn('model_name', $allowedModels);
+                // 从这些渠道中收集启用的模型
+                foreach ($channels as $channel) {
+                    $enabledModels = $channel->enabledModels()->get(['model_name']);
+                    $modelNames = $modelNames->merge($enabledModels->pluck('model_name'));
+                }
+
+                // 去重
+                $modelNames = $modelNames->unique()->values();
+
+                // 如果 API Key 有 allowed_models 限制，进一步过滤
+                $allowedModels = $apiKey->allowed_models;
+                if (! empty($allowedModels) && is_array($allowedModels)) {
+                    $modelNames = $modelNames->filter(function ($modelName) use ($allowedModels) {
+                        return in_array($modelName, $allowedModels, true);
+                    })->values();
+                }
+            } else {
+                // 没有 API Key 时，返回所有全局启用的模型
+                $modelNames = ModelList::where('is_enabled', true)
+                    ->pluck('model_name');
             }
 
-            $modelLists = $query->get();
+            // 从 model_lists 表获取模型详细信息
+            $modelLists = ModelList::whereIn('model_name', $modelNames)
+                ->where('is_enabled', true)
+                ->get();
 
             // 构建模型数据
             $data = $modelLists->map(function ($modelList) {
@@ -55,8 +76,8 @@ class ModelService
             })->values()->toArray();
 
             // 添加映射的模型别名
-            if (! empty($modelMappings)) {
-                foreach ($modelMappings as $alias => $actualModel) {
+            if ($apiKey && ! empty($apiKey->model_mappings)) {
+                foreach ($apiKey->model_mappings as $alias => $actualModel) {
                     $data[] = [
                         'id' => $alias,
                         'object' => 'model',

@@ -46,6 +46,8 @@ class AuditLog extends Model
         'request_type',
         'model',
         'actual_model',
+        'source_protocol',
+        'target_protocol',
         'prompt_tokens',
         'completion_tokens',
         'total_tokens',

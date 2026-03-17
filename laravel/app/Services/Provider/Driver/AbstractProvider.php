@@ -373,11 +373,11 @@ abstract class AbstractProvider implements ProviderInterface
                 // 正常模式：使用数组，Laravel会自动转为JSON
                 // DEBUG: 记录实际发送的 JSON
                 $encodedBody = json_encode($body, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                Log::debug('Provider request body', [
-                    'url' => $url,
-                    'body_type' => gettype($body),
-                    'body_json' => $encodedBody,
-                ]);
+                // Log::debug('Provider request body', [
+                //     'url' => $url,
+                //     'body_type' => gettype($body),
+                //     'body_json' => $encodedBody,
+                // ]);
 
                 // 调试：检查 messages[0].content 的类型
                 if (isset($body['messages'][0]['content'])) {
@@ -609,11 +609,11 @@ abstract class AbstractProvider implements ProviderInterface
             // 正常模式：使用数组，Laravel会自动转为JSON
             // DEBUG: 记录实际发送的 JSON
             $encodedBody = json_encode($body, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-            Log::debug('Provider request body', [
-                'url' => $url,
-                'body_type' => gettype($body),
-                'body_json' => $encodedBody,
-            ]);
+            // Log::debug('Provider request body', [
+            //     'url' => $url,
+            //     'body_type' => gettype($body),
+            //     'body_json' => $encodedBody,
+            // ]);
 
             // 调试：检查 messages[0].content 的类型
             if (isset($body['messages'][0]['content'])) {

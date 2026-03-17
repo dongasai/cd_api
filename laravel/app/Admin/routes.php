@@ -38,6 +38,9 @@ Route::group([
     // 系统设置管理
     $router->resource('system-settings', 'SystemSettingController');
 
+    // 渠道亲和性规则
+    $router->resource('channel-affinity-rules', 'ChannelAffinityRuleController');
+
     // 渠道亲和性缓存
     $router->resource('channel-affinity-cache', 'ChannelAffinityCacheController')->only(['index', 'show']);
 

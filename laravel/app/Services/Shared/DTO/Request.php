@@ -173,6 +173,10 @@ class Request
         $messages = [];
 
         foreach ($this->messages as $message) {
+            // 跳过 system 消息（Anthropic API 不允许 messages 中有 system 角色）
+            if ($message->role === \App\Services\Shared\Enums\MessageRole::System) {
+                continue;
+            }
             $messages[] = $message->toAnthropic($includeCacheControl, $filterThinking, $filterRequestThinking);
         }
 
@@ -219,14 +223,23 @@ class Request
             'messages' => $filteredMessages,
         ];
 
-        // max_tokens 对于 Anthropic API 是必需的
-        if ($this->maxTokens !== null) {
-            $result['max_tokens'] = $this->maxTokens;
-        }
+        // max_tokens 对于 Anthropic API 是必需的，如果没有提供则使用默认值
+        $result['max_tokens'] = $this->maxTokens ?? 4096;
 
-        // system 字段：保持原始格式（数组或字符串），支持 cache_control
+        // system 字段：转换为数组格式（阿里云 Coding 要求）
         if ($this->system !== null) {
-            $result['system'] = $this->system;
+            // 如果是字符串，转换为数组格式
+            if (is_string($this->system)) {
+                $result['system'] = [
+                    [
+                        'type' => 'text',
+                        'text' => $this->system,
+                    ],
+                ];
+            } else {
+                // 已经是数组格式，保持不变
+                $result['system'] = $this->system;
+            }
         }
         if ($this->temperature !== null) {
             $result['temperature'] = $this->temperature;
@@ -256,7 +269,15 @@ class Request
             $result['thinking'] = $this->thinking;
         }
 
-        return array_merge($result, $this->additionalParams);
+        // 合并 additionalParams，但过滤掉 OpenAI 特有的字段
+        $openaiSpecificFields = ['stream_options', 'response_format', 'seed', 'logprobs', 'top_logprobs', 'n'];
+        $filteredAdditionalParams = array_filter(
+            $this->additionalParams,
+            fn ($key) => !in_array($key, $openaiSpecificFields),
+            ARRAY_FILTER_USE_KEY
+        );
+
+        return array_merge($result, $filteredAdditionalParams);
     }
 
     /**
@@ -281,10 +302,32 @@ class Request
     public static function fromArray(array $data): self
     {
         $messages = [];
+        $systemContent = null;
+
         foreach ($data['messages'] ?? [] as $msg) {
             if ($msg instanceof Message) {
                 $messages[] = $msg;
             } elseif (is_array($msg)) {
+                // 提取 system 消息（OpenAI 格式中 system 消息在 messages 数组中）
+                if (($msg['role'] ?? '') === 'system') {
+                    // 提取 system 内容
+                    if (is_string($msg['content'] ?? null)) {
+                        $systemContent = $msg['content'];
+                    } elseif (is_array($msg['content'])) {
+                        // 多模态 system 消息，提取文本
+                        $texts = [];
+                        foreach ($msg['content'] as $block) {
+                            if (is_array($block) && ($block['type'] ?? '') === 'text') {
+                                $texts[] = $block['text'] ?? '';
+                            }
+                        }
+                        $systemContent = implode("\n", $texts);
+                    }
+
+                    // 不添加到 messages 数组，跳过 system 消息
+                    continue;
+                }
+
                 // 处理 content 字段：可能是字符串或数组（多模态）
                 $content = null;
                 $contentBlocks = null;
@@ -319,6 +362,23 @@ class Request
             }
         }
 
+        // 优先使用独立 system 字段（如果存在），否则使用提取的 system 消息
+        $systemField = $data['system'] ?? $systemContent;
+
+        // 收集未识别的字段到 additionalParams
+        $knownFields = [
+            'model', 'messages', 'max_tokens', 'temperature', 'top_p', 'top_k',
+            'stream', 'stop_sequences', 'stop', 'system', 'tools', 'tool_choice',
+            'thinking', 'metadata', 'user', 'additional_params', 'rawRequest',
+            'rawBodyString', 'queryString', 'content_blocks',
+        ];
+        $additionalParams = $data['additional_params'] ?? [];
+        foreach ($data as $key => $value) {
+            if (!in_array($key, $knownFields) && !isset($additionalParams[$key])) {
+                $additionalParams[$key] = $value;
+            }
+        }
+
         return new self(
             model: $data['model'] ?? '',
             messages: $messages,
@@ -328,13 +388,13 @@ class Request
             topK: $data['top_k'] ?? null,
             stream: $data['stream'] ?? false,
             stopSequences: $data['stop_sequences'] ?? $data['stop'] ?? null,
-            system: $data['system'] ?? null,
+            system: $systemField,
             tools: $data['tools'] ?? null,
             toolChoice: $data['tool_choice'] ?? null,
             thinking: $data['thinking'] ?? null,
             metadata: $data['metadata'] ?? null,
             user: $data['user'] ?? null,
-            additionalParams: $data['additional_params'] ?? [],
+            additionalParams: $additionalParams,
             rawRequest: $data['rawRequest'] ?? $data ?? null,
             rawBodyString: $data['rawBodyString'] ?? null,
             queryString: $data['queryString'] ?? null,

@@ -199,9 +199,20 @@ class AnthropicProvider extends AbstractProvider
             $result['max_tokens'] = $request->maxTokens;
         }
 
-        // system 字段：保持原始格式（数组或字符串），支持 cache_control
+        // system 字段：转换为数组格式（阿里云 Coding 要求）
         if ($request->system !== null) {
-            $result['system'] = $request->system;
+            // 如果是字符串，转换为数组格式
+            if (is_string($request->system)) {
+                $result['system'] = [
+                    [
+                        'type' => 'text',
+                        'text' => $request->system,
+                    ],
+                ];
+            } else {
+                // 已经是数组格式，保持不变
+                $result['system'] = $request->system;
+            }
         }
         if ($request->temperature !== null) {
             $result['temperature'] = $request->temperature;

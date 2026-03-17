@@ -50,6 +50,24 @@ class ApiKeyController extends AdminController
                 'revoked' => 'danger',
                 'expired' => 'warning',
             ]);
+
+            // 允许的渠道列
+            $grid->column('allowed_channels', '允许的渠道')
+                ->display(function ($value) {
+                    // 确保是数组
+                    if (is_string($value)) {
+                        $value = json_decode($value, true);
+                    }
+                    if (empty($value) || ! is_array($value)) {
+                        return '不限制';
+                    }
+                    // 转换为整数数组
+                    $channelIds = array_map('intval', $value);
+                    $channels = Channel::whereIn('id', $channelIds)->pluck('name')->toArray();
+
+                    return empty($channels) ? '不限制' : implode(', ', $channels);
+                });
+
             $grid->column('expires_at', '过期时间');
             $grid->column('last_used_at', '最后使用时间');
             $grid->column('created_at', '创建时间')->sortable();

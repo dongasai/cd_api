@@ -32,7 +32,29 @@ class OpenAiChatCompletionsDriver extends AbstractDriver
     public function parseRequest(array $rawRequest): Request
     {
         $messages = [];
+        $systemContent = null;
+
         foreach ($rawRequest['messages'] ?? [] as $msg) {
+            // 提取 system 消息（OpenAI 格式中 system 消息在 messages 数组中）
+            if (($msg['role'] ?? '') === 'system') {
+                // 提取 system 内容
+                if (is_string($msg['content'] ?? null)) {
+                    $systemContent = $msg['content'];
+                } elseif (is_array($msg['content'])) {
+                    // 多模态 system 消息（罕见），提取文本
+                    $texts = [];
+                    foreach ($msg['content'] as $block) {
+                        if (is_array($block) && ($block['type'] ?? '') === 'text') {
+                            $texts[] = $block['text'] ?? '';
+                        }
+                    }
+                    $systemContent = implode("\n", $texts);
+                }
+
+                // 不添加到 messages 数组，跳过 system 消息
+                continue;
+            }
+
             // 处理 content 字段：可能是字符串或数组（多模态）
             $content = null;
             $contentBlocks = null;
@@ -61,6 +83,9 @@ class OpenAiChatCompletionsDriver extends AbstractDriver
             );
         }
 
+        // 优先使用独立 system 字段（如果存在），否则使用提取的 system 消息
+        $systemField = $rawRequest['system'] ?? $systemContent;
+
         return new Request(
             model: $rawRequest['model'] ?? '',
             messages: $messages,
@@ -70,7 +95,7 @@ class OpenAiChatCompletionsDriver extends AbstractDriver
             topK: $rawRequest['top_k'] ?? null,
             stream: $rawRequest['stream'] ?? false,
             stopSequences: $rawRequest['stop'] ?? null,
-            system: $rawRequest['system'] ?? null,
+            system: $systemField,
             tools: $rawRequest['tools'] ?? null,
             toolChoice: $rawRequest['tool_choice'] ?? null,
             metadata: $rawRequest['metadata'] ?? null,

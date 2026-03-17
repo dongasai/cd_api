@@ -1819,3 +1819,296 @@ $errorType = ErrorType::RateLimitExceeded;
 3. **转换逻辑**：内置 `toOpenAI()` / `toAnthropic()` 方法，避免散落的转换代码
 4. **扩展性强**：添加新错误类型只需修改枚举类
 5. **文档友好**：枚举本身就是文档，包含所有可能的值
+
+---
+
+## 协议结构体定义
+
+### 设计原则
+
+**职责定位**：
+- **类型安全**：提供强类型字段定义，IDE 自动补全支持
+- **输入验证**：在结构体层面验证字段格式和约束
+- **协议文档化**：结构体即文档，清晰定义协议格式
+- **转换逻辑**：封装 JSON 序列化/反序列化逻辑
+
+**与 Shared\DTO 的区别**：
+
+| 特性 | Protocol\DTO（协议结构体） | Shared\DTO（中间格式） |
+|------|--------------------------|----------------------|
+| **用途** | 协议特定格式 | 协议无关格式 |
+| **字段命名** | 遵循协议命名（如 `max_tokens`） | 统一命名（如 `maxTokens`） |
+| **验证** | 严格的协议验证 | 基础验证 |
+| **转换** | ↔ JSON | ↔ Protocol\DTO |
+| **层级** | 协议层 | 共享层 |
+
+### OpenAI 协议结构体
+
+#### ChatRequest - OpenAI 请求结构体
+
+**文件**: `app/Services/Protocol/DTO/OpenAI/ChatRequest.php`
+
+```php
+<?php
+
+namespace App\Services\Protocol\DTO\OpenAI;
+
+use Illuminate\Support\Facades\Validator;
+use App\Services\Shared\DTO\Request as SharedRequest;
+
+/**
+ * OpenAI Chat Completions API 请求结构体
+ * @see https://platform.openai.com/docs/api-reference/chat/create
+ */
+class ChatRequest
+{
+    // 必需字段
+    public string $model;
+    public array $messages = [];
+
+    // 可选字段
+    public ?bool $stream = null;
+    public ?int $max_tokens = null;
+    public ?int $max_completion_tokens = null;
+    public ?string $reasoning_effort = null;
+    public ?float $temperature = null;
+    public ?float $top_p = null;
+    public ?int $top_k = null;
+    public array|string|null $stop = null;
+    public ?array $tools = null;
+    public string|object|null $tool_choice = null;
+    public ?bool $parallel_tool_calls = null;
+
+    /**
+     * 从 JSON 创建实例
+     */
+    public static function fromJson(string|array $data): self
+    {
+        if (is_string($data)) {
+            $data = json_decode($data, true);
+        }
+
+        $instance = new self();
+        $instance->model = $data['model'] ?? throw new \InvalidArgumentException('model is required');
+        $instance->messages = array_map(
+            fn($msg) => Message::fromArray($msg),
+            $data['messages'] ?? []
+        );
+
+        $instance->stream = $data['stream'] ?? null;
+        $instance->max_tokens = $data['max_tokens'] ?? null;
+        $instance->max_completion_tokens = $data['max_completion_tokens'] ?? null;
+        $instance->temperature = $data['temperature'] ?? null;
+        // ... 其他字段
+
+        return $instance;
+    }
+
+    /**
+     * 验证请求结构
+     */
+    public function validate(): bool
+    {
+        $validator = Validator::make([
+            'model' => $this->model,
+            'messages' => $this->messages,
+            'temperature' => $this->temperature,
+        ], [
+            'model' => 'required|string',
+            'messages' => 'required|array|min:1',
+            'temperature' => 'nullable|numeric|between:0,2',
+        ]);
+
+        if ($validator->fails()) {
+            throw new \InvalidArgumentException('Validation failed: ' . $validator->errors()->first());
+        }
+
+        return true;
+    }
+
+    /**
+     * 转换为 Shared\DTO\Request
+     */
+    public function toSharedRequest(): SharedRequest
+    {
+        $this->validate();
+
+        $sharedRequest = new SharedRequest();
+        $sharedRequest->model = $this->model;
+        $sharedRequest->messages = array_map(
+            fn(Message $msg) => $msg->toSharedMessage(),
+            $this->messages
+        );
+        $sharedRequest->stream = $this->stream ?? false;
+        $sharedRequest->maxTokens = $this->max_completion_tokens ?? $this->max_tokens;
+        $sharedRequest->temperature = $this->temperature;
+
+        return $sharedRequest;
+    }
+
+    /**
+     * 转换为数组
+     */
+    public function toArray(): array
+    {
+        $data = [
+            'model' => $this->model,
+            'messages' => array_map(fn(Message $msg) => $msg->toArray(), $this->messages),
+        ];
+
+        if ($this->stream !== null) $data['stream'] = $this->stream;
+        if ($this->max_tokens !== null) $data['max_tokens'] = $this->max_tokens;
+        if ($this->temperature !== null) $data['temperature'] = $this->temperature;
+
+        return $data;
+    }
+}
+```
+
+### Anthropic 协议结构体
+
+#### MessagesRequest - Anthropic 请求结构体
+
+**文件**: `app/Services/Protocol/DTO/Anthropic/MessagesRequest.php`
+
+```php
+<?php
+
+namespace App\Services\Protocol\DTO\Anthropic;
+
+use Illuminate\Support\Facades\Validator;
+use App\Services\Shared\DTO\Request as SharedRequest;
+
+/**
+ * Anthropic Messages API 请求结构体
+ * @see https://docs.anthropic.com/en/api/messages
+ */
+class MessagesRequest
+{
+    // 必需字段
+    public string $model;
+    public array $messages = [];
+    public int $max_tokens;
+
+    // 可选字段
+    public string|array|null $system = null;
+    public ?array $stop_sequences = null;
+    public ?bool $stream = null;
+    public ?float $temperature = null;
+    public ?float $top_p = null;
+    public ?int $top_k = null;
+    public ?array $tools = null;
+    public ?object $tool_choice = null;
+    public ?Thinking $thinking = null;
+
+    /**
+     * 从 JSON 创建实例
+     */
+    public static function fromJson(string|array $data): self
+    {
+        if (is_string($data)) {
+            $data = json_decode($data, true);
+        }
+
+        $instance = new self();
+        $instance->model = $data['model'] ?? throw new \InvalidArgumentException('model is required');
+        $instance->max_tokens = $data['max_tokens'] ?? throw new \InvalidArgumentException('max_tokens is required');
+        $instance->messages = array_map(
+            fn($msg) => Message::fromArray($msg),
+            $data['messages'] ?? []
+        );
+
+        $instance->system = $data['system'] ?? null;
+        $instance->temperature = $data['temperature'] ?? null;
+        // ... 其他字段
+
+        return $instance;
+    }
+
+    /**
+     * 转换为 Shared\DTO\Request
+     */
+    public function toSharedRequest(): SharedRequest
+    {
+        $this->validate();
+
+        $sharedRequest = new SharedRequest();
+        $sharedRequest->model = $this->model;
+        $sharedRequest->maxTokens = $this->max_tokens;
+        $sharedRequest->messages = array_map(
+            fn(Message $msg) => $msg->toSharedMessage(),
+            $this->messages
+        );
+
+        // 系统提示（Anthropic 特有）
+        if ($this->system) {
+            $sharedRequest->system = is_string($this->system)
+                ? $this->system
+                : implode("\n", array_column($this->system, 'text'));
+        }
+
+        $sharedRequest->stream = $this->stream ?? false;
+        $sharedRequest->temperature = $this->temperature;
+
+        return $sharedRequest;
+    }
+}
+```
+
+### 使用示例
+
+#### Protocol Driver 中使用协议结构体
+
+```php
+<?php
+
+namespace App\Services\Protocol\Driver;
+
+use App\Services\Protocol\DTO\OpenAI\ChatRequest;
+use App\Services\Shared\DTO\Request as SharedRequest;
+
+class OpenAiChatCompletionsDriver extends AbstractDriver
+{
+    /**
+     * 解析客户端请求
+     */
+    public function parseRequest(string $json): SharedRequest
+    {
+        try {
+            // 步骤 1: JSON → 协议结构体（验证+类型安全）
+            $chatRequest = ChatRequest::fromJson($json);
+
+            // 步骤 2: 协议结构体 → Shared\DTO
+            return $chatRequest->toSharedRequest();
+
+        } catch (\InvalidArgumentException $e) {
+            throw new ProtocolException(
+                "Invalid OpenAI request format: " . $e->getMessage(),
+                previous: $e
+            );
+        }
+    }
+}
+```
+
+### 协议结构体的优势
+
+1. **强类型支持**
+   - IDE 自动补全字段名和类型
+   - 静态分析工具可检测错误
+
+2. **输入验证集中化**
+   - 在结构体层面统一验证逻辑
+   - 使用 Laravel Validator 进行格式验证
+
+3. **协议文档化**
+   - 结构体定义即协议文档
+   - 注释引用官方 API 文档链接
+
+4. **转换逻辑封装**
+   - JSON ↔ 协议结构体 ↔ Shared\DTO
+   - 转换逻辑集中在结构体方法中
+
+5. **易于维护**
+   - 协议变更只需修改对应结构体
+   - 不影响其他协议和 Shared 层

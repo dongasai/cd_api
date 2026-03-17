@@ -130,7 +130,7 @@ class ProxyServer
         $rawBodyString = $request->getContent();
 
         // 创建初始审计日志
-        $auditLog = $this->auditLogger->createInitial($request, $rawRequest['model'] ?? null, $isStream);
+        $auditLog = $this->auditLogger->createInitial($request, $rawRequest['model'] ?? null, $isStream, $protocol);
 
         // 创建请求日志
         $requestLog = $this->requestLogger->create($request, $rawRequest, $protocol, $auditLog->id);
@@ -160,12 +160,13 @@ class ProxyServer
                         $standardRequest->model,
                         $apiKey,
                         $this->currentGroup,
-                        $this->channelSelector->getFailedChannels()
+                        $this->channelSelector->getFailedChannels(),
+                        $protocol  // 传入源协议
                     );
                 }
 
                 if ($this->selectedChannel === null) {
-                    throw new \RuntimeException('No available channel for model: '.$standardRequest->model);
+                    throw new \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException('No available channel for model: '.$standardRequest->model);
                 }
 
                 // 解析实际模型名称
@@ -180,6 +181,7 @@ class ProxyServer
                     'channel_name' => $this->selectedChannel?->name,
                     'model' => $standardRequest->model,
                     'actual_model' => $actualModel,  // 添加实际模型
+                    'target_protocol' => $channelProtocol,  // 添加目标协议
                     'channel_affinity' => $this->affinityService->getAffinityInfo($request),  // 记录渠道亲和性信息
                     'metadata' => $rawRequest['metadata'] ?? null,  // 记录请求元数据
                 ]);
@@ -336,6 +338,15 @@ class ProxyServer
     ): SharedRequest {
         // 检查是否开启了 body 透传
         if ($channel->shouldPassthroughBody() && $rawBodyString !== null) {
+            // 即使在透传模式下，也需要应用模型映射
+            $requestBody = json_decode($rawBodyString, true);
+
+            // 如果解析成功且有模型映射，替换模型名称
+            if (is_array($requestBody) && $actualModel !== $standardRequest->model) {
+                $requestBody['model'] = $actualModel;
+                $rawBodyString = json_encode($requestBody);
+            }
+
             $providerRequest = SharedRequest::fromArray([]);
             $providerRequest->rawBodyString = $rawBodyString;
             $providerRequest->queryString = request()->getQueryString();
@@ -466,10 +477,10 @@ class ProxyServer
 
         if (! \App\Services\ModelService::isModelAvailable($model, $apiKey)) {
             if ($apiKey && ! empty($apiKey->allowed_models)) {
-                throw new \InvalidArgumentException("Model '{$model}' is not in the allowed models list for this API key");
+                throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException("Model '{$model}' is not in the allowed models list for this API key");
             }
 
-            throw new \InvalidArgumentException("Model '{$model}' is not available");
+            throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException("Model '{$model}' is not available");
         }
     }
 

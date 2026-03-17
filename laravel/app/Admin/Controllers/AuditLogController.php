@@ -47,16 +47,47 @@ class AuditLogController extends AdminController
             $grid->column('id', 'ID')->sortable();
             $grid->column('api_key_and_affinity', 'API Key ')->display(function () {
                 $apiKey = $this->api_key_name ?: '-';
+                $apiKeyId = $this->api_key_id ?? 0;
                 $affinity = $this->channel_affinity ?? [];
                 $isHit = isset($affinity['is_affinity_hit']) && $affinity['is_affinity_hit'];
 
+                // 根据不同的 API Key ID 分配不同的边框颜色
+                $colors = [
+                    1 => 'border-primary',      // 蓝色
+                    2 => 'border-secondary',    // 灰色
+                    3 => 'border-success',      // 绿色
+                    4 => 'border-danger',       // 红色
+                    5 => 'border-warning',      // 黄色
+                    6 => 'border-info',         // 青色
+                    7 => 'border-dark',         // 深色
+                    8 => 'border-primary',      // 循环使用
+                ];
+
+                $borderColor = $colors[$apiKeyId] ?? 'border-secondary';
+
+                // 亲和性命中时右上角添加星号
                 if ($isHit) {
-                    return "<span class='border border-success rounded px-1' title='渠道亲和命中'>{$apiKey}</span>";
+                    return "<span class='border {$borderColor} rounded px-2 position-relative d-inline-block' title='渠道亲和命中'>{$apiKey}<span class='position-absolute' style='top:-8px;right:-8px;font-size:14px;'>⭐</span></span>";
                 }
 
-                return "<span title='渠道亲和未命中'>{$apiKey}</span>";
+                return "<span class='border {$borderColor} rounded px-2' title='渠道亲和未命中'>{$apiKey}</span>";
             });
-            $grid->column('channel_name', '渠道名称');
+            $grid->column('channel_protocol', '渠道/协议')->display(function () {
+                $channelName = $this->channel_name ?? '-';
+
+                $source = $this->source_protocol ?? '-';
+                $target = $this->target_protocol ?? '-';
+
+                // 协议徽章颜色
+                $sourceBadge = $source === 'anthropic'
+                    ? "<span class='badge bg-info'>{$source}</span>"
+                    : "<span class='badge bg-primary'>{$source}</span>";
+                $targetBadge = $target === 'anthropic'
+                    ? "<span class='badge bg-info'>{$target}</span>"
+                    : "<span class='badge bg-primary'>{$target}</span>";
+
+                return "<strong>{$channelName}</strong><br>请求: {$sourceBadge}<br>上游: {$targetBadge}";
+            });
             $grid->column('model_info', '模型')->display(function () {
                 $model = $this->model ?? '-';
                 $actual = $this->actual_model ?? '-';
@@ -193,6 +224,8 @@ class AuditLogController extends AdminController
             $show->field('request_type', '请求类型')->using(AuditLog::getRequestTypes());
             $show->field('model', '请求模型');
             $show->field('actual_model', '实际模型');
+            $show->field('source_protocol', '请求格式/源协议');
+            $show->field('target_protocol', '上游格式/目标协议');
 
             // Token信息
             $show->field('prompt_tokens', '提示Token数')->as(function ($value) {

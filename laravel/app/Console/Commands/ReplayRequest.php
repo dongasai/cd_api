@@ -15,12 +15,14 @@ use Illuminate\Support\Facades\Http;
  * 通过请求ID重放: php artisan request:replay --request-id=1004
  * 通过审计ID重放: php artisan request:replay --audit-id=500
  * 通过request_id重放: php artisan request:replay --request-id=req_abc123
+ * 使用最新审计日志: php artisan request:replay --latest
  */
 class ReplayRequest extends Command
 {
     protected $signature = 'request:replay
                             {--request-id= : 请求 ID 或 request_id}
                             {--audit-id= : 审计 ID}
+                            {--latest : 使用最新的审计日志}
                             {--timeout=120 : 请求超时时间 (秒)}
                             {--dry-run : 仅显示请求信息，不实际发送}';
 
@@ -30,18 +32,35 @@ class ReplayRequest extends Command
     {
         $requestId = $this->option('request-id');
         $auditId = $this->option('audit-id');
+        $useLatest = $this->option('latest');
 
-        // 二选一验证
-        if (! $requestId && ! $auditId) {
-            $this->error('请提供 --request-id 或 --audit-id 参数之一');
+        // 参数验证
+        $providedOptions = array_filter([$requestId, $auditId, $useLatest]);
+        $count = count($providedOptions);
+
+        if ($count === 0) {
+            $this->error('请提供 --request-id、--audit-id 或 --latest 参数之一');
 
             return self::FAILURE;
         }
 
-        if ($requestId && $auditId) {
-            $this->error('--request-id 和 --audit-id 参数不能同时使用');
+        if ($count > 1) {
+            $this->error('--request-id、--audit-id 和 --latest 参数只能使用其中一个');
 
             return self::FAILURE;
+        }
+
+        // 如果使用 --latest 参数,查询最新的审计日志
+        if ($useLatest) {
+            $auditLog = AuditLog::latest()->first();
+            if (! $auditLog) {
+                $this->error('未找到任何审计记录');
+
+                return self::FAILURE;
+            }
+
+            $auditId = $auditLog->id;
+            $this->info("使用最新审计记录 ID: {$auditId}");
         }
 
         // 查找请求日志

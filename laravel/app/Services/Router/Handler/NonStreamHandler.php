@@ -63,16 +63,27 @@ class NonStreamHandler
 
         // 使用传入的审计日志（如果已创建），否则创建新的
         if ($auditLog === null) {
-            $auditLog = $this->auditLogger->createInitial($httpRequest, $standardRequest->model, false);
+            $auditLog = $this->auditLogger->createInitial($httpRequest, $standardRequest->model, false, $sourceProtocol);
         }
 
         // 更新审计日志
-        $auditLog->update([
+        $updateData = [
             'status_code' => 200,
             'latency_ms' => $latencyMs,
             'first_token_ms' => $latencyMs,  // 非流式请求，首字延迟=总延迟
             'finish_reason' => $providerResponse->finishReason?->value,
-        ]);
+        ];
+
+        // 更新 token 使用信息
+        if ($providerResponse->usage !== null) {
+            $updateData['prompt_tokens'] = $providerResponse->usage->inputTokens ?? 0;
+            $updateData['completion_tokens'] = $providerResponse->usage->outputTokens ?? 0;
+            $updateData['total_tokens'] = ($providerResponse->usage->inputTokens ?? 0) + ($providerResponse->usage->outputTokens ?? 0);
+            $updateData['cache_read_tokens'] = $providerResponse->usage->cacheReadInputTokens ?? 0;
+            $updateData['cache_write_tokens'] = $providerResponse->usage->cacheCreationInputTokens ?? 0;
+        }
+
+        $auditLog->update($updateData);
 
         // 构建响应
         $response = $this->protocolConverter->denormalizeResponse($providerResponse, $sourceProtocol);

@@ -208,24 +208,54 @@ class JsonPreviewController extends Controller
 
             $event = [];
 
-            // 匹配 event: xxx
-            if (preg_match('/event:\s*(.+)/', $chunk, $matches)) {
-                $event['event'] = trim($matches[1]);
-            }
-
-            // 匹配 data: {...}
-            if (preg_match('/data:\s*(.+)/s', $chunk, $matches)) {
-                $dataStr = trim($matches[1]);
-                // 尝试解析 JSON
-                $jsonData = json_decode($dataStr, true);
-                if (json_last_error() === JSON_ERROR_NONE) {
-                    $event['data'] = $jsonData;
-                } else {
-                    $event['data'] = $dataStr;
+            // 如果 chunk 已经是数组形式的结构化数据
+            if (is_array($chunk)) {
+                // 直接使用数组字段
+                if (isset($chunk['event'])) {
+                    $event['event'] = $chunk['event'];
+                } elseif (isset($chunk['type'])) {
+                    // 使用 type 作为 event
+                    $event['event'] = $chunk['type'];
                 }
+
+                if (isset($chunk['data'])) {
+                    $event['data'] = $chunk['data'];
+                }
+
+                // 如果有 delta 或 content_delta，也提取出来
+                if (isset($chunk['delta'])) {
+                    $event['delta'] = $chunk['delta'];
+                }
+                if (isset($chunk['content_delta'])) {
+                    $event['content_delta'] = $chunk['content_delta'];
+                }
+
+                return ! empty($event) ? $event : ['raw' => $chunk];
             }
 
-            return ! empty($event) ? $event : null;
+            // 如果是字符串，使用正则匹配原始 SSE 格式
+            if (is_string($chunk)) {
+                // 匹配 event: xxx
+                if (preg_match('/event:\s*(.+)/', $chunk, $matches)) {
+                    $event['event'] = trim($matches[1]);
+                }
+
+                // 匹配 data: {...}
+                if (preg_match('/data:\s*(.+)/s', $chunk, $matches)) {
+                    $dataStr = trim($matches[1]);
+                    // 尝试解析 JSON
+                    $jsonData = json_decode($dataStr, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $event['data'] = $jsonData;
+                    } else {
+                        $event['data'] = $dataStr;
+                    }
+                }
+
+                return ! empty($event) ? $event : null;
+            }
+
+            return null;
         };
 
         // 解析事件类型统计

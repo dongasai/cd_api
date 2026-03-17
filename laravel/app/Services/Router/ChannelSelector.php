@@ -29,7 +29,7 @@ class ChannelSelector
     /**
      * 选择渠道（支持故障转移）
      */
-    public function select(string $model, ?ApiKey $apiKey, ?string $group, array $failedChannels = []): ?Channel
+    public function select(string $model, ?ApiKey $apiKey, ?string $group, array $failedChannels = [], string $sourceProtocol = 'openai'): ?Channel
     {
         $this->failedChannels = $failedChannels;
 
@@ -42,20 +42,57 @@ class ChannelSelector
             );
 
             if ($affinityResult->isHit && $affinityResult->channel) {
-                Log::info('Using affinity channel', [
-                    'channel_id' => $affinityResult->channel->id,
-                    'rule_id' => $affinityResult->rule?->id,
-                    'key_hash' => $affinityResult->keyHash,
-                ]);
+                // 检查亲和性渠道是否符合透传协议匹配
+                if ($affinityResult->channel->shouldPassthroughBody()) {
+                    $channelProtocol = $this->getChannelProtocol($affinityResult->channel);
+                    if ($channelProtocol !== $sourceProtocol) {
+                        Log::warning('Affinity channel excluded due to passthrough protocol mismatch', [
+                            'channel_id' => $affinityResult->channel->id,
+                            'channel_name' => $affinityResult->channel->name,
+                            'channel_protocol' => $channelProtocol,
+                            'source_protocol' => $sourceProtocol,
+                            'rule_id' => $affinityResult->rule?->id,
+                        ]);
+                    } else {
+                        Log::info('Using affinity channel', [
+                            'channel_id' => $affinityResult->channel->id,
+                            'rule_id' => $affinityResult->rule?->id,
+                            'key_hash' => $affinityResult->keyHash,
+                        ]);
 
-                return $affinityResult->channel;
+                        return $affinityResult->channel;
+                    }
+                } else {
+                    Log::info('Using affinity channel', [
+                        'channel_id' => $affinityResult->channel->id,
+                        'rule_id' => $affinityResult->rule?->id,
+                        'key_hash' => $affinityResult->keyHash,
+                    ]);
+
+                    return $affinityResult->channel;
+                }
             }
         }
 
         return $this->channelRouter->selectChannel($model, [
             'api_key' => $apiKey,
             'exclude_channels' => $this->failedChannels,
+            'source_protocol' => $sourceProtocol,
         ]);
+    }
+
+    /**
+     * 获取渠道的协议类型
+     */
+    protected function getChannelProtocol(Channel $channel): string
+    {
+        $provider = $channel->provider;
+
+        if (in_array($provider, ['anthropic', 'claude'])) {
+            return 'anthropic';
+        }
+
+        return 'openai';
     }
 
     /**
