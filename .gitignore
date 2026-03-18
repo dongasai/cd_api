@@ -4,3 +4,4 @@ docker/000-default.local.conf
 .trae/specs/*/*.md
 *.s.md
 .idea/
+.ai/
