@@ -70,20 +70,34 @@ class ChannelRouterService
             throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException("No available channel for model '{$model}' with protocol '{$sourceProtocol}'");
         }
 
+        // 应用User-Agent过滤
+        $userAgent = $context['user_agent'] ?? request()->header('User-Agent', '');
+        $channelsAfterUserAgent = $this->applyUserAgentFilter($channelsAfterProtocol, $userAgent);
+
+        // User-Agent不匹配导致没有可用渠道
+        if ($channelsAfterUserAgent->isEmpty()) {
+            Log::warning('All candidate channels filtered by User-Agent restriction', [
+                'model' => $model,
+                'user_agent' => $userAgent,
+                'candidate_count' => $channelsAfterProtocol->count(),
+            ]);
+            throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException("No available channel for model '{$model}' with current User-Agent");
+        }
+
         // 排除已失败的渠道
         $excludeChannels = $context['exclude_channels'] ?? [];
         if (! empty($excludeChannels)) {
-            $channelsAfterProtocol = $channelsAfterProtocol->reject(function ($channel) use ($excludeChannels) {
+            $channelsAfterUserAgent = $channelsAfterUserAgent->reject(function ($channel) use ($excludeChannels) {
                 return in_array($channel->id, $excludeChannels, true);
             });
         }
 
         // 所有渠道都失败了
-        if ($channelsAfterProtocol->isEmpty()) {
+        if ($channelsAfterUserAgent->isEmpty()) {
             throw new \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException("All channels failed for model: {$model}");
         }
 
-        $channel = $this->applyLoadBalancing($channelsAfterProtocol, $context);
+        $channel = $this->applyLoadBalancing($channelsAfterUserAgent, $context);
 
         Log::info('Channel selected', [
             'model' => $model,
@@ -117,6 +131,7 @@ class ChannelRouterService
 
             return Channel::whereIn('id', $channelIds)
                 ->where('status', 'active')
+                ->where('status2', 'normal') // 只选择健康状态正常的渠道
                 ->orderBy('priority', 'desc')
                 ->orderBy('weight', 'desc')
                 ->get();
@@ -189,6 +204,27 @@ class ChannelRouterService
 
             return $isMatch;
         });
+    }
+
+    /**
+     * 应用User-Agent过滤
+     *
+     * 根据渠道的User-Agent限制配置，过滤不匹配的渠道
+     *
+     * @param  \Illuminate\Database\Eloquent\Collection  $channels  渠道集合
+     * @param  string  $userAgent  请求的User-Agent
+     * @return \Illuminate\Database\Eloquent\Collection 过滤后的渠道集合
+     */
+    protected function applyUserAgentFilter(\Illuminate\Database\Eloquent\Collection $channels, string $userAgent): \Illuminate\Database\Eloquent\Collection
+    {
+        // 如果User-Agent为空，不过滤
+        if (empty($userAgent)) {
+            return $channels;
+        }
+
+        $userAgentFilter = app(UserAgentFilterService::class);
+
+        return $userAgentFilter->filterChannels($channels, $userAgent);
     }
 
     /**
@@ -347,6 +383,7 @@ class ChannelRouterService
 
         return $group->channels()
             ->where('status', 'active')
+            ->where('status2', 'normal') // 只选择健康状态正常的渠道
             ->orderByPivot('priority', 'desc')
             ->get();
     }
@@ -363,6 +400,7 @@ class ChannelRouterService
             $query->where('name', $tagName);
         })
             ->where('status', 'active')
+            ->where('status2', 'normal') // 只选择健康状态正常的渠道
             ->get();
     }
 

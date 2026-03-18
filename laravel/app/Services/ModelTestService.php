@@ -5,9 +5,9 @@ namespace App\Services;
 use App\Models\Channel;
 use App\Models\ModelTestLog;
 use App\Models\PresetPrompt;
+use App\Services\Provider\ProviderManager;
 use App\Services\Shared\DTO\Message;
 use App\Services\Shared\DTO\Request;
-use App\Services\Provider\ProviderManager;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -382,6 +382,143 @@ class ModelTestService
                 'system_prompt' => $systemPrompt,
                 'user_message' => $userMessage,
                 'request_headers' => $headers,
+                'is_stream' => true,
+                'status' => ModelTestLog::STATUS_FAILED,
+                'error_message' => $e->getMessage(),
+                'response_time_ms' => (int) ((microtime(true) - $startTime) * 1000),
+            ]);
+            $log->save();
+
+            throw $e;
+        }
+    }
+
+    /**
+     * 流式测试系统API(用于实时响应)
+     *
+     * @param  string  $model  测试模型
+     * @param  string|null  $userMessage  用户消息
+     * @param  PresetPrompt|null  $presetPrompt  预设提示词
+     * @return Generator 流式响应生成器
+     */
+    public function testSystemApiStream(
+        string $model,
+        ?string $userMessage = null,
+        ?PresetPrompt $presetPrompt = null
+    ): Generator {
+        $startTime = microtime(true);
+        $firstTokenTime = null;
+        $fullResponse = '';
+
+        // 获取默认测试 API Key
+        $defaultApiKey = $this->settingService->get('test.default_test_api_key');
+
+        if (! $defaultApiKey) {
+            throw new \Exception('未配置默认测试 API Key');
+        }
+
+        // 准备测试数据
+        $systemPrompt = $presetPrompt?->content;
+        $userMessage = $userMessage ?? '你好,请介绍一下你自己';
+        $presetHeaders = $presetPrompt?->getHeaders() ?? [];
+
+        try {
+            // 构建请求
+            $baseUrl = config('app.url');
+            $endpoint = rtrim($baseUrl, '/').'/api/openai/v1/chat/completions';
+
+            $messages = [];
+            if ($systemPrompt) {
+                $messages[] = ['role' => 'system', 'content' => $systemPrompt];
+            }
+            $messages[] = ['role' => 'user', 'content' => $userMessage];
+
+            $requestData = [
+                'model' => $model,
+                'messages' => $messages,
+                'stream' => true,
+            ];
+
+            $requestHeaders = array_merge([
+                'Authorization' => 'Bearer '.$defaultApiKey,
+                'Content-Type' => 'application/json',
+            ], $presetHeaders);
+
+            // 使用流式请求
+            $response = Http::withHeaders($requestHeaders)
+                ->timeout(120)
+                ->post($endpoint, $requestData);
+
+            if (! $response->successful()) {
+                throw new \Exception('请求失败: '.$response->status().' - '.$response->body());
+            }
+
+            // 处理流式响应
+            $body = $response->body();
+            $lines = explode("\n", $body);
+            $usageData = null;
+
+            foreach ($lines as $line) {
+                if (str_starts_with($line, 'data: ')) {
+                    $data = substr($line, 6);
+                    if ($data === '[DONE]') {
+                        break;
+                    }
+
+                    $chunk = json_decode($data, true);
+                    if (isset($chunk['choices'][0]['delta']['content'])) {
+                        if ($firstTokenTime === null) {
+                            $firstTokenTime = microtime(true);
+                        }
+                        $content = $chunk['choices'][0]['delta']['content'];
+                        $fullResponse .= $content;
+
+                        // 创建响应对象并 yield
+                        yield new class($content)
+                        {
+                            public string $content;
+
+                            public function __construct(string $content)
+                            {
+                                $this->content = $content;
+                            }
+                        };
+                    }
+
+                    // 提取 usage 信息
+                    if (isset($chunk['usage'])) {
+                        $usageData = $chunk['usage'];
+                    }
+                }
+            }
+
+            // 保存测试日志
+            $log = new ModelTestLog([
+                'test_type' => ModelTestLog::TEST_TYPE_SYSTEM_API,
+                'model' => $model,
+                'prompt_preset_id' => $presetPrompt?->id,
+                'system_prompt' => $systemPrompt,
+                'user_message' => $userMessage,
+                'request_headers' => $requestHeaders,
+                'assistant_response' => $fullResponse,
+                'is_stream' => true,
+                'prompt_tokens' => $usageData['prompt_tokens'] ?? null,
+                'completion_tokens' => $usageData['completion_tokens'] ?? null,
+                'total_tokens' => $usageData['total_tokens'] ?? null,
+                'response_time_ms' => (int) ((microtime(true) - $startTime) * 1000),
+                'first_token_ms' => $firstTokenTime ? (int) (($firstTokenTime - $startTime) * 1000) : null,
+                'status' => ModelTestLog::STATUS_SUCCESS,
+            ]);
+            $log->save();
+        } catch (\Exception $e) {
+            // 保存失败日志
+            $log = new ModelTestLog([
+                'test_type' => ModelTestLog::TEST_TYPE_SYSTEM_API,
+                'model' => $model,
+                'prompt_preset_id' => $presetPrompt?->id,
+                'system_prompt' => $systemPrompt,
+                'user_message' => $userMessage,
+                'request_headers' => $presetHeaders,
                 'is_stream' => true,
                 'status' => ModelTestLog::STATUS_FAILED,
                 'error_message' => $e->getMessage(),

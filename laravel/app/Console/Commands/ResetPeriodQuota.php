@@ -121,8 +121,14 @@ class ResetPeriodQuota extends Command
     {
         $enabledCount = 0;
 
+        // 检查账户是否允许自动启用
+        if (! $account->allowsAutoEnable()) {
+            return 0;
+        }
+
         foreach ($account->channels as $channel) {
-            if ($channel->allowsAutoEnable() && ! $channel->isActive()) {
+            // 只启用健康状态异常的渠道
+            if (! $channel->isHealthNormal()) {
                 $result = $this->channelService->manualEnableChannel(
                     $channel,
                     null,

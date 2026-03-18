@@ -32,7 +32,7 @@ class ChannelCodingStatusService
     /**
      * 检查并更新渠道状态
      *
-     * 根据Coding账户的配额状态决定是否启用/禁用渠道
+     * 根据Coding账户的配额状态决定是否启用/禁用渠道的健康状态(status2)
      */
     public function checkAndUpdateChannel(Channel $channel): array
     {
@@ -57,31 +57,31 @@ class ChannelCodingStatusService
         $result = [
             'updated' => false,
             'action' => null,
-            'from_status' => $channel->status,
-            'to_status' => $channel->status,
+            'from_status' => $channel->status2,
+            'to_status' => $channel->status2,
         ];
 
-        // 检查是否需要禁用
-        if ($channel->isActive() && $driver->shouldDisable()) {
-            if ($channel->allowsAutoDisable()) {
+        // 检查是否需要禁用健康状态
+        if ($channel->isHealthNormal() && $driver->shouldDisable()) {
+            if ($account->allowsAutoDisable()) {
                 $this->disableChannel($channel, $account, '配额耗尽或账户异常');
                 $result['updated'] = true;
                 $result['action'] = 'disabled';
                 $result['to_status'] = 'disabled';
             } else {
-                $result['message'] = '配额耗尽，但渠道配置为不自动禁用';
+                $result['message'] = '配额耗尽，但账户配置为不自动禁用';
             }
         }
 
-        // 检查是否需要启用
-        if (! $channel->isActive() && $driver->shouldEnable()) {
-            if ($channel->allowsAutoEnable()) {
+        // 检查是否需要启用健康状态
+        if (! $channel->isHealthNormal() && $driver->shouldEnable()) {
+            if ($account->allowsAutoEnable()) {
                 $this->enableChannel($channel, $account, '配额恢复');
                 $result['updated'] = true;
                 $result['action'] = 'enabled';
-                $result['to_status'] = 'active';
+                $result['to_status'] = 'normal';
             } else {
-                $result['message'] = '配额恢复，但渠道配置为不自动启用';
+                $result['message'] = '配额恢复，但账户配置为不自动启用';
             }
         }
 
@@ -89,24 +89,26 @@ class ChannelCodingStatusService
     }
 
     /**
-     * 禁用渠道（系统自动）
+     * 禁用渠道健康状态（系统自动）
      */
     public function disableChannel(Channel $channel, CodingAccount $account, string $reason): void
     {
-        $fromStatus = $channel->status;
+        $fromStatus = $channel->status2;
         $beforeData = [
-            'status' => $fromStatus,
+            'status2' => $fromStatus,
+            'status2_remark' => $channel->status2_remark,
             'account_status' => $account->status,
         ];
 
-        // 更新渠道状态
-        $channel->update(['status' => 'disabled']);
+        // 更新渠道健康状态
+        $channel->disableHealth($reason);
 
         // 更新账户禁用时间
         $account->markAsDisabled(CodingAccount::STATUS_EXHAUSTED);
 
         $afterData = [
-            'status' => 'disabled',
+            'status2' => 'disabled',
+            'status2_remark' => $reason,
             'account_status' => CodingAccount::STATUS_EXHAUSTED,
         ];
 
@@ -124,7 +126,7 @@ class ChannelCodingStatusService
             source: OperationSource::SYSTEM
         );
 
-        Log::info('渠道已自动禁用', [
+        Log::info('渠道健康状态已自动禁用', [
             'channel_id' => $channel->id,
             'channel_name' => $channel->name,
             'account_id' => $account->id,
@@ -133,24 +135,26 @@ class ChannelCodingStatusService
     }
 
     /**
-     * 启用渠道（系统自动）
+     * 启用渠道健康状态（系统自动）
      */
     public function enableChannel(Channel $channel, CodingAccount $account, string $reason): void
     {
-        $fromStatus = $channel->status;
+        $fromStatus = $channel->status2;
         $beforeData = [
-            'status' => $fromStatus,
+            'status2' => $fromStatus,
+            'status2_remark' => $channel->status2_remark,
             'account_status' => $account->status,
         ];
 
-        // 更新渠道状态
-        $channel->update(['status' => 'active']);
+        // 更新渠道健康状态
+        $channel->enableHealth();
 
         // 清除账户禁用时间
         $account->reopen();
 
         $afterData = [
-            'status' => 'active',
+            'status2' => 'normal',
+            'status2_remark' => null,
             'account_status' => CodingAccount::STATUS_ACTIVE,
         ];
 
@@ -168,7 +172,7 @@ class ChannelCodingStatusService
             source: OperationSource::SYSTEM
         );
 
-        Log::info('渠道已自动启用', [
+        Log::info('渠道健康状态已自动启用', [
             'channel_id' => $channel->id,
             'channel_name' => $channel->name,
             'account_id' => $account->id,
@@ -177,7 +181,7 @@ class ChannelCodingStatusService
     }
 
     /**
-     * 手动禁用渠道
+     * 手动禁用渠道健康状态
      */
     public function manualDisableChannel(Channel $channel, ?int $userId = null, ?string $reason = null): array
     {
@@ -196,17 +200,19 @@ class ChannelCodingStatusService
             ];
         }
 
-        $fromStatus = $channel->status;
+        $fromStatus = $channel->status2;
         $beforeData = [
-            'status' => $fromStatus,
+            'status2' => $fromStatus,
+            'status2_remark' => $channel->status2_remark,
             'account_status' => $account->status,
         ];
 
-        // 更新渠道状态
-        $channel->update(['status' => 'disabled']);
+        // 更新渠道健康状态
+        $channel->disableHealth($reason ?? '手动禁用');
 
         $afterData = [
-            'status' => 'disabled',
+            'status2' => 'disabled',
+            'status2_remark' => $reason ?? '手动禁用',
         ];
 
         // 记录状态变更日志
@@ -234,12 +240,12 @@ class ChannelCodingStatusService
 
         return [
             'success' => true,
-            'message' => '渠道已手动禁用',
+            'message' => '渠道健康状态已手动禁用',
         ];
     }
 
     /**
-     * 手动启用渠道
+     * 手动启用渠道健康状态
      */
     public function manualEnableChannel(Channel $channel, ?int $userId = null, ?string $reason = null): array
     {
@@ -266,22 +272,24 @@ class ChannelCodingStatusService
         if ($status['status'] === CodingAccount::STATUS_EXHAUSTED) {
             return [
                 'success' => false,
-                'message' => 'Coding账户配额已耗尽，无法启用渠道',
+                'message' => 'Coding账户配额已耗尽，无法启用渠道健康状态',
                 'quota_status' => $status,
             ];
         }
 
-        $fromStatus = $channel->status;
+        $fromStatus = $channel->status2;
         $beforeData = [
-            'status' => $fromStatus,
+            'status2' => $fromStatus,
+            'status2_remark' => $channel->status2_remark,
             'account_status' => $account->status,
         ];
 
-        // 更新渠道状态
-        $channel->update(['status' => 'active']);
+        // 更新渠道健康状态
+        $channel->enableHealth();
 
         $afterData = [
-            'status' => 'active',
+            'status2' => 'normal',
+            'status2_remark' => null,
         ];
 
         // 记录状态变更日志
@@ -309,7 +317,7 @@ class ChannelCodingStatusService
 
         return [
             'success' => true,
-            'message' => '渠道已手动启用',
+            'message' => '渠道健康状态已手动启用',
         ];
     }
 
@@ -442,15 +450,17 @@ class ChannelCodingStatusService
             'has_coding_account' => true,
             'channel_id' => $channel->id,
             'channel_status' => $channel->status,
+            'channel_health_status' => $channel->status2,
             'account' => [
                 'id' => $account->id,
                 'name' => $account->name,
                 'platform' => $account->platform,
                 'driver' => $account->driver_class,
                 'status' => $account->status,
+                'last_check_at' => $account->last_check_at?->toDateTimeString(),
             ],
             'quota' => $driver->getQuotaInfo(),
-            'override' => $channel->getCodingStatusOverride(),
+            'override' => $account->getStatusOverride(),
         ];
     }
 
@@ -494,61 +504,94 @@ class ChannelCodingStatusService
     /**
      * 批量检查并更新所有渠道状态
      *
-     * 根据各驱动的 check_interval 配置决定是否需要检查
+     * 按账户分组检查，避免重复检查同一账户
      *
      * @return array<string, mixed>
      */
     public function batchCheckAndUpdate(): array
     {
+        // 获取所有绑定Coding账户的渠道，按账户分组
         $channels = $this->getChannelsWithCodingAccount();
-        $results = [];
 
-        foreach ($channels as $channel) {
+        // 按账户ID分组
+        $channelsByAccount = $channels->groupBy('coding_account_id');
+
+        $results = [];
+        $accountCheckResults = [];
+
+        // 先检查每个账户（避免重复检查）
+        foreach ($channelsByAccount as $accountId => $accountChannels) {
+            $firstChannel = $accountChannels->first();
+            if (! $firstChannel || ! $firstChannel->codingAccount) {
+                continue;
+            }
+
+            $account = $firstChannel->codingAccount;
+
             try {
-                $result = $this->checkChannelIfNeeded($channel);
-                $results[$channel->id] = $result;
+                $accountCheckResults[$accountId] = $this->checkAccountIfNeeded($account);
             } catch (\Exception $e) {
-                Log::error('检查渠道状态失败', [
-                    'channel_id' => $channel->id,
+                Log::error('检查账户状态失败', [
+                    'account_id' => $accountId,
                     'error' => $e->getMessage(),
                 ]);
-                $results[$channel->id] = [
+                $accountCheckResults[$accountId] = [
                     'updated' => false,
                     'error' => $e->getMessage(),
                 ];
             }
         }
 
+        // 根据账户检查结果更新所有关联渠道
+        foreach ($channels as $channel) {
+            $accountId = $channel->coding_account_id;
+            if (! isset($accountCheckResults[$accountId])) {
+                $results[$channel->id] = [
+                    'updated' => false,
+                    'message' => '账户检查结果不存在',
+                ];
+
+                continue;
+            }
+
+            $accountResult = $accountCheckResults[$accountId];
+
+            // 如果账户检查触发了状态变更，需要更新所有关联渠道
+            if ($accountResult['updated'] ?? false) {
+                try {
+                    $result = $this->checkAndUpdateChannel($channel);
+                    $results[$channel->id] = $result;
+                } catch (\Exception $e) {
+                    Log::error('检查渠道状态失败', [
+                        'channel_id' => $channel->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                    $results[$channel->id] = [
+                        'updated' => false,
+                        'error' => $e->getMessage(),
+                    ];
+                }
+            } else {
+                $results[$channel->id] = $accountResult;
+            }
+        }
+
         return [
             'total' => $channels->count(),
+            'accounts' => count($accountCheckResults),
             'results' => $results,
         ];
     }
 
     /**
-     * 检查渠道是否需要检查（根据驱动的检查间隔）
+     * 检查账户是否需要检查（根据驱动的检查间隔）
      */
-    protected function checkChannelIfNeeded(Channel $channel): array
+    protected function checkAccountIfNeeded(CodingAccount $account): array
     {
-        if (! $channel->hasCodingAccount()) {
-            return [
-                'updated' => false,
-                'message' => '渠道未绑定Coding账户',
-            ];
-        }
-
-        $account = $channel->codingAccount;
-        if (! $account) {
-            return [
-                'updated' => false,
-                'message' => 'Coding账户不存在',
-            ];
-        }
-
         $driver = $this->driverManager->driverForAccount($account);
         $checkInterval = $driver->getCheckInterval();
 
-        $lastCheckAt = $channel->coding_last_check_at ?? null;
+        $lastCheckAt = $account->last_check_at ?? null;
 
         if ($lastCheckAt) {
             $nextCheckAt = \Carbon\Carbon::parse($lastCheckAt)->addSeconds($checkInterval);
@@ -562,10 +605,12 @@ class ChannelCodingStatusService
             }
         }
 
-        $result = $this->checkAndUpdateChannel($channel);
+        // 更新最后检查时间
+        $account->updateLastCheckAt();
 
-        $channel->update(['coding_last_check_at' => now()]);
-
-        return $result;
+        return [
+            'updated' => true,
+            'message' => '账户需要检查',
+        ];
     }
 }

@@ -103,12 +103,12 @@ class PresetPrompt extends Model
     public static function getCategories(): array
     {
         return [
-            'general' => '通用',
-            'programming' => '编程',
-            'translation' => '翻译',
-            'analysis' => '分析',
-            'writing' => '写作',
-            'other' => '其他',
+            'general' => __('menu.preset_prompt_categories.general'),
+            'programming' => __('menu.preset_prompt_categories.programming'),
+            'translation' => __('menu.preset_prompt_categories.translation'),
+            'analysis' => __('menu.preset_prompt_categories.analysis'),
+            'writing' => __('menu.preset_prompt_categories.writing'),
+            'other' => __('menu.preset_prompt_categories.other'),
         ];
     }
 

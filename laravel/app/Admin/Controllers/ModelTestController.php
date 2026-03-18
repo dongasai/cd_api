@@ -9,8 +9,6 @@ use App\Services\ModelTestService;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
 use Dcat\Admin\Layout\Content;
-use Dcat\Admin\Layout\Row;
-use Dcat\Admin\Widgets\Card;
 use Illuminate\Http\Request;
 
 /**
@@ -35,23 +33,6 @@ class ModelTestController extends AdminController
      */
     public function index(Content $content)
     {
-        return $content
-            ->header($this->title)
-            ->description('AI模型对话测试')
-            ->body(function (Row $row) {
-                // 测试表单卡片
-                $row->column(6, $this->buildTestFormCard());
-
-                // 测试结果展示卡片
-                $row->column(6, $this->buildResultCard());
-            });
-    }
-
-    /**
-     * 构建测试表单卡片
-     */
-    protected function buildTestFormCard(): Card
-    {
         $channels = Channel::where('status', 'active')->pluck('name', 'id')->toArray();
         $presetPrompts = PresetPrompt::where('is_enabled', true)
             ->orderBy('sort_order')
@@ -63,23 +44,33 @@ class ModelTestController extends AdminController
             ModelTestLog::TEST_TYPE_SYSTEM_API => '系统API测试',
         ];
 
-        $form = view('admin.model-test.form', [
-            'channels' => $channels,
-            'presetPrompts' => $presetPrompts,
-            'testTypes' => $testTypes,
-        ])->render();
-
-        return Card::make('测试配置', $form);
+        return $content
+            ->header($this->title)
+            ->description('AI模型对话测试')
+            ->body(view('admin.model-test.index', [
+                'channels' => $channels,
+                'presetPrompts' => $presetPrompts,
+                'testTypes' => $testTypes,
+            ]));
     }
 
     /**
-     * 构建结果展示卡片
+     * OpenAI Chat UI 测试页面
      */
-    protected function buildResultCard(): Card
+    public function openaiTest(Content $content)
     {
-        $result = view('admin.model-test.result')->render();
+        // 获取第一个可用的 API Key 作为默认值
+        $defaultApiKey = \App\Models\ApiKey::where('status', 'active')
+            ->whereNotNull('key')
+            ->orderBy('id')
+            ->value('key');
 
-        return Card::make('测试结果', $result)->id('test-result-card');
+        return $content
+            ->header('OpenAI Chat UI')
+            ->description('基于 chat.html 的模型测试')
+            ->body(view('admin.model-test.openai', [
+                'defaultApiKey' => $defaultApiKey,
+            ]));
     }
 
     /**
@@ -92,7 +83,7 @@ class ModelTestController extends AdminController
             'model' => 'required|string|max:100',
             'user_message' => 'nullable|string',
             'preset_prompt_id' => 'nullable|exists:preset_prompts,id',
-            'is_stream' => 'boolean',
+            'is_stream' => 'nullable|in:true,false,1,0',
             'channel_id' => 'required_if:test_type,channel_direct|exists:channels,id',
         ]);
 
@@ -106,46 +97,73 @@ class ModelTestController extends AdminController
         $presetPrompt = $presetPromptId ? PresetPrompt::find($presetPromptId) : null;
 
         try {
-            if ($testType === ModelTestLog::TEST_TYPE_CHANNEL_DIRECT) {
-                $channel = Channel::findOrFail($channelId);
+            // 流式测试返回 SSE 响应 (EventSource 发送 GET 请求, wantsJson 为 false)
+            if ($isStream && $request->wantsJson() === false) {
+                if ($testType === ModelTestLog::TEST_TYPE_CHANNEL_DIRECT) {
+                    $channel = Channel::findOrFail($channelId);
+                } else {
+                    $channel = null;
+                }
 
-                // 流式测试返回 SSE 响应
-                if ($isStream && $request->wantsJson() === false) {
-                    return response()->stream(function () use ($channel, $model, $userMessage, $presetPrompt) {
-                        echo 'data: '.json_encode(['status' => 'start'])."\n\n";
+                return response()->stream(function () use ($channel, $model, $userMessage, $presetPrompt, $testType) {
+                    // 开启输出缓冲
+                    if (ob_get_level() === 0) {
+                        ob_start();
+                    }
 
-                        try {
+                    echo 'data: '.json_encode(['status' => 'start'])."\n\n";
+                    ob_flush();
+                    flush();
+
+                    try {
+                        if ($testType === ModelTestLog::TEST_TYPE_CHANNEL_DIRECT) {
                             $generator = $this->testService->testChannelDirectStream(
                                 $channel,
                                 $model,
                                 $userMessage,
                                 $presetPrompt
                             );
-
-                            foreach ($generator as $chunk) {
-                                echo 'data: '.json_encode([
-                                    'content' => $chunk->content ?? '',
-                                    'status' => 'streaming',
-                                ])."\n\n";
-                                ob_flush();
-                                flush();
-                            }
-
-                            echo 'data: '.json_encode(['status' => 'done'])."\n\n";
-                        } catch (\Exception $e) {
-                            echo 'data: '.json_encode([
-                                'status' => 'error',
-                                'message' => $e->getMessage(),
-                            ])."\n\n";
+                        } else {
+                            $generator = $this->testService->testSystemApiStream(
+                                $model,
+                                $userMessage,
+                                $presetPrompt
+                            );
                         }
-                    }, 200, [
-                        'Content-Type' => 'text/event-stream',
-                        'Cache-Control' => 'no-cache',
-                        'X-Accel-Buffering' => 'no',
-                    ]);
-                }
 
-                // 非流式测试
+                        foreach ($generator as $chunk) {
+                            // 使用 contentDelta 或 delta 作为内容
+                            $content = $chunk->contentDelta ?? $chunk->delta ?? '';
+                            echo 'data: '.json_encode([
+                                'content' => $content,
+                                'status' => 'streaming',
+                            ])."\n\n";
+                            ob_flush();
+                            flush();
+                        }
+
+                        echo 'data: '.json_encode(['status' => 'done'])."\n\n";
+                        ob_flush();
+                        flush();
+                    } catch (\Exception $e) {
+                        echo 'data: '.json_encode([
+                            'status' => 'error',
+                            'message' => $e->getMessage(),
+                        ])."\n\n";
+                        ob_flush();
+                        flush();
+                    }
+                }, 200, [
+                    'Content-Type' => 'text/event-stream',
+                    'Cache-Control' => 'no-cache',
+                    'X-Accel-Buffering' => 'no',
+                ]);
+            }
+
+            // 非流式测试
+            if ($testType === ModelTestLog::TEST_TYPE_CHANNEL_DIRECT) {
+                $channel = Channel::findOrFail($channelId);
+
                 $log = $this->testService->testChannelDirect(
                     $channel,
                     $model,

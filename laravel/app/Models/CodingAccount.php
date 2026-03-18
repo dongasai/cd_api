@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property array|null $status_override 状态覆盖配置
+ * @property \Carbon\Carbon|null $last_check_at 最后检查时间
+ */
 class CodingAccount extends Model
 {
     use HasFactory;
@@ -56,11 +60,13 @@ class CodingAccount extends Model
         'credentials',
         'status',
         'config',
+        'status_override',
         'last_sync_at',
         'sync_error',
         'sync_error_count',
         'expires_at',
         'disabled_at',
+        'last_check_at',
     ];
 
     /**
@@ -73,7 +79,9 @@ class CodingAccount extends Model
         return [
             'credentials' => 'array',
             'config' => 'array',
+            'status_override' => 'array',
             'last_sync_at' => 'datetime',
+            'last_check_at' => 'datetime',
             'expires_at' => 'datetime',
             'disabled_at' => 'datetime',
         ];
@@ -287,5 +295,77 @@ class CodingAccount extends Model
             'status' => self::STATUS_ACTIVE,
             'disabled_at' => null,
         ]);
+    }
+
+    /**
+     * 获取状态覆盖配置
+     *
+     * @return array{
+     *   auto_disable: bool,
+     *   auto_enable: bool,
+     *   disable_threshold: float,
+     *   warning_threshold: float,
+     *   priority: int,
+     *   fallback_channel_id: int|null
+     * }
+     */
+    public function getStatusOverride(): array
+    {
+        return $this->status_override ?? [
+            'auto_disable' => true,
+            'auto_enable' => true,
+            'disable_threshold' => 0.95,
+            'warning_threshold' => 0.80,
+            'priority' => 1,
+            'fallback_channel_id' => null,
+        ];
+    }
+
+    /**
+     * 检查是否允许自动禁用
+     */
+    public function allowsAutoDisable(): bool
+    {
+        $override = $this->getStatusOverride();
+
+        return $override['auto_disable'] ?? true;
+    }
+
+    /**
+     * 检查是否允许自动启用
+     */
+    public function allowsAutoEnable(): bool
+    {
+        $override = $this->getStatusOverride();
+
+        return $override['auto_enable'] ?? true;
+    }
+
+    /**
+     * 获取禁用阈值
+     */
+    public function getDisableThreshold(): float
+    {
+        $override = $this->getStatusOverride();
+
+        return (float) ($override['disable_threshold'] ?? 0.95);
+    }
+
+    /**
+     * 获取警告阈值
+     */
+    public function getWarningThreshold(): float
+    {
+        $override = $this->getStatusOverride();
+
+        return (float) ($override['warning_threshold'] ?? 0.80);
+    }
+
+    /**
+     * 更新最后检查时间
+     */
+    public function updateLastCheckAt(): void
+    {
+        $this->update(['last_check_at' => now()]);
     }
 }

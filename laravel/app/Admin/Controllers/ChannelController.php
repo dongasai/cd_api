@@ -3,6 +3,8 @@
 namespace App\Admin\Controllers;
 
 use App\Admin\Actions\CopyChannel;
+use App\Enums\ChannelHealthStatus;
+use App\Enums\ChannelStatus;
 use App\Models\Channel;
 use App\Models\ChannelModel;
 use Dcat\Admin\Form;
@@ -62,15 +64,33 @@ class ChannelController extends AdminController
 
                 return '<span class="text-muted">-</span>';
             });
-            $grid->column('status', '状态')->using([
-                'active' => '正常',
-                'disabled' => '禁用',
-                'maintenance' => '维护中',
-            ])->label([
-                'active' => 'success',
-                'disabled' => 'default',
-                'maintenance' => 'warning',
-            ]);
+            $grid->column('status', '状态')->display(function ($value) {
+                $status = ChannelStatus::tryFrom($value);
+                if ($status) {
+                    return '<span class="badge bg-'.$status->labelStyle().'">'.$status->label().'</span>';
+                }
+
+                return $value;
+            });
+            $grid->column('status2', '健康状态')->display(function ($value) {
+                $status = ChannelHealthStatus::tryFrom($value);
+                if (! $status) {
+                    return $value;
+                }
+
+                if ($status === ChannelHealthStatus::NORMAL) {
+                    return '<span class="badge bg-success">正常</span>';
+                }
+
+                $html = '<span class="badge bg-danger">禁用</span>';
+
+                // 如果禁用且有备注，显示备注
+                if ($this->status2_remark) {
+                    $html .= ' <span class="text-danger small">'.$this->status2_remark.'</span>';
+                }
+
+                return $html;
+            });
             $grid->column('success_rate', '成功率')->display(function ($value) {
                 return $value ? number_format($value * 100, 2).'%' : '-';
             });
@@ -85,11 +105,8 @@ class ChannelController extends AdminController
 
                 $filter->equal('id', 'ID');
                 $filter->like('name', '渠道名称');
-                $filter->equal('status', '状态')->select([
-                    'active' => '正常',
-                    'disabled' => '禁用',
-                    'maintenance' => '维护中',
-                ]);
+                $filter->equal('status', '状态')->select(ChannelStatus::options());
+                $filter->equal('status2', '健康状态')->select(ChannelHealthStatus::options());
                 $filter->equal('provider', '提供商')->select(
                     Channel::query()->distinct()->pluck('provider', 'provider')->toArray()
                 );
@@ -165,13 +182,27 @@ class ChannelController extends AdminController
             })->width(6);
 
             $show->field('status', '状态')->as(function ($value) {
-                $labels = [
-                    'active' => '<span class="label label-success">正常</span>',
-                    'disabled' => '<span class="label label-default">禁用</span>',
-                    'maintenance' => '<span class="label label-warning">维护中</span>',
-                ];
+                $status = ChannelStatus::tryFrom($value);
+                if ($status) {
+                    return '<span class="badge bg-'.$status->labelStyle().'">'.$status->label().'</span>';
+                }
 
-                return $labels[$value] ?? $value;
+                return $value;
+            })->unescape()->width(3);
+            $show->field('status2', '健康状态')->as(function ($value) {
+                $status = ChannelHealthStatus::tryFrom($value);
+                if (! $status) {
+                    return $value;
+                }
+
+                $html = '<span class="badge bg-'.$status->labelStyle().'">'.$status->label().'</span>';
+
+                // 如果禁用且有备注，显示备注
+                if ($status === ChannelHealthStatus::DISABLED && $this->status2_remark) {
+                    $html .= ' <small class="text-muted">('.$this->status2_remark.')</small>';
+                }
+
+                return $html;
             })->unescape()->width(3);
             $show->field('weight', '权重')->width(3);
 
@@ -295,6 +326,16 @@ class ChannelController extends AdminController
                     'maintenance' => '维护中',
                 ])->default('active')->required();
 
+                $form->select('status2', '健康状态')->options([
+                    'normal' => '正常',
+                    'disabled' => '禁用',
+                ])->default('normal')->required()
+                    ->help('健康状态为禁用时，该渠道不参与渠道选择');
+
+                $form->textarea('status2_remark', '健康状态备注')
+                    ->rows(2)
+                    ->help('记录健康状态变更原因，如：CodingStatus禁用');
+
                 // 关联 Coding 账户
                 $form->select('coding_account_id', '关联Coding账户')
                     ->options(\App\Models\CodingAccount::pluck('name', 'id')->toArray())
@@ -368,6 +409,27 @@ class ChannelController extends AdminController
                 ])->default('merge');
             });
 
+            // User-Agent限制
+            $form->tab('User-Agent限制', function (Form $form) {
+                $form->multipleSelect('allowedUserAgents', '允许的User-Agent')
+                    ->options(\App\Models\UserAgent::where('is_enabled', true)->pluck('name', 'id'))
+                    ->customFormat(function ($v) {
+                        if (! $v) {
+                            return [];
+                        }
+
+                        return $v->pluck('id')->toArray();
+                    })
+                    ->saving(function ($value) {
+                        return $value;
+                    })
+                    ->help('选择允许访问此渠道的User-Agent规则，留空表示允许所有');
+
+                $form->display('has_user_agent_restriction', '限制状态')->with(function ($value) {
+                    return $value ? '<span class="badge badge-warning">已启用限制</span>' : '<span class="badge badge-success">无限制</span>';
+                });
+            });
+
             // 保存时处理API Key
             $form->saving(function (Form $form) {
                 // 如果设置了新的API Key，生成hash
@@ -379,6 +441,13 @@ class ChannelController extends AdminController
                 if (empty($form->inherit_mode)) {
                     $form->inherit_mode = 'merge';
                 }
+            });
+
+            // 保存后更新has_user_agent_restriction标志
+            $form->saved(function (Form $form) {
+                $channel = $form->model();
+                $hasRestriction = $channel->allowedUserAgents()->exists();
+                $channel->update(['has_user_agent_restriction' => $hasRestriction]);
             });
 
             // 删除时确认

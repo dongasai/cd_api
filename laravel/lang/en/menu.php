@@ -1,0 +1,46 @@
+<?php
+
+return [
+    'titles' => [
+        'dashboard' => 'Dashboard',
+        'api_keys' => 'API Keys',
+        'channels' => 'Channels',
+        'channel_list' => 'Channel List',
+        'channel_groups' => 'Channel Groups',
+        'channel_tags' => 'Channel Tags',
+        'channel_models' => 'Channel Models',
+        'coding_accounts' => 'Coding Accounts',
+        'channel_stats' => 'Channel Statistics',
+        'model_management' => 'Models',
+        'model_list' => 'Model List',
+        'logs' => 'Logs',
+        'audit_logs' => 'Audit Logs',
+        'request_logs' => 'Request Logs',
+        'response_logs' => 'Response Logs',
+        'channel_request_logs' => 'Channel Request Logs',
+        'operation_logs' => 'Operation Logs',
+        'system_settings' => 'Settings',
+        'settings' => 'System Settings',
+        'channel_affinity' => 'Channel Affinity Rules',
+        'user_agents' => 'User-Agent Rules',
+        'preset_prompts' => 'Preset Prompts',
+        'model_test' => 'Model Test',
+        'model_test_old' => 'Model Test (Legacy)',
+        'model_test_openai' => 'OpenAI Chat',
+        'system' => 'System',
+        'administrators' => 'Administrators',
+        'roles' => 'Roles',
+        'permissions' => 'Permissions',
+        'menu' => 'Menu',
+    ],
+
+    // Preset prompt categories
+    'preset_prompt_categories' => [
+        'general' => 'General',
+        'programming' => 'Programming',
+        'translation' => 'Translation',
+        'analysis' => 'Analysis',
+        'writing' => 'Writing',
+        'other' => 'Other',
+    ],
+];

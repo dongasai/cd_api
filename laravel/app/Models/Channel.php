@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\ChannelHealthStatus;
+use App\Enums\ChannelStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,8 +12,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property int|null $coding_account_id
- * @property array|null $coding_status_override
- * @property \Carbon\Carbon|null $coding_last_check_at
+ * @property ChannelStatus $status 运营状态
+ * @property ChannelHealthStatus $status2 健康状态
+ * @property string|null $status2_remark 健康状态备注
  */
 class Channel extends Model
 {
@@ -34,6 +37,8 @@ class Channel extends Model
         'weight',
         'priority',
         'status',
+        'status2',
+        'status2_remark',
         'failure_count',
         'success_count',
         'last_check_at',
@@ -47,9 +52,8 @@ class Channel extends Model
         'config',
         'forward_headers',
         'coding_account_id',
-        'coding_status_override',
-        'coding_last_check_at',
         'description',
+        'has_user_agent_restriction',
     ];
 
     /**
@@ -60,15 +64,16 @@ class Channel extends Model
     protected function casts(): array
     {
         return [
+            'status' => ChannelStatus::class,
+            'status2' => ChannelHealthStatus::class,
             'config' => 'array',
             'forward_headers' => 'array',
-            'coding_status_override' => 'array',
             'last_check_at' => 'datetime',
             'last_failure_at' => 'datetime',
             'last_success_at' => 'datetime',
-            'coding_last_check_at' => 'datetime',
             'total_cost' => 'decimal:6',
             'success_rate' => 'decimal:4',
+            'has_user_agent_restriction' => 'boolean',
         ];
     }
 
@@ -127,6 +132,48 @@ class Channel extends Model
     }
 
     /**
+     * 检查渠道健康状态是否正常
+     */
+    public function isHealthNormal(): bool
+    {
+        return $this->status2 === 'normal';
+    }
+
+    /**
+     * 检查渠道是否可以参与选择
+     *
+     * 同时满足：运营状态为active 且 健康状态为normal
+     */
+    public function isAvailableForSelection(): bool
+    {
+        return $this->isActive() && $this->isHealthNormal();
+    }
+
+    /**
+     * 禁用渠道健康状态
+     *
+     * @param  string  $reason  禁用原因
+     */
+    public function disableHealth(string $reason): void
+    {
+        $this->update([
+            'status2' => ChannelHealthStatus::DISABLED,
+            'status2_remark' => $reason,
+        ]);
+    }
+
+    /**
+     * 启用渠道健康状态
+     */
+    public function enableHealth(): void
+    {
+        $this->update([
+            'status2' => ChannelHealthStatus::NORMAL,
+            'status2_remark' => null,
+        ]);
+    }
+
+    /**
      * Coding账户
      */
     public function codingAccount(): BelongsTo
@@ -135,46 +182,11 @@ class Channel extends Model
     }
 
     /**
-     * 获取Coding状态覆盖配置
-     */
-    public function getCodingStatusOverride(): array
-    {
-        return $this->coding_status_override ?? [
-            'auto_disable' => true,
-            'auto_enable' => true,
-            'disable_threshold' => 0.95,
-            'warning_threshold' => 0.80,
-            'priority' => 1,
-            'fallback_channel_id' => null,
-        ];
-    }
-
-    /**
      * 检查是否绑定Coding账户
      */
     public function hasCodingAccount(): bool
     {
         return $this->coding_account_id !== null;
-    }
-
-    /**
-     * 检查是否允许自动禁用
-     */
-    public function allowsAutoDisable(): bool
-    {
-        $override = $this->getCodingStatusOverride();
-
-        return $override['auto_disable'] ?? true;
-    }
-
-    /**
-     * 检查是否允许自动启用
-     */
-    public function allowsAutoEnable(): bool
-    {
-        $override = $this->getCodingStatusOverride();
-
-        return $override['auto_enable'] ?? true;
     }
 
     /**
@@ -303,5 +315,56 @@ class Channel extends Model
         }
 
         return null;
+    }
+
+    /**
+     * 允许的User-Agent规则列表
+     */
+    public function allowedUserAgents(): BelongsToMany
+    {
+        return $this->belongsToMany(UserAgent::class, 'channel_user_agent', 'channel_id', 'user_agent_id')
+            ->withTimestamps()
+            ->where('is_enabled', true); // 只关联启用的规则
+    }
+
+    /**
+     * 检查是否有User-Agent限制
+     */
+    public function hasUserAgentRestriction(): bool
+    {
+        return (bool) $this->has_user_agent_restriction;
+    }
+
+    /**
+     * 检查请求的User-Agent是否被允许
+     *
+     * @param  string  $userAgent  请求的User-Agent
+     * @return bool true=允许, false=不允许
+     */
+    public function isUserAgentAllowed(string $userAgent): bool
+    {
+        // 如果没有限制，允许所有User-Agent
+        if (! $this->hasUserAgentRestriction()) {
+            return true;
+        }
+
+        // 获取关联的User-Agent规则
+        $allowedPatterns = $this->allowedUserAgents;
+
+        // 如果有限制但未配置任何规则，拒绝访问
+        if ($allowedPatterns->isEmpty()) {
+            return false;
+        }
+
+        // 检查是否匹配任意一条规则
+        foreach ($allowedPatterns as $pattern) {
+            if ($pattern->matches($userAgent)) {
+                $pattern->recordHit(); // 记录命中
+
+                return true;
+            }
+        }
+
+        return false; // 没有任何规则匹配
     }
 }

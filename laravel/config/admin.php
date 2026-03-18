@@ -71,7 +71,7 @@ return [
 
         'namespace' => 'App\\Admin\\Controllers',
 
-        'middleware' => ['web', 'admin'],
+        'middleware' => ['web', 'admin', \App\Http\Middleware\SetAdminLocale::class],
 
         'enable_session_middleware' => false,
     ],
@@ -144,7 +144,7 @@ return [
         'providers' => [
             'admin' => [
                 'driver' => 'eloquent',
-                'model' => Dcat\Admin\Models\Administrator::class,
+                'model' => App\Models\Administrator::class,
             ],
         ],
 
@@ -287,7 +287,7 @@ return [
 
         // User tables and model.
         'users_table' => 'admin_users',
-        'users_model' => Dcat\Admin\Models\Administrator::class,
+        'users_model' => App\Models\Administrator::class,
 
         // Role table and model.
         'roles_table' => 'admin_roles',
@@ -325,12 +325,12 @@ return [
         // sidebar-separate
         'body_class' => [],
 
-        'horizontal_menu' => false,
+        'horizontal_menu' => true,
 
         'sidebar_collapsed' => false,
 
         // light, primary, dark
-        'sidebar_style' => 'light',
+        'sidebar_style' => 'primary',
 
         'dark_mode_switch' => false,
 
