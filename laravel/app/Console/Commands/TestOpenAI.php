@@ -8,7 +8,7 @@ use OpenAI\Client;
 
 class TestOpenAI extends Command
 {
-    protected $signature = 'openai:test
+    protected $signature = 'cdapi:openai:test
                             {--key= : API Key (不填则使用环境变量)}
                             {--base-url= : API Base URL (不填则使用默认或环境变量)}
                             {--model= : 模型名称}

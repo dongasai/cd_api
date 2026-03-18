@@ -80,4 +80,7 @@ Route::group([
     // 渠道统计
     $router->get('channel-stats', 'ChannelStatsController@index')->name('channel-stats');
 
+    // 测试图表
+    $router->get('test-chart', 'TestChartController@index')->name('test-chart');
+
 });

@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Log;
  */
 class AutoReopenCodingAccounts extends Command
 {
-    protected $signature = 'coding:auto-reopen';
+    protected $signature = 'cdapi:coding:auto-reopen';
 
     protected $description = '自动重新开启被禁用的Coding账户';
 

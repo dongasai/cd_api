@@ -8,11 +8,11 @@ use Illuminate\Console\Command;
 
 /**
  * 分析 request_log 和 channel_request_logs 的参数差异
- * php artisan  analyze:request-diff 1290 --limit 1
+ * php artisan cdapi:analyze:request-diff 1290 --limit 1
  */
 class AnalyzeRequestDiff extends Command
 {
-    protected $signature = 'analyze:request-diff
+    protected $signature = 'cdapi:analyze:request-diff
                             {audit_log_id? : 审计日志ID}
                             {--limit=10 : 显示差异的最大条数}
                             {--show-diff : 对大型文本差异显示行级 diff}

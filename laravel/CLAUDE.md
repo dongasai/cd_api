@@ -87,72 +87,85 @@ cd laravel && php artisan test --compact --filter=testName
 
 ## Console命令
 
-项目包含以下自定义Artisan命令:
+项目包含以下自定义Artisan命令（统一使用 `cdapi:` 前缀）:
 
 ### 调试与测试命令
 
-- **`proxy:test`** - 测试本站代理 API 连接
-    - 支持: `php artisan proxy:test {key?} {model?}`
+- **`cdapi:proxy:test`** - 测试本站代理 API 连接
+    - 支持: `php artisan cdapi:proxy:test {key?} {model?}`
     - 支持: `--prompt=提示语` 和 `--stream` (流式输出)
 
-- **`proxy:test-anthropic`** - 测试本站 Anthropic 代理 API 连接
+- **`cdapi:proxy:test-anthropic`** - 测试本站 Anthropic 代理 API 连接
 
-- **`proxy:test-tool-call`** - 测试本站代理 API 的工具调用功能
+- **`cdapi:proxy:test-tool-call`** - 测试本站代理 API 的工具调用功能
 
-- **`openai:test`** - 使用 openai-php SDK 测试 API 连接
+- **`cdapi:openai:test`** - 使用 openai-php SDK 测试 API 连接
     - 支持: `--key=API密钥`, `--base-url=基础URL`, `--model=模型名`
     - 支持: `--prompt=提示语` 和 `--stream` (流式输出)
 
+- **`cdapi:channel:test`** - 测试渠道连接是否正常
+    - 支持: `php artisan cdapi:channel:test {channel?}`
+    - 支持: `--all` (测试所有启用渠道), `--model=模型名`, `--timeout=超时时间`
+
 ### 请求重放命令
 
-- **`request:replay`** - 复现请求(重新发送真实HTTP请求到本系统)
+- **`cdapi:request:replay`** - 复现请求(重新发送真实HTTP请求到本系统)
     - 支持: `--request-id=ID` 或 `--audit-id=ID` 或 `--latest` (使用最新审计日志)
     - 支持: `--timeout=超时时间` 和 `--dry-run` (仅显示请求信息)
 
-- **`request:replay-curl`** - 使用 PHP curl 重放请求(直接发送到上游)
+- **`cdapi:request:replay-curl`** - 使用 PHP curl 重放请求(直接发送到上游)
     - 支持: `--request-id=ID` 或 `--audit-id=ID`
     - 支持: `--channel-id=渠道ID` 和 `--timeout=超时时间`
 
-- **`request:replay-channel`** - 直接使用渠道驱动重放请求(绕过 ProxyServer)
+- **`cdapi:request:replay-channel`** - 直接使用渠道驱动重放请求(绕过 ProxyServer)
     - 支持: `--request-id=ID` 或 `--audit-id=ID`
     - 支持: `--channel-id=渠道ID` 和 `--show-body` (显示实际请求体)
 
-- **`request:replay-direct`** - 直接重放请求(不经过 HTTP,直接调用 ProxyServer)
+- **`cdapi:request:replay-direct`** - 直接重放请求(不经过 HTTP,直接调用 ProxyServer)
     - 支持: `--request-id=ID` 或 `--audit-id=ID`
     - 支持: `--stream` (强制流式) 和 `--no-stream` (强制非流式)
 
 ### 分析命令
 
-- **`analyze:request-diff`** - 分析 request_log 和 channel_request_logs 的请求体差异
-    - 用法: `php artisan analyze:request-diff {audit_log_id}`
+- **`cdapi:analyze:request-diff`** - 分析 request_log 和 channel_request_logs 的请求体差异
+    - 用法: `php artisan cdapi:analyze:request-diff {audit_log_id}`
     - 支持: `--limit=最大条数`, `--show-diff` (显示行级diff), `--diff-chars=字符数`
 
 ### Coding账户管理命令
 
-- **`coding:sync-quota`** - 同步Coding账户配额状态
+- **`cdapi:coding:sync-quota`** - 同步Coding账户配额状态
     - 支持: `--account=账户ID` 和 `--platform=平台类型`
 
-- **`coding:check-channels`** - 检查渠道Coding状态并触发调控
+- **`cdapi:coding:check-channels`** - 检查渠道Coding状态并触发调控
     - 支持: `--channel=渠道ID`
 
-- **`coding:auto-reopen`** - 自动重新开启被禁用的Coding账户
+- **`cdapi:coding:auto-reopen`** - 自动重新开启被禁用的Coding账户
 
-- **`coding:cleanup-sliding-window`** - 清理过期滑动窗口数据
+- **`cdapi:coding:cleanup-sliding-window`** - 清理过期滑动窗口数据
 
-- **`coding:reset-period`** - 检查并执行周期配额重置
+- **`cdapi:coding:reset-period`** - 检查并执行周期配额重置
+
+### 备份命令
+
+- **`cdapi:backup:table`** - 备份指定数据表的数据和结构
+    - 支持: `--group=表组`, `--tables=表名列表`, `--path=备份路径`
+    - 支持: `--no-structure`, `--no-compress`, `--chunk=分批大小`, `--keep=保留数量`
 
 ### 使用示例
 
 ```bash
 # 测试所有渠道
-php artisan channel:test --all
+php artisan cdapi:channel:test --all
 
 # 重放特定请求
-php artisan request:replay --request-id=1234
+php artisan cdapi:request:replay --request-id=1234
 
 # 分析请求差异
-php artisan analyze:request-diff 5678 --show-diff
+php artisan cdapi:analyze:request-diff 5678 --show-diff
 
 # 同步Coding配额
-php artisan coding:sync-quota
+php artisan cdapi:coding:sync-quota
+
+# 备份核心表
+php artisan cdapi:backup:table --group=core
 ```

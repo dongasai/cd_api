@@ -14,13 +14,13 @@ use Illuminate\Console\Command;
  *
  * 从 request_logs 表读取数据，使用 PHP curl 扩展直接发送请求到上游
  *
- * php artisan request:replay-curl --request-id=2510
- * php artisan request:replay-curl --audit-id=500
- * php artisan request:replay-curl --request-id=req_abc123
+ * php artisan cdapi:request:replay-curl --request-id=2510
+ * php artisan cdapi:request:replay-curl --audit-id=500
+ * php artisan cdapi:request:replay-curl --request-id=req_abc123
  */
 class ReplayRequestCurl extends Command
 {
-    protected $signature = 'request:replay-curl
+    protected $signature = 'cdapi:request:replay-curl
                             {--request-id= : 请求 ID 或 request_id}
                             {--audit-id= : 审计 ID}
                             {--channel-id= : 指定渠道 ID (可选，不指定则使用原始渠道)}

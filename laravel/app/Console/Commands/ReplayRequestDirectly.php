@@ -15,15 +15,15 @@ use Illuminate\Support\Facades\Log as FacadesLog;
 /**
  * 直接重放请求，不经过 HTTP，直接组装 Request 对象调用 ProxyServer
  *
- * php artisan request:replay-direct --request-id=1004
- * php artisan request:replay-direct --audit-id=500
- * php artisan request:replay-direct --request-id=req_abc123
- * php artisan request:replay-direct --request-id=1004 --stream    # 强制流式请求
- * php artisan request:replay-direct --request-id=1004 --no-stream # 强制非流式请求
+ * php artisan cdapi:request:replay-direct --request-id=1004
+ * php artisan cdapi:request:replay-direct --audit-id=500
+ * php artisan cdapi:request:replay-direct --request-id=req_abc123
+ * php artisan cdapi:request:replay-direct --request-id=1004 --stream    # 强制流式请求
+ * php artisan cdapi:request:replay-direct --request-id=1004 --no-stream # 强制非流式请求
  */
 class ReplayRequestDirectly extends Command
 {
-    protected $signature = 'request:replay-direct
+    protected $signature = 'cdapi:request:replay-direct
                             {--request-id= : 请求 ID 或 request_id}
                             {--audit-id= : 审计 ID}
                             {--stream : 强制使用流式请求}

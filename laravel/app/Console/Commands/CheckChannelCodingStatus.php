@@ -18,7 +18,7 @@ class CheckChannelCodingStatus extends Command
      *
      * @var string
      */
-    protected $signature = 'coding:check-channels
+    protected $signature = 'cdapi:coding:check-channels
                             {--channel= : 指定渠道ID}';
 
     /**

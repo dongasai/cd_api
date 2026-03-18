@@ -19,7 +19,7 @@ class SyncCodingQuota extends Command
      *
      * @var string
      */
-    protected $signature = 'coding:sync-quota
+    protected $signature = 'cdapi:coding:sync-quota
                             {--account= : 指定账户ID}
                             {--platform= : 指定平台类型}';
 

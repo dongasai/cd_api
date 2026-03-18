@@ -18,7 +18,12 @@ class ResetApiKey extends RowAction
      *
      * @var string
      */
-    protected $title = '<i class="feather icon-key"></i> 重置密钥';
+    protected $title;
+
+    public function __construct()
+    {
+        $this->title = '<i class="feather icon-key"></i> '.trans('admin-actions.reset_api_key');
+    }
 
     /**
      * 处理请求
@@ -30,7 +35,7 @@ class ResetApiKey extends RowAction
         try {
             $apiKey = ApiKey::find($id);
             if (! $apiKey) {
-                return $this->response()->error('API密钥不存在');
+                return $this->response()->error(trans('admin-actions.api_key_not_found'));
             }
 
             // 生成新密钥
@@ -43,10 +48,10 @@ class ResetApiKey extends RowAction
 
             // 返回成功响应，并显示新密钥
             return $this->response()
-                ->success("密钥重置成功！新密钥：\n\n{$newKey}\n\n请妥善保存，此密钥只会显示一次！")
+                ->success(trans('admin-actions.reset_api_key_success')."\n\n{$newKey}\n\n".trans('admin-actions.reset_api_key_warning'))
                 ->refresh();
         } catch (\Exception $e) {
-            return $this->response()->error('重置失败: '.$e->getMessage());
+            return $this->response()->error(trans('admin-actions.reset_api_key_error').': '.$e->getMessage());
         }
     }
 
@@ -55,7 +60,10 @@ class ResetApiKey extends RowAction
      */
     public function confirm()
     {
-        return ['确认重置此API密钥?', '重置后原密钥将立即失效，新密钥将显示一次，请妥善保存。'];
+        return [
+            trans('admin-actions.reset_api_key_confirm'),
+            trans('admin-actions.reset_api_key_confirm_desc'),
+        ];
     }
 
     /**

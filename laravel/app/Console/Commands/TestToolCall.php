@@ -9,13 +9,13 @@ use OpenAI;
 /**
  * 测试工具调用功能
  *
- * @example php artisan proxy:test-tool-call
- * @example php artisan proxy:test-tool-call "" deepseek-chat
- * @example php artisan proxy:test-tool-call --stream
+ * @example php artisan cdapi:proxy:test-tool-call
+ * @example php artisan cdapi:proxy:test-tool-call "" deepseek-chat
+ * @example php artisan cdapi:proxy:test-tool-call --stream
  */
 class TestToolCall extends Command
 {
-    protected $signature = 'proxy:test-tool-call
+    protected $signature = 'cdapi:proxy:test-tool-call
                             {key? : API 密钥 (不填则使用第一个活跃的 Key)}
                             {model? : 模型名称}
                             {--stream : 使用流式输出}

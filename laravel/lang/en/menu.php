@@ -11,6 +11,7 @@ return [
         'channel_models' => 'Channel Models',
         'coding_accounts' => 'Coding Accounts',
         'channel_stats' => 'Channel Statistics',
+        'data_statistics' => 'Data Statistics',
         'model_management' => 'Models',
         'model_list' => 'Model List',
         'logs' => 'Logs',

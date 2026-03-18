@@ -25,6 +25,7 @@ return [
         'channel_models' => '渠道模型配置',
         'coding_accounts' => 'Coding账户',
         'channel_stats' => '渠道统计',
+        'data_statistics' => '数据统计',
         'model_management' => '模型管理',
         'model_list' => '模型列表',
         'logs' => '日志中心',

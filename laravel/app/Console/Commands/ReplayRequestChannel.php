@@ -5,9 +5,9 @@ namespace App\Console\Commands;
 use App\Models\ApiKey;
 use App\Models\AuditLog;
 use App\Models\RequestLog;
-use App\Services\Shared\DTO\Request;
 use App\Services\Provider\ProviderManager;
 use App\Services\Router\ChannelRouterService;
+use App\Services\Shared\DTO\Request;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
 
@@ -19,13 +19,13 @@ use Illuminate\Support\Arr;
  * 2. 通过 ProviderManager 获取渠道驱动
  * 3. 直接使用原始请求体字符串发送请求
  *
- * php artisan request:replay-channel --request-id=1971
- * php artisan request:replay-channel --audit-id=500
- * php artisan request:replay-channel --request-id=req_abc123
+ * php artisan cdapi:request:replay-channel --request-id=1971
+ * php artisan cdapi:request:replay-channel --audit-id=500
+ * php artisan cdapi:request:replay-channel --request-id=req_abc123
  */
 class ReplayRequestChannel extends Command
 {
-    protected $signature = 'request:replay-channel
+    protected $signature = 'cdapi:request:replay-channel
                             {--request-id= : 请求 ID 或 request_id}
                             {--audit-id= : 审计 ID}
                             {--channel-id= : 指定渠道 ID (可选，不指定则自动选择)}

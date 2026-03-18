@@ -11,9 +11,9 @@ use Illuminate\Console\Command;
  * 数据库表备份命令
  *
  * 使用方法：
- * php artisan backup:table --group=core
- * php artisan backup:table --tables=users,channels
- * php artisan backup:table --tables=admin_*
+ * php artisan cdapi:backup:table --group=core
+ * php artisan cdapi:backup:table --tables=users,channels
+ * php artisan cdapi:backup:table --tables=admin_*
  */
 class BackupTableCommand extends Command
 {
@@ -22,7 +22,7 @@ class BackupTableCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'backup:table
+    protected $signature = 'cdapi:backup:table
         {--group= : 指定配置文件中的表组}
         {--tables= : 直接指定表名，逗号分隔或通配符}
         {--path= : 自定义备份路径}

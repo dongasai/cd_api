@@ -2,11 +2,13 @@
 
 namespace App\Admin\Controllers;
 
+use App\Admin\Widgets\StatsCharts\ClientDistributionChart;
+use App\Admin\Widgets\StatsCharts\RequestTokenTrendChart;
+use App\Admin\Widgets\StatsCharts\SuccessRateTrendChart;
 use App\Models\AuditLog;
 use App\Models\Channel;
 use Dcat\Admin\Layout\Content;
 use Dcat\Admin\Layout\Row;
-use Dcat\Admin\Widgets\ApexCharts\Chart;
 use Dcat\Admin\Widgets\Card;
 use Dcat\Admin\Widgets\Table;
 use Illuminate\Http\Request;
@@ -24,7 +26,7 @@ class ChannelStatsController
     public function index(Content $content, Request $request)
     {
         // 解析筛选参数
-        $channelId = $request->get('channel_id');
+        $channelId = $this->parseChannelId($request->get('channel_id'));
         $dateRange = $request->get('date_range', '7d');
         $startDate = $request->get('start_date');
         $endDate = $request->get('end_date');
@@ -35,13 +37,13 @@ class ChannelStatsController
         return $content
             ->header('渠道统计')
             ->description('渠道使用情况深度分析')
-            ->body(function (Row $row) use ($channelId, $start, $end) {
+            ->body(function (Row $row) use ($channelId, $start, $end, $dateRange) {
                 // 第一行：渠道选择器 + 时间范围选择器
                 $row->column(12, function ($column) use ($channelId) {
                     $column->row($this->buildChannelSelector($channelId));
                 });
 
-                $row->column(12, function ($column) use ($channelId, $start, $end) {
+                $row->column(12, function ($column) use ($channelId, $start, $end, $dateRange) {
                     // 第二行：基础统计卡片
                     $column->row(function ($row) use ($channelId, $start, $end) {
                         $row->column(3, $this->buildTotalRequestsCard($channelId, $start, $end));
@@ -50,23 +52,48 @@ class ChannelStatsController
                         $row->column(3, $this->buildSuccessRateCard($channelId, $start, $end));
                     });
 
-                    // 第三行：性能指标卡片
-                    $column->row(function ($row) use ($channelId, $start, $end) {
+                    // 第三行：性能指标卡片（今天不显示成功率趋势图）
+                    $column->row(function ($row) use ($channelId, $start, $end, $dateRange) {
                         $row->column(4, $this->buildAvgLatencyCard($channelId, $start, $end));
                         $row->column(4, $this->buildFirstTokenLatencyCard($channelId, $start, $end));
-                        $row->column(4, $this->buildSuccessRateTrendCard($channelId, $start, $end));
+                        // 今天不显示成功率趋势图，用普通卡片代替
+                        if ($dateRange === 'today') {
+                            $row->column(4, $this->buildSuccessRateSimpleCard($channelId, $start, $end));
+                        } else {
+                            $row->column(4, $this->buildSuccessRateTrendCard($channelId, $start, $end));
+                        }
                     });
 
-                    // 第四行：请求/Token趋势图
-                    $column->row($this->buildTrendChart($channelId, $start, $end));
+                    // 第四行：请求/Token趋势图（今天不显示）
+                    if ($dateRange !== 'today') {
+                        $column->row($this->buildTrendChart($channelId, $start, $end));
+                    }
 
                     // 第五行：客户端分布
                     $column->row(function ($row) use ($channelId, $start, $end) {
                         $row->column(6, $this->buildClientDistributionChart($channelId, $start, $end));
                         $row->column(6, $this->buildTopUserAgentsTable($channelId, $start, $end));
                     });
+
+                    // 第六行：Top 10 User-Agent 分组版本
+                    $column->row($this->buildTopUserAgentGroupsTable($channelId, $start, $end));
                 });
             });
+    }
+
+    /**
+     * 解析渠道ID参数
+     *
+     * @param  mixed  $value
+     */
+    protected function parseChannelId($value): ?int
+    {
+        // 空值或非数字返回null
+        if (empty($value) || ! is_numeric($value)) {
+            return null;
+        }
+
+        return (int) $value;
     }
 
     /**
@@ -80,10 +107,13 @@ class ChannelStatsController
 
         $optionsHtml = '';
         foreach ($options as $value => $label) {
-            $selected = ($value == $selectedChannelId) ? 'selected' : '';
+            $selected = ((string) $value === (string) $selectedChannelId) ? 'selected' : '';
             $valueAttr = $value === '' ? '' : "value=\"{$value}\"";
             $optionsHtml .= "<option {$valueAttr} {$selected}>{$label}</option>";
         }
+
+        // 用于链接的channel_id参数
+        $channelIdParam = $selectedChannelId ?? '';
 
         $html = <<<HTML
 <div class="card">
@@ -98,9 +128,9 @@ class ChannelStatsController
             <div class="form-group">
                 <label class="mr-2">时间范围：</label>
                 <div class="btn-group" role="group">
-                    <a href="?channel_id={$selectedChannelId}&date_range=today" class="btn btn-outline-primary">今天</a>
-                    <a href="?channel_id={$selectedChannelId}&date_range=7d" class="btn btn-outline-primary">7天</a>
-                    <a href="?channel_id={$selectedChannelId}&date_range=30d" class="btn btn-outline-primary">30天</a>
+                    <a href="?channel_id={$channelIdParam}&date_range=today" class="btn btn-outline-primary">今天</a>
+                    <a href="?channel_id={$channelIdParam}&date_range=7d" class="btn btn-outline-primary">7天</a>
+                    <a href="?channel_id={$channelIdParam}&date_range=30d" class="btn btn-outline-primary">30天</a>
                 </div>
             </div>
         </form>
@@ -423,6 +453,69 @@ HTML;
     }
 
     /**
+     * 构建成功率简单卡片（用于今天视图，不显示趋势图）
+     */
+    protected function buildSuccessRateSimpleCard(?int $channelId, Carbon $start, Carbon $end): Card
+    {
+        // 查询总请求数和成功请求数
+        $query = AuditLog::whereBetween('created_at', [$start, $end]);
+        if ($channelId) {
+            $query->where('channel_id', $channelId);
+        }
+        $totalRequests = $query->count();
+
+        $successQuery = AuditLog::whereBetween('created_at', [$start, $end])
+            ->whereBetween('status_code', [200, 299]);
+        if ($channelId) {
+            $successQuery->where('channel_id', $channelId);
+        }
+        $successRequests = $successQuery->count();
+
+        // 计算成功率
+        $successRate = $totalRequests > 0 ? round($successRequests / $totalRequests * 100, 2) : 0;
+
+        // 计算上一小时的数据（用于环比）
+        $previousStart = (clone $start)->subHour();
+        $previousEnd = (clone $start)->subSecond();
+
+        $previousQuery = AuditLog::whereBetween('created_at', [$previousStart, $previousEnd]);
+        if ($channelId) {
+            $previousQuery->where('channel_id', $channelId);
+        }
+        $previousTotal = $previousQuery->count();
+
+        $previousSuccessQuery = AuditLog::whereBetween('created_at', [$previousStart, $previousEnd])
+            ->whereBetween('status_code', [200, 299]);
+        if ($channelId) {
+            $previousSuccessQuery->where('channel_id', $channelId);
+        }
+        $previousSuccess = $previousSuccessQuery->count();
+        $previousRate = $previousTotal > 0 ? round($previousSuccess / $previousTotal * 100, 2) : 0;
+
+        // 计算环比增长
+        $growthRate = $previousRate > 0 ? round($successRate - $previousRate, 2) : 0;
+        $growthClass = $growthRate >= 0 ? 'text-success' : 'text-danger';
+        $growthIcon = $growthRate >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+
+        $content = <<<HTML
+<div class="d-flex justify-content-between align-items-center">
+    <div>
+        <h2 class="font-weight-bold">{$successRate}%</h2>
+        <p class="mb-0 text-muted">当前成功率</p>
+    </div>
+    <div class="text-right {$growthClass}">
+        <i class="fa {$growthIcon}"></i> {$growthRate}%
+        <small class="d-block text-muted">较上小时</small>
+    </div>
+</div>
+HTML;
+
+        return Card::make('成功率', $content)
+            ->icon('fa fa-check-circle')
+            ->style('success');
+    }
+
+    /**
      * 构建成功率趋势卡片
      */
     protected function buildSuccessRateTrendCard(?int $channelId, Carbon $start, Carbon $end): Card
@@ -465,35 +558,12 @@ HTML;
             ];
         }
 
-        $dates = array_keys($dateRange);
         $rates = array_column($dateRange, 'rate');
         $avgRate = count($rates) > 0 ? round(array_sum($rates) / count($rates), 2) : 0;
 
-        // 创建趋势图
-        $chart = Chart::make()
-            ->series([[
-                'name' => '成功率',
-                'data' => $rates,
-                'type' => 'line',
-            ]])
-            ->labels($dates)
-            ->chart([
-                'height' => 120,
-                'toolbar' => ['show' => false],
-                'sparkline' => ['enabled' => true],
-            ])
-            ->yaxis([[
-                'min' => 0,
-                'max' => 100,
-                'labels' => [
-                    'formatter' => 'function(val) { return val.toFixed(0) + "%"; }',
-                ],
-            ]])
-            ->stroke([
-                'curve' => 'smooth',
-                'width' => 2,
-            ])
-            ->colors(['#28a745']);
+        // 使用图表类
+        $chart = SuccessRateTrendChart::make()
+            ->setParams($channelId, $start, $end);
 
         $content = $chart->render();
         $content .= "<div class='text-center mt-2'><small class='text-muted'>平均成功率: {$avgRate}%</small></div>";
@@ -507,94 +577,9 @@ HTML;
      */
     protected function buildTrendChart(?int $channelId, Carbon $start, Carbon $end)
     {
-        // 查询每日统计数据
-        $query = AuditLog::whereBetween('created_at', [$start, $end])
-            ->select(
-                DB::raw('DATE(created_at) as date'),
-                DB::raw('COUNT(*) as request_count'),
-                DB::raw('SUM(total_tokens) as token_count')
-            )
-            ->groupBy('date')
-            ->orderBy('date');
-
-        if ($channelId) {
-            $query->where('channel_id', $channelId);
-        }
-
-        $dailyStats = $query->get()->keyBy('date');
-
-        // 填充缺失日期
-        $dates = [];
-        $requestCounts = [];
-        $tokenCounts = [];
-        $current = clone $start;
-
-        while ($current <= $end) {
-            $dateStr = $current->format('Y-m-d');
-            $dates[] = $current->format('m-d');
-            $requestCounts[] = $dailyStats->get($dateStr)?->request_count ?? 0;
-            $tokenCounts[] = $dailyStats->get($dateStr)?->token_count ?? 0;
-            $current->addDay();
-        }
-
-        // 创建双Y轴折线图
-        $chart = Chart::make()
-            ->series([
-                [
-                    'name' => '请求数',
-                    'data' => $requestCounts,
-                    'type' => 'line',
-                ],
-                [
-                    'name' => 'Token数',
-                    'data' => $tokenCounts,
-                    'type' => 'line',
-                ],
-            ])
-            ->labels($dates)
-            ->chart([
-                'type' => 'line',
-                'height' => 350,
-                'toolbar' => [
-                    'show' => true,
-                ],
-                'zoom' => [
-                    'enabled' => true,
-                ],
-            ])
-            ->yaxis([
-                [
-                    'title' => ['text' => '请求数'],
-                    'labels' => [
-                        'formatter' => 'function(val) { return val.toLocaleString(); }',
-                    ],
-                ],
-                [
-                    'title' => ['text' => 'Token数'],
-                    'opposite' => true,
-                    'labels' => [
-                        'formatter' => 'function(val) { return val.toLocaleString(); }',
-                    ],
-                ],
-            ])
-            ->xaxis([
-                'type' => 'category',
-                'labels' => [
-                    'rotate' => -45,
-                    'rotateAlways' => true,
-                ],
-            ])
-            ->stroke([
-                'curve' => 'smooth',
-                'width' => 2,
-            ])
-            ->dataLabels([
-                'enabled' => false,
-            ])
-            ->legend([
-                'position' => 'top',
-            ])
-            ->colors(['#5c6bc0', '#42a5f5']);
+        // 使用图表类
+        $chart = RequestTokenTrendChart::make()
+            ->setParams($channelId, $start, $end);
 
         return Card::make('请求/Token趋势', $chart);
     }
@@ -604,50 +589,9 @@ HTML;
      */
     protected function buildClientDistributionChart(?int $channelId, Carbon $start, Carbon $end): Card
     {
-        // 按User-Agent前缀分组统计
-        $query = AuditLog::whereBetween('created_at', [$start, $end])
-            ->whereNotNull('user_agent')
-            ->select(
-                DB::raw('SUBSTRING_INDEX(user_agent, "/", 1) as client'),
-                DB::raw('COUNT(*) as count')
-            )
-            ->groupBy('client')
-            ->orderBy('count', 'desc')
-            ->limit(10);
-
-        if ($channelId) {
-            $query->where('channel_id', $channelId);
-        }
-
-        $clientStats = $query->get();
-
-        // 构建图表数据
-        $labels = $clientStats->pluck('client')->toArray();
-        $series = $clientStats->pluck('count')->toArray();
-
-        // 创建饼图
-        $chart = Chart::make()
-            ->series([[
-                'name' => '请求数',
-                'data' => $series,
-            ]])
-            ->labels($labels)
-            ->chart([
-                'type' => 'pie',
-                'height' => 280,
-                'toolbar' => [
-                    'show' => false,
-                ],
-            ])
-            ->dataLabels([
-                'enabled' => true,
-                'formatter' => 'function(val) { return val.toFixed(1) + "%"; }',
-            ])
-            ->legend([
-                'position' => 'bottom',
-                'fontSize' => '12px',
-            ])
-            ->colors(['#5c6bc0', '#42a5f5', '#26a69a', '#66bb6a', '#ffa726', '#ef5350', '#ab47bc', '#ec407a', '#ff7043', '#d4e157']);
+        // 使用图表类
+        $chart = ClientDistributionChart::make()
+            ->setParams($channelId, $start, $end);
 
         return Card::make('客户端分布', $chart);
     }
@@ -693,6 +637,166 @@ HTML;
             ->class('table table-striped table-hover table-sm');
 
         return Card::make('Top 10 User-Agent', $table);
+    }
+
+    /**
+     * 构建 Top 10 User-Agent 分组统计表格
+     */
+    protected function buildTopUserAgentGroupsTable(?int $channelId, Carbon $start, Carbon $end)
+    {
+        // 查询所有 User-Agent 数据
+        $query = AuditLog::whereBetween('created_at', [$start, $end])
+            ->whereNotNull('user_agent')
+            ->select(
+                'user_agent',
+                DB::raw('COUNT(*) as request_count'),
+                DB::raw('SUM(total_tokens) as total_tokens'),
+                DB::raw('SUM(cost) as total_cost'),
+                DB::raw('AVG(latency_ms) as avg_latency'),
+                DB::raw('AVG(first_token_ms) as avg_first_token')
+            )
+            ->groupBy('user_agent');
+
+        if ($channelId) {
+            $query->where('channel_id', $channelId);
+        }
+
+        $userAgents = $query->get();
+
+        // 按 User-Agent 分组统计
+        $groupedStats = [];
+        foreach ($userAgents as $item) {
+            $group = $this->groupUserAgent($item->user_agent);
+
+            if (! isset($groupedStats[$group])) {
+                $groupedStats[$group] = [
+                    'request_count' => 0,
+                    'total_tokens' => 0,
+                    'total_cost' => 0,
+                    'avg_latency' => [],
+                    'avg_first_token' => [],
+                    'user_agents' => [],
+                ];
+            }
+
+            $groupedStats[$group]['request_count'] += $item->request_count;
+            $groupedStats[$group]['total_tokens'] += $item->total_tokens;
+            $groupedStats[$group]['total_cost'] += $item->total_cost;
+            $groupedStats[$group]['avg_latency'][] = $item->avg_latency;
+            $groupedStats[$group]['avg_first_token'][] = $item->avg_first_token;
+            $groupedStats[$group]['user_agents'][] = $item->user_agent;
+        }
+
+        // 计算平均延迟并排序，取 Top 10
+        foreach ($groupedStats as &$stats) {
+            $latencies = array_filter($stats['avg_latency'], fn ($v) => $v > 0);
+            $firstTokens = array_filter($stats['avg_first_token'], fn ($v) => $v > 0);
+            $stats['avg_latency'] = count($latencies) > 0 ? round(array_sum($latencies) / count($latencies), 0) : 0;
+            $stats['avg_first_token'] = count($firstTokens) > 0 ? round(array_sum($firstTokens) / count($firstTokens), 0) : 0;
+        }
+
+        // 按请求数排序
+        uasort($groupedStats, fn ($a, $b) => $b['request_count'] <=> $a['request_count']);
+        $top10Groups = array_slice($groupedStats, 0, 10, true);
+
+        // 构建表格数据
+        $headers = ['User-Agent 分组', '请求数', 'Token', '费用', '平均延迟', '首Token延迟'];
+        $rows = [];
+
+        foreach ($top10Groups as $group => $stats) {
+            $rows[] = [
+                "<strong>{$group}</strong><br><small class='text-muted'>".count($stats['user_agents']).' 个版本</small>',
+                number_format($stats['request_count']),
+                number_format($stats['total_tokens']),
+                '$'.number_format($stats['total_cost'], 4),
+                $stats['avg_latency'] > 0 ? $stats['avg_latency'].'ms' : '-',
+                $stats['avg_first_token'] > 0 ? $stats['avg_first_token'].'ms' : '-',
+            ];
+        }
+
+        $table = Table::make($headers, $rows)
+            ->class('table table-striped table-hover');
+
+        return Card::make('Top 10 User-Agent 分组版本', $table);
+    }
+
+    /**
+     * User-Agent 分组规则
+     */
+    protected function groupUserAgent(string $userAgent): string
+    {
+        $userAgent = strtolower($userAgent);
+
+        // Claude CLI
+        if (strpos($userAgent, 'claude-cli') !== false || strpos($userAgent, 'claude_code') !== false) {
+            return 'claude-cli';
+        }
+
+        // RooCode
+        if (strpos($userAgent, 'roocode') !== false || strpos($userAgent, 'roo-code') !== false) {
+            return 'RooCode';
+        }
+
+        // curl
+        if (strpos($userAgent, 'curl') !== false) {
+            return 'curl';
+        }
+
+        // Chrome (浏览器)
+        if (strpos($userAgent, 'chrome') !== false) {
+            return 'Chrome';
+        }
+
+        // Firefox (浏览器)
+        if (strpos($userAgent, 'firefox') !== false) {
+            return 'Firefox';
+        }
+
+        // Safari (浏览器)
+        if (strpos($userAgent, 'safari') !== false && strpos($userAgent, 'chrome') === false) {
+            return 'Safari';
+        }
+
+        // Python requests
+        if (strpos($userAgent, 'python-requests') !== false || strpos($userAgent, 'python') !== false) {
+            return 'Python';
+        }
+
+        // Node.js / axios
+        if (strpos($userAgent, 'node') !== false || strpos($userAgent, 'axios') !== false) {
+            return 'Node.js';
+        }
+
+        // Go http client
+        if (strpos($userAgent, 'go-http') !== false) {
+            return 'Go';
+        }
+
+        // Java
+        if (strpos($userAgent, 'java') !== false) {
+            return 'Java';
+        }
+
+        // OpenAI SDK
+        if (strpos($userAgent, 'openai') !== false) {
+            return 'OpenAI-SDK';
+        }
+
+        // Anthropic SDK
+        if (strpos($userAgent, 'anthropic') !== false) {
+            return 'Anthropic-SDK';
+        }
+
+        // 其他：提取第一个 / 前的部分作为分组
+        $parts = explode('/', $userAgent);
+        $firstPart = trim($parts[0]);
+
+        // 如果第一个部分太长，截取前30个字符
+        if (strlen($firstPart) > 30) {
+            return 'Other ('.substr($firstPart, 0, 30).'...)';
+        }
+
+        return $firstPart ?: 'Unknown';
     }
 
     /**

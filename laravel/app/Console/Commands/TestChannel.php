@@ -6,15 +6,15 @@ use App\Models\Channel;
 use App\Services\Provider\Driver\AnthropicProvider;
 use App\Services\Provider\Driver\OpenAICompatibleProvider;
 use App\Services\Provider\Driver\OpenAIProvider;
+use App\Services\Provider\Exceptions\ProviderException;
 use App\Services\Shared\DTO\Message;
 use App\Services\Shared\DTO\Request;
-use App\Services\Provider\Exceptions\ProviderException;
 use App\Services\Shared\Enums\MessageRole;
 use Illuminate\Console\Command;
 
 class TestChannel extends Command
 {
-    protected $signature = 'channel:test
+    protected $signature = 'cdapi:channel:test
                             {channel? : 渠道ID或渠道名称}
                             {--all : 测试所有启用的渠道}
                             {--model= : 指定测试使用的模型}

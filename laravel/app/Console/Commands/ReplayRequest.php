@@ -12,14 +12,14 @@ use Illuminate\Support\Facades\Http;
 /**
  * 重放客户端真实请求,使用真实Http重新请求到本系统
  *
- * 通过请求ID重放: php artisan request:replay --request-id=1004
- * 通过审计ID重放: php artisan request:replay --audit-id=500
- * 通过request_id重放: php artisan request:replay --request-id=req_abc123
- * 使用最新审计日志: php artisan request:replay --latest
+ * 通过请求ID重放: php artisan cdapi:request:replay --request-id=1004
+ * 通过审计ID重放: php artisan cdapi:request:replay --audit-id=500
+ * 通过request_id重放: php artisan cdapi:request:replay --request-id=req_abc123
+ * 使用最新审计日志: php artisan cdapi:request:replay --latest
  */
 class ReplayRequest extends Command
 {
-    protected $signature = 'request:replay
+    protected $signature = 'cdapi:request:replay
                             {--request-id= : 请求 ID 或 request_id}
                             {--audit-id= : 审计 ID}
                             {--latest : 使用最新的审计日志}

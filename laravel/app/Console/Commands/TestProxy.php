@@ -7,11 +7,11 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
 /**
- * php artisan  proxy:test
+ * php artisan cdapi:proxy:test
  */
 class TestProxy extends Command
 {
-    protected $signature = 'proxy:test
+    protected $signature = 'cdapi:proxy:test
                             {key? : API 密钥 (不填则使用第一个活跃的 Key)}
                             {model? : 模型名称}
                             {--prompt= : 测试提示语}

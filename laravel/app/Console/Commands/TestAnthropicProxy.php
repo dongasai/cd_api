@@ -8,11 +8,11 @@ use App\Models\ApiKey;
 use Illuminate\Console\Command;
 
 /**
- * php artisan  proxy:test-anthropic "" Step-3.5-Flash
+ * php artisan cdapi:proxy:test-anthropic "" Step-3.5-Flash
  */
 class TestAnthropicProxy extends Command
 {
-    protected $signature = 'proxy:test-anthropic
+    protected $signature = 'cdapi:proxy:test-anthropic
                             {key? : API 密钥 (不填则使用第一个活跃的 Key)}
                             {model? : 模型名称}
                             {--prompt= : 测试提示语}

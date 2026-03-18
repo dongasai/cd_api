@@ -20,7 +20,7 @@ class ResetPeriodQuota extends Command
      *
      * @var string
      */
-    protected $signature = 'coding:reset-period
+    protected $signature = 'cdapi:coding:reset-period
                             {--account= : 指定账户ID}';
 
     /**

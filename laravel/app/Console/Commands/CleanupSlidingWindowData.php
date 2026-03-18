@@ -8,7 +8,7 @@ use Illuminate\Console\Command;
 
 class CleanupSlidingWindowData extends Command
 {
-    protected $signature = 'coding:cleanup-sliding-window
+    protected $signature = 'cdapi:coding:cleanup-sliding-window
                             {--retention=35 : Number of days to retain data}
                             {--dry-run : Show what would be deleted without actually deleting}';
 
