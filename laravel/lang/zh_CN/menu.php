@@ -34,7 +34,7 @@ return [
         'response_logs' => '响应日志',
         'channel_request_logs' => '渠道请求日志',
         'operation_logs' => '操作日志',
-        'system_settings' => '系统设置',
+        'app_settings' => '应用设置',
         'settings' => '系统配置',
         'channel_affinity' => '渠道亲和性规则',
         'user_agents' => 'User-Agent规则',

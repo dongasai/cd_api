@@ -5,3 +5,4 @@ docker/000-default.local.conf
 *.s.md
 .idea/
 .ai/
+.playwright-mcp/

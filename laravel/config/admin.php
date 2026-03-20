@@ -325,7 +325,7 @@ return [
         // sidebar-separate
         'body_class' => [],
 
-        'horizontal_menu' => true,
+        'horizontal_menu' => false,
 
         'sidebar_collapsed' => false,
 

@@ -50,8 +50,8 @@ class UserAgentController extends AdminController
             $form->display('id', 'ID');
             $form->text('name', '规则名称')->required();
 
-            // 多条正则表达式（listField）
-            $form->listField('patterns', '正则表达式列表')
+            // 多条正则表达式（list 字段类型）
+            $form->list('patterns', '正则表达式列表')
                 ->required()
                 ->help('每行一个正则表达式，如：Chrome\\/[0-9]+（不需要添加分隔符）');
 

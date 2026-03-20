@@ -90,7 +90,6 @@ return [
     'back' => '返回',
     'back_to_list' => '返回列表',
     'submit' => '送出',
-    'menu' => '目錄',
     'input' => '輸入',
     'succeeded' => '成功',
     'failed' => '失敗',

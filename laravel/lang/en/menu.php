@@ -20,7 +20,7 @@ return [
         'response_logs' => 'Response Logs',
         'channel_request_logs' => 'Channel Request Logs',
         'operation_logs' => 'Operation Logs',
-        'system_settings' => 'Settings',
+        'app_settings' => 'App Settings',
         'settings' => 'System Settings',
         'channel_affinity' => 'Channel Affinity Rules',
         'user_agents' => 'User-Agent Rules',

@@ -16,3 +16,4 @@
 ## 工作注意
 
 - 完成一项工作后，在work目录创建工作记录，`work/{年月}/{日}-{主题}.md`文件
+- 使用 playwright-laravel Agent进行浏览器测试
