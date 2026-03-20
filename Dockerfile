@@ -88,9 +88,13 @@ RUN usermod -a -G www-data php && \
 
 
 
-USER php
-
 COPY laravel /var/www/html
+
+# 确保 storage 和 bootstrap/cache 目录权限正确
+RUN mkdir -p /var/www/html/storage/logs /var/www/html/storage/framework/cache /var/www/html/storage/framework/sessions /var/www/html/storage/framework/testing /var/www/html/storage/framework/views /var/www/html/bootstrap/cache && \
+    chown -R php:php /var/www/html/storage /var/www/html/bootstrap/cache
+
+USER php
 
 # 安装 PHP 依赖
 RUN composer install --no-dev --optimize-autoloader --no-interaction
