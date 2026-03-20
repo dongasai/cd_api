@@ -48,9 +48,32 @@ UserProfileController → admin-user-profile.php
 位置：lang/{locale}/menu.php
 ```
 
-## 二、语言包内容结构
+## 二、控制器属性声明
 
-### 2.1 控制器语言包结构
+控制器必须声明 `$translation` 属性来指定语言包文件名：
+
+```php
+class ChannelController extends AdminController
+{
+    /**
+     * 语言包名称
+     *
+     * @var string
+     */
+    public $translation = 'admin-channel';
+
+    // ...
+}
+```
+
+**命名规则**：`admin-{控制器名小写中划线}`
+- `ChannelController` → `admin-channel`
+- `CodingAccountController` → `admin-coding-account`
+- `AuditLogController` → `admin-audit-log`
+
+## 三、语言包内容结构
+
+### 3.1 控制器语言包结构
 
 ```php
 <?php
@@ -61,7 +84,10 @@ return [
         '字段名' => '翻译',
     ],
     'labels' => [
-        // 标签翻译 - 标题、帮助文本、按钮等
+        // 标题 - 控制器页面标题（必须）
+        'title' => '页面标题',
+
+        // 其他标签翻译 - 帮助文本、按钮等
         '标签键' => '翻译',
     ],
     'options' => [
@@ -72,6 +98,10 @@ return [
     ],
 ];
 ```
+
+**重要说明**：
+- `labels.title` 是必须的，用于控制器的 `title()` 方法返回页面标题
+- 在控制器中使用：`protected function title(): string { return admin_trans_label('title'); }`
 
 ### 2.2 Admin Actions 语言包结构
 
@@ -115,15 +145,36 @@ return [
 ];
 ```
 
-## 三、翻译函数使用规则
+## 四、翻译函数使用规则
+
+### 4.1 字段翻译（自动匹配）
+
+当控制器声明了 `$translation` 属性后，`column()` 省略第二个参数会自动匹配语言包：
+
+```php
+// 控制器中声明
+public $translation = 'admin-channel';
+
+// 自动匹配 admin-channel.fields.name
+$grid->column('name');  // 推荐，简洁
+$grid->column('name', admin_trans_field('name'));  // 冗余，不推荐
+```
+
+**原理**：Dcat Admin 会自动查找 `{translation}.fields.{字段名}` 的翻译。
+
+### 4.2 翻译函数对照表
 
 | 场景 | 函数 | 示例 |
 |------|------|------|
 | 字段翻译 | 自动（省略参数） | `$grid->column('name')` |
 | 标签翻译 | `admin_trans_label()` | `admin_trans_label('basic_info')` |
-| 选项翻译 | `admin_trans()` | `admin_trans('channel.options.status')` |
-| 选项值翻译 | `admin_trans_option()` | `admin_trans_option('active', 'status')` |
+| 选项组数组 | `admin_trans_options()` | `$show->field('status')->using(admin_trans_options('status'))` |
+| 单个选项值翻译 | `admin_trans_option()` | `admin_trans_option('active', 'status')` |
 | Action 标题 | `admin_trans_action()` | `admin_trans_action('reset_api_key')` |
+
+**重要说明**：
+- `->using()` 方法需要传入数组，使用 `admin_trans_options('选项组名')` 获取整个选项组数组
+- `admin_trans()` 返回字符串，不能用于 `->using()` 方法
 
 ### 3.1 Action 实现示例
 
