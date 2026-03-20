@@ -18,6 +18,8 @@ use Dcat\Admin\Show;
  */
 class AuditLogController extends AdminController
 {
+    public $translation = 'admin-audit-log';
+
     /**
      * 数据模型
      *
@@ -34,18 +36,16 @@ class AuditLogController extends AdminController
 
     /**
      * 列表页面
-     *
-     * @return Grid
      */
-    protected function grid()
+    protected function grid(): Grid
     {
         return Grid::make(AuditLog::with(['channel', 'requestLog', 'responseLog', 'channelRequestLogs']), function (Grid $grid) {
             // 默认按创建时间倒序排序
             $grid->model()->orderBy('id', 'desc');
 
             // 列表字段
-            $grid->column('id', 'ID')->sortable();
-            $grid->column('api_key_and_affinity', 'API Key ')->display(function () {
+            $grid->column('id')->sortable();
+            $grid->column('api_key_and_affinity')->display(function () {
                 $apiKey = $this->api_key_name ?: '-';
                 $apiKeyId = $this->api_key_id ?? 0;
                 $affinity = $this->channel_affinity ?? [];
@@ -67,12 +67,12 @@ class AuditLogController extends AdminController
 
                 // 亲和性命中时右上角添加星号
                 if ($isHit) {
-                    return "<span class='border {$borderColor} rounded px-2 position-relative d-inline-block' title='渠道亲和命中'>{$apiKey}<span class='position-absolute' style='top:-8px;right:-8px;font-size:14px;'>⭐</span></span>";
+                    return "<span class='border {$borderColor} rounded px-2 position-relative d-inline-block' title='".admin_trans_label('affinity_hit')."'>{$apiKey}<span class='position-absolute' style='top:-8px;right:-8px;font-size:14px;'>⭐</span></span>";
                 }
 
-                return "<span class='border {$borderColor} rounded px-2' title='渠道亲和未命中'>{$apiKey}</span>";
+                return "<span class='border {$borderColor} rounded px-2' title='".admin_trans_label('affinity_not_hit')."'>{$apiKey}</span>";
             });
-            $grid->column('channel_protocol', '渠道/协议')->display(function () {
+            $grid->column('channel_protocol', admin_trans_field('channel_protocol'))->display(function () {
                 $channelName = $this->channel_name ?? '-';
 
                 $source = $this->source_protocol ?? '-';
@@ -86,15 +86,15 @@ class AuditLogController extends AdminController
                     ? "<span class='badge bg-info'>{$target}</span>"
                     : "<span class='badge bg-primary'>{$target}</span>";
 
-                return "<strong>{$channelName}</strong><br>请求: {$sourceBadge}<br>上游: {$targetBadge}";
+                return "<strong>{$channelName}</strong><br>".admin_trans_label('request').": {$sourceBadge}<br>".admin_trans_label('upstream').": {$targetBadge}";
             });
-            $grid->column('model_info', '模型')->display(function () {
+            $grid->column('model_info', admin_trans_field('model_info'))->display(function () {
                 $model = $this->model ?? '-';
                 $actual = $this->actual_model ?? '-';
 
-                return "请求: {$model}<br>实际: {$actual}";
+                return admin_trans_label('request').": {$model}<br>".admin_trans_field('actual_model').": {$actual}";
             });
-            $grid->column('tokens', 'Token数')->display(function () {
+            $grid->column('tokens', admin_trans_field('tokens'))->display(function () {
                 $total = number_format($this->total_tokens);
                 $prompt = number_format($this->prompt_tokens);
                 $completion = number_format($this->completion_tokens);
@@ -103,18 +103,18 @@ class AuditLogController extends AdminController
                 if ($this->cache_read_tokens > 0 || $this->cache_write_tokens > 0) {
                     $cacheRead = number_format($this->cache_read_tokens);
                     $cacheWrite = number_format($this->cache_write_tokens);
-                    $cacheInfo = "<br>缓存读: {$cacheRead} / 写: {$cacheWrite}";
+                    $cacheInfo = '<br>'.admin_trans_label('cache_read').": {$cacheRead} / ".admin_trans_label('cache_write').": {$cacheWrite}";
                 }
 
-                return "总: {$total}<br>入: {$prompt} / 出: {$completion}{$cacheInfo}";
+                return admin_trans_label('total').": {$total}<br>".admin_trans_label('input').": {$prompt} / ".admin_trans_label('output').": {$completion}{$cacheInfo}";
             });
-            $grid->column('latency', '耗时(s)')->display(function () {
+            $grid->column('latency', admin_trans_field('latency'))->display(function () {
                 $first = $this->first_token_ms ? round($this->first_token_ms / 1000, 2) : '-';
                 $total = round($this->latency_ms / 1000, 2);
 
-                return "首字: {$first} / 总计: {$total}";
+                return admin_trans_label('first_token').": {$first} / ".admin_trans_label('total_time').": {$total}";
             });
-            $grid->column('status_stream', '状态码/流')->display(function () {
+            $grid->column('status_stream', admin_trans_field('status_stream'))->display(function () {
                 $statusCode = $this->status_code;
                 $isStream = $this->is_stream;
 
@@ -134,12 +134,12 @@ class AuditLogController extends AdminController
 
                 // 流式徽章
                 $streamBadge = $isStream
-                    ? "<span class='badge bg-primary'>流</span>"
-                    : "<span class='badge bg-secondary'>非流</span>";
+                    ? "<span class='badge bg-primary'>".admin_trans_label('stream').'</span>'
+                    : "<span class='badge bg-secondary'>".admin_trans_label('non_stream').'</span>';
 
                 return "{$statusBadge} {$streamBadge}";
             });
-            $grid->column('created_at', '创建时间')->sortable();
+            $grid->column('created_at')->sortable();
 
             // 筛选器
             $grid->filter(function ($filter) {
@@ -148,19 +148,19 @@ class AuditLogController extends AdminController
                 $filter->expand(true);
 
                 // 用户名筛选
-                $filter->like('username', '用户名');
+                $filter->like('username');
 
                 // 渠道名称筛选
-                $filter->like('channel_name', '渠道名称');
+                $filter->like('channel_name');
 
                 // 模型筛选
-                $filter->like('model', '请求模型');
+                $filter->like('model');
 
                 // 状态码筛选
-                $filter->equal('status_code', '状态码');
+                $filter->equal('status_code');
 
                 // 创建时间范围筛选
-                $filter->between('created_at', '创建时间')->datetime();
+                $filter->between('created_at')->datetime();
             });
 
             // 禁用创建按钮
@@ -199,88 +199,85 @@ class AuditLogController extends AdminController
 
     /**
      * 详情页面
-     *
-     * @param  mixed  $id
-     * @return Show
      */
-    protected function detail($id)
+    protected function detail($id): Show
     {
         return Show::make(AuditLog::with(['user', 'channel', 'apiKey'])->findOrFail($id), function (Show $show) {
             // 基本信息
-            $show->field('id', 'ID');
-            $show->field('user_id', '用户ID');
-            $show->field('username', '用户名');
-            $show->field('api_key_id', 'API Key ID');
-            $show->field('api_key_name', 'API Key名称');
-            $show->field('cached_key_prefix', '缓存Key前缀');
+            $show->field('id');
+            $show->field('user_id');
+            $show->field('username');
+            $show->field('api_key_id');
+            $show->field('api_key_name');
+            $show->field('cached_key_prefix');
 
             // 渠道信息
-            $show->field('channel_id', '渠道ID');
-            $show->field('channel_name', '渠道名称');
+            $show->field('channel_id');
+            $show->field('channel_name');
 
             // 请求信息
-            $show->field('request_id', '请求ID');
-            $show->field('run_unid', '运行UNID');
-            $show->field('request_type', '请求类型')->using(AuditLog::getRequestTypes());
-            $show->field('model', '请求模型');
-            $show->field('actual_model', '实际模型');
-            $show->field('source_protocol', '请求格式/源协议');
-            $show->field('target_protocol', '上游格式/目标协议');
+            $show->field('request_id');
+            $show->field('run_unid');
+            $show->field('request_type')->using(AuditLog::getRequestTypes());
+            $show->field('model');
+            $show->field('actual_model');
+            $show->field('source_protocol');
+            $show->field('target_protocol');
 
             // Token信息
-            $show->field('prompt_tokens', '提示Token数')->as(function ($value) {
+            $show->field('prompt_tokens')->as(function ($value) {
                 return number_format($value);
             });
-            $show->field('completion_tokens', '完成Token数')->as(function ($value) {
+            $show->field('completion_tokens')->as(function ($value) {
                 return number_format($value);
             });
-            $show->field('total_tokens', '总Token数')->as(function ($value) {
+            $show->field('total_tokens')->as(function ($value) {
                 return number_format($value);
             });
-            $show->field('cache_read_tokens', '缓存读取Token数')->as(function ($value) {
+            $show->field('cache_read_tokens')->as(function ($value) {
                 return number_format($value);
             });
-            $show->field('cache_write_tokens', '缓存写入Token数')->as(function ($value) {
+            $show->field('cache_write_tokens')->as(function ($value) {
                 return number_format($value);
             });
 
             // 费用信息
-            $show->field('cost', '费用')->as(function ($value) {
+            $show->field('cost')->as(function ($value) {
                 return $value ? '$'.number_format($value, 6) : '-';
             });
-            $show->field('quota', '配额')->as(function ($value) {
+            $show->field('quota')->as(function ($value) {
                 return $value ? number_format($value, 6) : '-';
             });
-            $show->field('billing_source', '计费来源')->using(AuditLog::getBillingSources());
+            $show->field('billing_source')->using(AuditLog::getBillingSources());
 
             // 状态信息
-            $show->field('status_code', '状态码');
-            $show->field('latency_ms', '延迟(ms)')->as(function ($value) {
+            $show->field('status_code');
+            $show->field('latency_ms')->as(function ($value) {
                 return number_format($value);
             });
-            $show->field('first_token_ms', '首Token延迟(ms)')->as(function ($value) {
+            $show->field('first_token_ms')->as(function ($value) {
                 return $value ? number_format($value) : '-';
             });
 
             // 流式信息
-            $show->field('is_stream', '是否流式')->using([0 => '否', 1 => '是']);
-            $show->field('finish_reason', '完成原因');
+            $show->field('is_stream')->using(admin_trans_options('is_stream'));
+            $show->field('finish_reason');
 
             // 错误信息
-            $show->field('error_type', '错误类型');
-            $show->field('error_message', '错误信息');
+            $show->field('error_type');
+            $show->field('error_message');
 
             // 客户端信息
-            $show->field('client_ip', '客户端IP');
-            $show->field('user_agent', 'User Agent');
-            $show->field('group_name', '分组名称');
+            $show->field('client_ip');
+            $show->field('user_agent');
+            $show->field('group_name');
 
             // 其他信息
-            $show->field('channel_affinity', '渠道亲和性')->json();
-            $show->field('metadata', '元数据')->json();
+            $show->field('channel_affinity')->json();
+            $show->field('metadata')->json();
 
             // 时间信息
-            $show->field('created_at', '创建时间');
+            $show->field('created_at');
 
             // 禁用编辑按钮
             $show->disableEditButton();
@@ -292,12 +289,18 @@ class AuditLogController extends AdminController
 
     /**
      * 禁用表单
-     *
-     * @return \Illuminate\Http\Response
      */
     protected function form()
     {
         // 只读模式,不提供表单
         abort(404);
+    }
+
+    /**
+     * 标题
+     */
+    protected function title(): string
+    {
+        return admin_trans_label('title');
     }
 }

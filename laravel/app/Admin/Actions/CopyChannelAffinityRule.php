@@ -10,7 +10,10 @@ use Dcat\Admin\Grid\RowAction;
  */
 class CopyChannelAffinityRule extends RowAction
 {
-    protected $title = '<i class="fa fa-copy"></i> 复制';
+    public function title()
+    {
+        return '<i class="fa fa-copy"></i> '.admin_trans_action('copy_channel_affinity_rule');
+    }
 
     /**
      * 处理复制逻辑
@@ -22,17 +25,17 @@ class CopyChannelAffinityRule extends RowAction
         // 查找原规则
         $originalRule = ChannelAffinityRule::find($id);
         if (! $originalRule) {
-            return $this->response()->error('规则不存在');
+            return $this->response()->error(admin_trans_action('rule_not_found'));
         }
 
         // 复制规则数据
         $newRule = $originalRule->replicate();
-        $newRule->name = $originalRule->name.' (复制)';
+        $newRule->name = $originalRule->name.' ('.admin_trans_action('copy_channel_affinity_rule').')';
         $newRule->hit_count = 0;
         $newRule->last_hit_at = null;
         $newRule->save();
 
-        return $this->response()->success('规则复制成功')->refresh();
+        return $this->response()->success(admin_trans_action('rule_copy_success'))->refresh();
     }
 
     /**
@@ -40,6 +43,6 @@ class CopyChannelAffinityRule extends RowAction
      */
     public function confirm()
     {
-        return ['确认复制此规则?', '将创建一个新的规则副本，命中统计将重置为零。'];
+        return [admin_trans_action('rule_copy_confirm'), admin_trans_action('rule_copy_confirm_desc')];
     }
 }

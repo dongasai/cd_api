@@ -10,7 +10,10 @@ use Dcat\Admin\Grid\RowAction;
  */
 class CopyChannel extends RowAction
 {
-    protected $title = '<i class="fa fa-copy"></i> 复制';
+    public function title()
+    {
+        return '<i class="fa fa-copy"></i> '.admin_trans_action('copy_channel');
+    }
 
     /**
      * 处理复制逻辑
@@ -22,12 +25,12 @@ class CopyChannel extends RowAction
         // 查找原渠道
         $originalChannel = Channel::with('channelModels')->find($id);
         if (! $originalChannel) {
-            return $this->response()->error('渠道不存在');
+            return $this->response()->error(admin_trans_action('channel_not_found'));
         }
 
         // 复制渠道数据
         $newChannel = $originalChannel->replicate();
-        $newChannel->name = $originalChannel->name.' (复制)';
+        $newChannel->name = $originalChannel->name.' ('.admin_trans_action('copy_channel').')';
         $newChannel->slug = $originalChannel->slug.'_copy_'.time();
         $newChannel->success_count = 0;
         $newChannel->failure_count = 0;
@@ -52,7 +55,7 @@ class CopyChannel extends RowAction
             $newChannelModel->save();
         }
 
-        return $this->response()->success('渠道复制成功')->refresh();
+        return $this->response()->success(admin_trans_action('channel_copy_success'))->refresh();
     }
 
     /**
@@ -60,6 +63,6 @@ class CopyChannel extends RowAction
      */
     public function confirm()
     {
-        return ['确认复制此渠道?', '将创建一个新的渠道副本，统计信息将重置为零。'];
+        return [admin_trans_action('channel_copy_confirm'), admin_trans_action('channel_copy_confirm_desc')];
     }
 }

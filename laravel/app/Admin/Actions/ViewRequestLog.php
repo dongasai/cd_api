@@ -9,7 +9,10 @@ use Dcat\Admin\Grid\RowAction;
  */
 class ViewRequestLog extends RowAction
 {
-    protected $title = '请求日志 &nbsp;';
+    public function title()
+    {
+        return admin_trans_action('view_request_log').' &nbsp;';
+    }
 
     public function href()
     {

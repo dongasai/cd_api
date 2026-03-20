@@ -15,6 +15,13 @@ use Dcat\Admin\Show;
 class ChannelAffinityCacheController extends AdminController
 {
     /**
+     * 语言包名称
+     *
+     * @var string
+     */
+    public $translation = 'admin-channel-affinity-cache';
+
+    /**
      * 数据模型
      *
      * @var string
@@ -40,14 +47,14 @@ class ChannelAffinityCacheController extends AdminController
             $grid->model()->orderBy('id', 'desc');
 
             // 列表字段
-            $grid->column('id', 'ID')->sortable();
-            $grid->column('rule_id', '规则ID');
-            $grid->column('key_hash', 'Key哈希')->limit(20);
-            $grid->column('channel_name', '渠道名称');
-            $grid->column('key_hint', 'Key提示')->limit(20);
-            $grid->column('hit_count', '命中次数')->sortable();
-            $grid->column('expires_at', '过期时间')->sortable();
-            $grid->column('created_at', '创建时间')->sortable();
+            $grid->column('id')->sortable();
+            $grid->column('rule_id');
+            $grid->column('key_hash')->limit(20);
+            $grid->column('channel_name');
+            $grid->column('key_hint')->limit(20);
+            $grid->column('hit_count')->sortable();
+            $grid->column('expires_at')->sortable();
+            $grid->column('created_at')->sortable();
 
             // 筛选器
             $grid->filter(function ($filter) {
@@ -56,19 +63,19 @@ class ChannelAffinityCacheController extends AdminController
                 $filter->expand(true);
 
                 // 规则ID筛选
-                $filter->equal('rule_id', '规则ID');
+                $filter->equal('rule_id');
 
                 // 渠道名称筛选
-                $filter->like('channel_name', '渠道名称');
+                $filter->like('channel_name');
 
                 // Key哈希筛选
-                $filter->like('key_hash', 'Key哈希');
+                $filter->like('key_hash');
 
                 // Key提示筛选
-                $filter->like('key_hint', 'Key提示');
+                $filter->like('key_hint');
 
                 // 创建时间范围筛选
-                $filter->between('created_at', '创建时间')->datetime();
+                $filter->between('created_at')->datetime();
             });
 
             // 禁用创建按钮
@@ -107,16 +114,16 @@ class ChannelAffinityCacheController extends AdminController
     {
         return Show::make(ChannelAffinityCache::with(['channel'])->findOrFail($id), function (Show $show) {
             // 基本信息
-            $show->field('id', 'ID');
-            $show->field('rule_id', '规则ID');
-            $show->field('key_hash', 'Key哈希');
-            $show->field('channel_id', '渠道ID');
-            $show->field('channel_name', '渠道名称');
-            $show->field('key_hint', 'Key提示');
-            $show->field('hit_count', '命中次数');
-            $show->field('expires_at', '过期时间');
-            $show->field('created_at', '创建时间');
-            $show->field('updated_at', '更新时间');
+            $show->field('id');
+            $show->field('rule_id');
+            $show->field('key_hash');
+            $show->field('channel_id');
+            $show->field('channel_name');
+            $show->field('key_hint');
+            $show->field('hit_count');
+            $show->field('expires_at');
+            $show->field('created_at');
+            $show->field('updated_at');
 
             // 禁用编辑按钮
             $show->disableEditButton();
@@ -135,5 +142,13 @@ class ChannelAffinityCacheController extends AdminController
     {
         // 只读模式,不提供表单
         abort(404);
+    }
+
+    /**
+     * 标题
+     */
+    protected function title(): string
+    {
+        return admin_trans_label('title');
     }
 }

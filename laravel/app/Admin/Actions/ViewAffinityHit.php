@@ -10,7 +10,10 @@ use Dcat\Admin\Grid\RowAction;
  */
 class ViewAffinityHit extends RowAction
 {
-    protected $title = '亲和性命中 &nbsp;';
+    public function title()
+    {
+        return admin_trans_action('view_affinity_hit').' &nbsp;';
+    }
 
     public function href()
     {

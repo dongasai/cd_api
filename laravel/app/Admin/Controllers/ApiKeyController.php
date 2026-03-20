@@ -7,6 +7,7 @@ use App\Admin\Actions\ResetApiKey;
 use App\Admin\Grids\ChannelSelectGrid;
 use App\Models\ApiKey;
 use App\Models\Channel;
+use App\Services\ModelService;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
@@ -19,6 +20,13 @@ use Illuminate\Support\Str;
 class ApiKeyController extends AdminController
 {
     /**
+     * 语言包名称
+     *
+     * @var string
+     */
+    public $translation = 'admin-api-key';
+
+    /**
      * 模型
      *
      * @var string
@@ -27,24 +35,22 @@ class ApiKeyController extends AdminController
 
     /**
      * 列表页面
-     *
-     * @return Grid
      */
-    protected function grid()
+    protected function grid(): Grid
     {
         return Grid::make(ApiKey::query()->orderBy('id', 'desc'), function (Grid $grid) {
             // 列表字段
-            $grid->column('id', 'ID')->sortable();
-            $grid->column('name', '名称')->copyableValue('key');  // 显示名称，点击复制图标可复制密钥
-            $grid->column('key', '密钥')
+            $grid->column('id', admin_trans_field('id'))->sortable();
+            $grid->column('name', admin_trans_field('name'))->copyableValue('key');  // 显示名称，点击复制图标可复制密钥
+            $grid->column('key', admin_trans_field('key'))
                 ->display(function ($value) {
                     return substr($value, 0, 15).'...';  // 显示部分密钥
                 })
                 ->copyableValue();  // 复制完整密钥
-            $grid->column('status', '状态')->using([
-                'active' => '激活',
-                'revoked' => '已撤销',
-                'expired' => '已过期',
+            $grid->column('status', admin_trans_field('status'))->using([
+                'active' => admin_trans_option('active', 'status'),
+                'revoked' => admin_trans_option('revoked', 'status'),
+                'expired' => admin_trans_option('expired', 'status'),
             ])->label([
                 'active' => 'success',
                 'revoked' => 'danger',
@@ -52,25 +58,25 @@ class ApiKeyController extends AdminController
             ]);
 
             // 允许的渠道列
-            $grid->column('allowed_channels', '允许的渠道')
+            $grid->column('allowed_channels', admin_trans_field('allowed_channels'))
                 ->display(function ($value) {
                     // 确保是数组
                     if (is_string($value)) {
                         $value = json_decode($value, true);
                     }
                     if (empty($value) || ! is_array($value)) {
-                        return '不限制';
+                        return admin_trans_label('no_limit');
                     }
                     // 转换为整数数组
                     $channelIds = array_map('intval', $value);
                     $channels = Channel::whereIn('id', $channelIds)->pluck('name')->toArray();
 
-                    return empty($channels) ? '不限制' : implode(', ', $channels);
+                    return empty($channels) ? admin_trans_label('no_limit') : implode(', ', $channels);
                 });
 
-            $grid->column('expires_at', '过期时间');
-            $grid->column('last_used_at', '最后使用时间');
-            $grid->column('created_at', '创建时间')->sortable();
+            $grid->column('expires_at', admin_trans_field('expires_at'));
+            $grid->column('last_used_at', admin_trans_field('last_used_at'));
+            $grid->column('created_at', admin_trans_field('created_at'))->sortable();
 
             // 筛选器
             $grid->filter(function (Grid\Filter $filter) {
@@ -78,13 +84,13 @@ class ApiKeyController extends AdminController
                 $filter->panel();
                 $filter->expand(true);
 
-                $filter->equal('status', '状态')->select([
-                    'active' => '激活',
-                    'revoked' => '已撤销',
-                    'expired' => '已过期',
+                $filter->equal('status', admin_trans_field('status'))->select([
+                    'active' => admin_trans_option('active', 'status'),
+                    'revoked' => admin_trans_option('revoked', 'status'),
+                    'expired' => admin_trans_option('expired', 'status'),
                 ]);
-                $filter->like('name', '名称');
-                $filter->like('key', '密钥');
+                $filter->like('name', admin_trans_field('name'));
+                $filter->like('key', admin_trans_field('key'));
             });
 
             // 快速搜索
@@ -104,27 +110,24 @@ class ApiKeyController extends AdminController
 
     /**
      * 详情页面
-     *
-     * @param  mixed  $id
-     * @return Show
      */
-    protected function detail($id)
+    protected function detail($id): Show
     {
         return Show::make($id, new ApiKey, function (Show $show) {
-            $show->field('id', 'ID');
-            $show->field('name', '名称');
-            $show->field('key', '密钥')->display(function ($value) {
+            $show->field('id', admin_trans_field('id'));
+            $show->field('name', admin_trans_field('name'));
+            $show->field('key', admin_trans_field('key'))->display(function ($value) {
                 return substr($value, 0, 10).'...';
             });
-            $show->field('status', '状态')->using([
-                'active' => '激活',
-                'revoked' => '已撤销',
-                'expired' => '已过期',
+            $show->field('status', admin_trans_field('status'))->using([
+                'active' => admin_trans_option('active', 'status'),
+                'revoked' => admin_trans_option('revoked', 'status'),
+                'expired' => admin_trans_option('expired', 'status'),
             ]);
-            $show->field('model_mappings', '模型映射')->json();
+            $show->field('model_mappings', admin_trans_field('model_mappings'))->json();
 
             // 允许的渠道 - 显示渠道名称
-            $show->field('allowed_channels', '允许的渠道')
+            $show->field('allowed_channels', admin_trans_field('allowed_channels'))
                 ->unescape()
                 ->as(function ($value) {
                     // 确保是数组
@@ -132,14 +135,14 @@ class ApiKeyController extends AdminController
                         $value = json_decode($value, true);
                     }
                     if (empty($value) || ! is_array($value)) {
-                        return '<span class="text-muted">不限制</span>';
+                        return '<span class="text-muted">'.admin_trans_label('no_limit').'</span>';
                     }
                     // 转换为整数数组
                     $channelIds = array_map('intval', $value);
                     $channels = Channel::whereIn('id', $channelIds)->pluck('name')->toArray();
 
                     if (empty($channels)) {
-                        return '<span class="text-muted">不限制</span>';
+                        return '<span class="text-muted">'.admin_trans_label('no_limit').'</span>';
                     }
 
                     // 返回带标签样式的 HTML
@@ -149,7 +152,7 @@ class ApiKeyController extends AdminController
                 });
 
             // 禁止的渠道 - 显示渠道名称
-            $show->field('not_allowed_channels', '禁止的渠道')
+            $show->field('not_allowed_channels', admin_trans_field('not_allowed_channels'))
                 ->unescape()
                 ->as(function ($value) {
                     // 确保是数组
@@ -157,14 +160,14 @@ class ApiKeyController extends AdminController
                         $value = json_decode($value, true);
                     }
                     if (empty($value) || ! is_array($value)) {
-                        return '<span class="text-muted">无</span>';
+                        return '<span class="text-muted">'.admin_trans_label('none').'</span>';
                     }
                     // 转换为整数数组
                     $channelIds = array_map('intval', $value);
                     $channels = Channel::whereIn('id', $channelIds)->pluck('name')->toArray();
 
                     if (empty($channels)) {
-                        return '<span class="text-muted">无</span>';
+                        return '<span class="text-muted">'.admin_trans_label('none').'</span>';
                     }
 
                     // 返回带标签样式的 HTML
@@ -174,14 +177,15 @@ class ApiKeyController extends AdminController
                 });
 
             // 可用模型列表 - 从允许的渠道中获取启用的模型
-            $show->field('available_models', '可用模型')
+            $show->field('available_models', admin_trans_field('available_models'))
                 ->unescape()
                 ->as(function ($value) {
                     // 使用 ModelService 获取可用渠道模型
+                    /** @var ApiKey $this */
                     $channelModels = ModelService::getAvailableChannelModels($this);
 
                     if (empty($channelModels)) {
-                        return '<span class="text-muted">无可用模型</span>';
+                        return '<span class="text-muted">'.admin_trans_label('no_available_models').'</span>';
                     }
 
                     // 构建显示HTML
@@ -196,7 +200,9 @@ class ApiKeyController extends AdminController
                             $displayName = $model->getDisplayName();
                             $modelName = $model->model_name;
                             if ($model->mapped_model) {
-                                return "<span class='label bg-primary' title=\"实际模型: {$model->mapped_model}\">{$displayName} ({$modelName})</span>";
+                                $actualModel = admin_trans_label('actual_model');
+
+                                return "<span class='label bg-primary' title=\"{$actualModel}: {$model->mapped_model}\">{$displayName} ({$modelName})</span>";
                             }
 
                             return "<span class='label bg-primary'>{$displayName} ({$modelName})</span>";
@@ -209,7 +215,7 @@ class ApiKeyController extends AdminController
                 });
 
             // 速率限制 - 友好显示
-            $show->field('rate_limit', '速率限制')
+            $show->field('rate_limit', admin_trans_field('rate_limit'))
                 ->unescape()
                 ->as(function ($value) {
                     // 确保是数组
@@ -217,26 +223,26 @@ class ApiKeyController extends AdminController
                         $value = json_decode($value, true);
                     }
                     if (empty($value) || ! is_array($value)) {
-                        return '<span class="text-muted">不限制</span>';
+                        return '<span class="text-muted">'.admin_trans_label('no_limit').'</span>';
                     }
                     $parts = [];
                     if (! empty($value['requests_per_minute'])) {
-                        $parts[] = "<span class='label bg-info'>{$value['requests_per_minute']} 次/分钟</span>";
+                        $parts[] = "<span class='label bg-info'>{$value['requests_per_minute']} ".admin_trans_label('times_per_minute').'</span>';
                     }
                     if (! empty($value['requests_per_day'])) {
-                        $parts[] = "<span class='label bg-info'>{$value['requests_per_day']} 次/天</span>";
+                        $parts[] = "<span class='label bg-info'>{$value['requests_per_day']} ".admin_trans_label('times_per_day').'</span>';
                     }
                     if (! empty($value['tokens_per_day'])) {
-                        $parts[] = "<span class='label bg-info'>{$value['tokens_per_day']} Token/天</span>";
+                        $parts[] = "<span class='label bg-info'>{$value['tokens_per_day']} ".admin_trans_label('tokens_per_day').'</span>';
                     }
 
-                    return $parts ? implode(' ', $parts) : '<span class="text-muted">不限制</span>';
+                    return $parts ? implode(' ', $parts) : '<span class="text-muted">'.admin_trans_label('no_limit').'</span>';
                 });
 
-            $show->field('expires_at', '过期时间');
-            $show->field('last_used_at', '最后使用时间');
-            $show->field('created_at', '创建时间');
-            $show->field('updated_at', '更新时间');
+            $show->field('expires_at', admin_trans_field('expires_at'));
+            $show->field('last_used_at', admin_trans_field('last_used_at'));
+            $show->field('created_at', admin_trans_field('created_at'));
+            $show->field('updated_at', admin_trans_field('updated_at'));
 
             // 添加刷新模型缓存工具按钮
             $show->tools(function (Show\Tools $tools) {
@@ -247,76 +253,74 @@ class ApiKeyController extends AdminController
 
     /**
      * 表单页面
-     *
-     * @return Form
      */
-    protected function form()
+    protected function form(): Form
     {
         return Form::make(new ApiKey, function (Form $form) {
             // 基本信息
-            $form->display('id', 'ID');
+            $form->display('id', admin_trans_field('id'));
 
-            $form->text('name', '名称')
+            $form->text('name', admin_trans_field('name'))
                 ->required()
                 ->maxLength(100)
-                ->help('API密钥的名称，方便识别');
+                ->help(admin_trans_label('name_help'));
 
             // 密钥字段 - 生成一次
             $defaultKey = $this->generateApiKey();
-            $form->text('key', '密钥')
+            $form->text('key', admin_trans_field('key'))
                 ->default($defaultKey)
                 ->required()
-                ->help('API密钥，创建后请妥善保存')
+                ->help(admin_trans_label('key_help'))
                 ->readOnly();
 
             // 状态
-            $form->select('status', '状态')
+            $form->select('status', admin_trans_field('status'))
                 ->options([
-                    'active' => '激活',
-                    'revoked' => '已撤销',
-                    'expired' => '已过期',
+                    'active' => admin_trans_option('active', 'status'),
+                    'revoked' => admin_trans_option('revoked', 'status'),
+                    'expired' => admin_trans_option('expired', 'status'),
                 ])
                 ->default('active')
                 ->required();
 
             // 模型映射
-            $form->keyValue('model_mappings', '模型映射')
-                ->help('配置模型别名映射，格式：别名 => 实际模型名。例如：cd-coding-latest => gpt-4');
+            $form->keyValue('model_mappings', admin_trans_field('model_mappings'))
+                ->help(admin_trans_label('model_mappings_help'));
 
             // 渠道限制,
             // 允许的渠道,多选
-            $form->multipleSelectTable('allowed_channels', '允许的渠道')
+            $form->multipleSelectTable('allowed_channels', admin_trans_field('allowed_channels'))
 
                 ->from(new ChannelSelectGrid)
                 ->model(Channel::class, 'id', 'name')
-                ->help('选择允许访问的渠道，留空表示不限制');
+                ->help(admin_trans_label('allowed_channels_help'));
             // 禁止的渠道,多选
-            $form->multipleSelectTable('not_allowed_channels', '禁止的渠道')
+            $form->multipleSelectTable('not_allowed_channels', admin_trans_field('not_allowed_channels'))
 
                 ->from(new ChannelSelectGrid)
                 ->model(Channel::class, 'id', 'name')
-                ->help('选择禁止访问的渠道');
+                ->help(admin_trans_label('not_allowed_channels_help'));
 
             // 速率限制
-            $form->embeds('rate_limit', '速率限制', function ($form) {
-                $form->number('requests_per_minute', '每分钟请求数')
+            $form->embeds('rate_limit', admin_trans_field('rate_limit'), function ($form) {
+                $form->number('requests_per_minute', admin_trans_field('requests_per_minute'))
                     ->min(0)
-                    ->help('每分钟最大请求数，0表示不限制');
-                $form->number('requests_per_day', '每日请求数')
+                    ->help(admin_trans_label('requests_per_minute_help'));
+                $form->number('requests_per_day', admin_trans_field('requests_per_day'))
                     ->min(0)
-                    ->help('每日最大请求数，0表示不限制');
-                $form->number('tokens_per_day', '每日Token数')
+                    ->help(admin_trans_label('requests_per_day_help'));
+                $form->number('tokens_per_day', admin_trans_field('tokens_per_day'))
                     ->min(0)
-                    ->help('每日最大Token数，0表示不限制');
-            })->help('配置API密钥的速率限制');
+                    ->help(admin_trans_label('tokens_per_day_help'));
+            })->help(admin_trans_label('rate_limit_help'));
 
             // 过期时间
-            $form->datetime('expires_at', '过期时间')
-                ->help('留空表示永不过期');
+            $form->datetime('expires_at', admin_trans_field('expires_at'))
+                ->help(admin_trans_label('expires_at_help'));
 
             // 时间戳
-            $form->display('created_at', '创建时间');
-            $form->display('updated_at', '更新时间');
+            $form->display('created_at', admin_trans_field('created_at'));
+            $form->display('updated_at', admin_trans_field('updated_at'));
         });
     }
 
@@ -333,11 +337,9 @@ class ApiKeyController extends AdminController
 
     /**
      * 标题
-     *
-     * @return string
      */
-    protected function title()
+    protected function title(): string
     {
-        return 'API密钥管理';
+        return admin_trans_label('title');
     }
 }

@@ -15,14 +15,10 @@ class ResetApiKey extends RowAction
 {
     /**
      * 按钮标题
-     *
-     * @var string
      */
-    protected $title;
-
-    public function __construct()
+    public function title()
     {
-        $this->title = '<i class="feather icon-key"></i> '.trans('admin-actions.reset_api_key');
+        return '<i class="feather icon-key"></i> '.admin_trans_action('reset_api_key');
     }
 
     /**
@@ -35,7 +31,7 @@ class ResetApiKey extends RowAction
         try {
             $apiKey = ApiKey::find($id);
             if (! $apiKey) {
-                return $this->response()->error(trans('admin-actions.api_key_not_found'));
+                return $this->response()->error(admin_trans_action('api_key_not_found'));
             }
 
             // 生成新密钥
@@ -48,10 +44,10 @@ class ResetApiKey extends RowAction
 
             // 返回成功响应，并显示新密钥
             return $this->response()
-                ->success(trans('admin-actions.reset_api_key_success')."\n\n{$newKey}\n\n".trans('admin-actions.reset_api_key_warning'))
+                ->success(admin_trans_action('reset_api_key_success')."\n\n{$newKey}\n\n".admin_trans_action('reset_api_key_warning'))
                 ->refresh();
         } catch (\Exception $e) {
-            return $this->response()->error(trans('admin-actions.reset_api_key_error').': '.$e->getMessage());
+            return $this->response()->error(admin_trans_action('reset_api_key_error').': '.$e->getMessage());
         }
     }
 
@@ -61,8 +57,8 @@ class ResetApiKey extends RowAction
     public function confirm()
     {
         return [
-            trans('admin-actions.reset_api_key_confirm'),
-            trans('admin-actions.reset_api_key_confirm_desc'),
+            admin_trans_action('reset_api_key_confirm'),
+            admin_trans_action('reset_api_key_confirm_desc'),
         ];
     }
 

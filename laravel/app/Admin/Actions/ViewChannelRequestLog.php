@@ -9,7 +9,10 @@ use Dcat\Admin\Grid\RowAction;
  */
 class ViewChannelRequestLog extends RowAction
 {
-    protected $title = '渠道日志 &nbsp;';
+    public function title()
+    {
+        return admin_trans_action('view_channel_request_log').' &nbsp;';
+    }
 
     public function href()
     {

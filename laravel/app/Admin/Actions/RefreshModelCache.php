@@ -12,20 +12,6 @@ use Dcat\Admin\Show\AbstractTool;
 class RefreshModelCache extends AbstractTool
 {
     /**
-     * 按钮标题
-     *
-     * @var string
-     */
-    protected $title = '刷新模型缓存';
-
-    /**
-     * 确认提示信息
-     *
-     * @var string
-     */
-    protected $confirmMessage = '确定要刷新模型缓存吗？这将清除当前API密钥的所有模型相关缓存。';
-
-    /**
      * 处理请求
      *
      * @return Response
@@ -38,9 +24,9 @@ class RefreshModelCache extends AbstractTool
             // 清除指定 API Key 的模型缓存
             ModelService::clearCache((int) $id);
 
-            return $this->response()->success('模型缓存已刷新')->refresh();
+            return $this->response()->success(admin_trans_action('model_cache_refreshed'))->refresh();
         } catch (\Exception $e) {
-            return $this->response()->error('刷新失败: '.$e->getMessage());
+            return $this->response()->error(admin_trans_action('refresh_failed').': '.$e->getMessage());
         }
     }
 
@@ -51,7 +37,7 @@ class RefreshModelCache extends AbstractTool
      */
     public function confirm()
     {
-        return [$this->confirmMessage];
+        return [admin_trans_action('refresh_model_cache_confirm')];
     }
 
     /**
@@ -61,9 +47,11 @@ class RefreshModelCache extends AbstractTool
      */
     public function html()
     {
+        $title = admin_trans_action('refresh_model_cache');
+
         return <<<HTML
 <a class="{$this->getElementClass()}" href="javascript:void(0);">
-    <i class="feather icon-refresh-cw"></i> {$this->title}
+    <i class="feather icon-refresh-cw"></i> {$title}
 </a>
 HTML;
     }

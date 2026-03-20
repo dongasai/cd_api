@@ -12,20 +12,6 @@ use Dcat\Admin\Grid\Tools\AbstractTool;
 class RefreshSettingCache extends AbstractTool
 {
     /**
-     * 按钮标题
-     *
-     * @var string
-     */
-    protected $title = '刷新缓存';
-
-    /**
-     * 确认提示信息
-     *
-     * @var string
-     */
-    protected $confirmMessage = '确定要刷新系统设置缓存吗？这将清除所有设置缓存并重新加载。';
-
-    /**
      * 处理请求
      *
      * @return Response
@@ -36,9 +22,9 @@ class RefreshSettingCache extends AbstractTool
             // 清除系统设置缓存
             app(SettingService::class)->clearCache();
 
-            return $this->response()->success('系统设置缓存已刷新')->refresh();
+            return $this->response()->success(admin_trans_action('setting_cache_refreshed'))->refresh();
         } catch (\Exception $e) {
-            return $this->response()->error('刷新失败: '.$e->getMessage());
+            return $this->response()->error(admin_trans_action('refresh_failed').': '.$e->getMessage());
         }
     }
 
@@ -49,7 +35,7 @@ class RefreshSettingCache extends AbstractTool
      */
     public function confirm()
     {
-        return [$this->confirmMessage];
+        return [admin_trans_action('refresh_setting_cache_confirm')];
     }
 
     /**
@@ -59,9 +45,11 @@ class RefreshSettingCache extends AbstractTool
      */
     public function html()
     {
+        $title = admin_trans_action('refresh_setting_cache');
+
         return <<<HTML
 <a class="{$this->getElementClass()} btn btn-primary btn-sm" href="javascript:void(0);">
-    <i class="feather icon-refresh-cw"></i> {$this->title}
+    <i class="feather icon-refresh-cw"></i> {$title}
 </a>
 HTML;
     }
