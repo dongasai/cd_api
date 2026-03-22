@@ -2,8 +2,8 @@
 
 namespace App\Services\Protocol\Driver;
 
-use App\Services\Shared\DTO\Request;
-use App\Services\Shared\DTO\Response;
+use App\Services\Protocol\Contracts\ProtocolRequest;
+use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Shared\DTO\StreamChunk;
 
 /**
@@ -17,20 +17,20 @@ interface DriverInterface
     public function getProtocolName(): string;
 
     /**
-     * 解析原始请求为标准格式
+     * 解析原始请求为协议请求结构体
      *
      * @param  array  $rawRequest  原始请求数据
-     * @return Request 标准请求格式
+     * @return ProtocolRequest 协议请求结构体
      */
-    public function parseRequest(array $rawRequest): Request;
+    public function parseRequest(array $rawRequest): ProtocolRequest;
 
     /**
-     * 从标准格式构建本协议的响应
+     * 从协议响应结构体构建本协议的响应数组
      *
-     * @param  Response  $response  标准响应格式
+     * @param  ProtocolResponse  $response  协议响应结构体
      * @return array 本协议的响应数据
      */
-    public function buildResponse(Response $response): array;
+    public function buildResponse(ProtocolResponse $response): array;
 
     /**
      * 从标准格式构建本协议的流式块

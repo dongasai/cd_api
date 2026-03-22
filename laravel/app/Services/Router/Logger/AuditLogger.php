@@ -4,6 +4,7 @@ namespace App\Services\Router\Logger;
 
 use App\Models\AuditLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * 审计日志记录服务
@@ -17,7 +18,7 @@ class AuditLogger
     {
         $apiKey = $request->attributes->get('api_key');
 
-        return AuditLog::create([
+        $auditLog = AuditLog::create([
             'request_id' => $request->attributes->get('request_id'),
             'api_key_id' => $apiKey?->id,
             'api_key_name' => $apiKey?->name,
@@ -27,6 +28,10 @@ class AuditLogger
             'user_agent' => $request->userAgent(),
             'is_stream' => $isStream,
         ]);
+
+        Log::info('审计日志插入成功', ['audit_log_id' => $auditLog->id]);
+
+        return $auditLog;
     }
 
     /**

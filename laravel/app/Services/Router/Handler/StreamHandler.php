@@ -3,11 +3,11 @@
 namespace App\Services\Router\Handler;
 
 use App\Models\RequestLog;
+use App\Services\Protocol\Contracts\ProtocolRequest;
 use App\Services\Protocol\ProtocolConverter;
 use App\Services\Provider\ProviderManager;
 use App\Services\Router\Logger\AuditLogger;
 use App\Services\Router\Logger\ResponseLogger;
-use App\Services\Shared\DTO\Request;
 use App\Services\Shared\DTO\StreamChunk;
 use Generator;
 use Illuminate\Http\Request as HttpRequest;
@@ -48,8 +48,7 @@ class StreamHandler
      */
     public function handle(
         HttpRequest $httpRequest,
-        Request $standardRequest,
-        Request $providerRequest,
+        ProtocolRequest $protocolRequest,
         $provider,
         string $sourceProtocol,
         string $targetProtocol,
@@ -59,11 +58,15 @@ class StreamHandler
         $selectedChannel = null  // 接收选中的渠道
     ): Generator {
         $this->selectedChannel = $selectedChannel;  // 保存渠道引用，用于记录亲和性
-        $stream = $provider->sendStream($providerRequest);
+
+        // 获取模型名称
+        $modelName = $protocolRequest->getModel();
+
+        $stream = $provider->sendStream($protocolRequest);
 
         // 使用传入的审计日志（如果已创建），否则创建新的
         if ($auditLog === null) {
-            $auditLog = $this->auditLogger->createInitial($httpRequest, $standardRequest->model, true, $sourceProtocol);
+            $auditLog = $this->auditLogger->createInitial($httpRequest, $modelName, true, $sourceProtocol);
         }
 
         $firstTokenMs = null;
@@ -109,13 +112,13 @@ class StreamHandler
         $this->updateAuditLogWithUsage($auditLog, $latencyMs, $firstTokenMs, $collectedUsage, $collectedFinishReason);
 
         // 记录渠道亲和性（成功请求后更新缓存）
-        $this->recordAffinity($httpRequest, $standardRequest->model);
+        $this->recordAffinity($httpRequest, $modelName);
 
         // 从流式块中提取完整文本内容
         $generatedText = $this->extractTextFromChunks($streamChunks);
 
         // 组装完整的响应数据（用于记录 body_text）
-        $completeResponse = $this->buildCompleteResponse($streamChunks, $standardRequest->model, $collectedUsage, $collectedFinishReason);
+        $completeResponse = $this->buildCompleteResponse($streamChunks, $modelName, $collectedUsage, $collectedFinishReason);
 
         // 记录响应日志
         $this->responseLogger->create(

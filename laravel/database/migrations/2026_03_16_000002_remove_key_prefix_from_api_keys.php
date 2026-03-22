@@ -12,6 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('api_keys', function (Blueprint $table) {
+            // SQLite 需要先删除依赖列的索引
+            $table->dropIndex('api_keys_key_prefix_index');
             $table->dropColumn('key_prefix');
         });
     }
@@ -23,6 +25,7 @@ return new class extends Migration
     {
         Schema::table('api_keys', function (Blueprint $table) {
             $table->string('key_prefix', 20)->nullable()->comment('API密钥前缀')->after('key');
+            $table->index('key_prefix', 'api_keys_key_prefix_index');
         });
     }
 };

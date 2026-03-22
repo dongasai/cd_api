@@ -2,10 +2,10 @@
 
 namespace App\Services\Protocol\Driver;
 
+use App\Services\Protocol\Contracts\ProtocolRequest;
+use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Protocol\Driver\Anthropic\MessagesRequest;
 use App\Services\Protocol\Driver\Anthropic\MessagesResponse;
-use App\Services\Shared\DTO\Request;
-use App\Services\Shared\DTO\Response;
 use App\Services\Shared\DTO\StreamChunk;
 
 /**
@@ -71,28 +71,31 @@ class AnthropicMessagesDriver extends AbstractDriver
     }
 
     /**
-     * 解析原始请求为标准格式
+     * 解析原始请求为协议请求结构体
      *
-     * 使用 MessagesRequest 结构体进行强类型转换和验证
+     * 直接返回 MessagesRequest，不再转换为 Shared\DTO
      */
-    public function parseRequest(array $rawRequest): Request
+    public function parseRequest(array $rawRequest): ProtocolRequest
     {
-        // 使用协议结构体进行转换和验证
-        $request = MessagesRequest::fromArrayValidated($rawRequest);
-
-        // 转换为 Shared\DTO
-        return $request->toSharedDTO();
+        return MessagesRequest::fromArrayValidated($rawRequest);
     }
 
     /**
-     * 从标准格式构建 Anthropic 响应
+     * 从协议响应结构体构建 Anthropic 响应数组
      *
-     * 使用 MessagesResponse 结构体进行转换
+     * 直接使用协议响应结构体，不再从 Shared\DTO 转换
      */
-    public function buildResponse(Response $response): array
+    public function buildResponse(ProtocolResponse $response): array
     {
-        // 使用协议结构体进行转换
-        return MessagesResponse::fromSharedDTO($response)->toArray();
+        // 如果是同协议响应，直接转数组
+        if ($response instanceof MessagesResponse) {
+            return $response->toArray();
+        }
+
+        // 需要转换：通过 Shared\DTO 中间层
+        $sharedDTO = $response->toSharedDTO();
+
+        return MessagesResponse::fromSharedDTO($sharedDTO)->toArray();
     }
 
     /**

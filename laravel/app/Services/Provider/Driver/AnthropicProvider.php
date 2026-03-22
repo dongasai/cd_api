@@ -2,10 +2,11 @@
 
 namespace App\Services\Provider\Driver;
 
-use App\Services\Shared\DTO\Request;
-use App\Services\Shared\DTO\Response;
+use App\Services\Protocol\Contracts\ProtocolRequest;
+use App\Services\Protocol\Contracts\ProtocolResponse;
+use App\Services\Protocol\Driver\Anthropic\MessagesRequest;
+use App\Services\Protocol\Driver\Anthropic\MessagesResponse;
 use App\Services\Shared\DTO\StreamChunk;
-use App\Services\Shared\DTO\ToolCall;
 use App\Services\Shared\DTO\Usage;
 use App\Services\Shared\Enums\FinishReason;
 use Illuminate\Support\Facades\Log;
@@ -54,7 +55,7 @@ class AnthropicProvider extends AbstractProvider
     /**
      * 获取 API 端点
      */
-    public function getEndpoint(Request $request): string
+    public function getEndpoint(ProtocolRequest $request): string
     {
         return '/messages';
     }
@@ -75,18 +76,28 @@ class AnthropicProvider extends AbstractProvider
 
     /**
      * 构建请求体
+     *
+     * 接收 MessagesRequest 协议结构体
      */
-    public function buildRequestBody(Request $request): array
+    public function buildRequestBody(ProtocolRequest $request): array
     {
-        return $this->toAnthropicFormat($request);
+        // 如果是 Anthropic 协议请求，直接转数组
+        if ($request instanceof MessagesRequest) {
+            return $request->toArray();
+        }
+
+        // 其他协议需要转换
+        throw new \InvalidArgumentException('AnthropicProvider requires MessagesRequest');
     }
 
     /**
      * 解析响应
+     *
+     * 返回 MessagesResponse 协议结构体
      */
-    public function parseResponse(array $response): Response
+    public function parseResponse(array $response): ProtocolResponse
     {
-        return $this->parseAnthropicResponse($response);
+        return MessagesResponse::fromArray($response);
     }
 
     /**
@@ -111,198 +122,6 @@ class AnthropicProvider extends AbstractProvider
     public function getProviderName(): string
     {
         return 'anthropic';
-    }
-
-    /**
-     * 将 Request 转换为 Anthropic 格式
-     */
-    protected function toAnthropicFormat(Request $request): array
-    {
-        $messages = [];
-
-        foreach ($request->messages as $message) {
-            $role = $message->role->value;
-
-            // system 消息应该放到 system 字段，不处理
-            if ($role === 'system') {
-                continue;
-            }
-
-            // tool 消息需要转换为 user 消息中的 tool_result 内容块
-            if ($role === 'tool') {
-                $toolCallId = $message->toolCallId;
-                $toolContent = $message->content ?? '';
-
-                // Anthropic 格式：tool_result 作为 user 消息的内容块
-                $messages[] = [
-                    'role' => 'user',
-                    'content' => [
-                        [
-                            'type' => 'tool_result',
-                            'tool_use_id' => $toolCallId,
-                            'content' => $toolContent,
-                        ],
-                    ],
-                ];
-
-                continue;
-            }
-
-            $messages[] = $message->toArray();
-        }
-
-        // 合并连续的 user 消息（Anthropic 要求 tool_result 和其他内容在同一个 user 消息中）
-        $filteredMessages = [];
-        $previousUserMessage = null;
-
-        foreach ($messages as $message) {
-            if ($message['role'] === 'user') {
-                if ($previousUserMessage !== null) {
-                    // 合并到前一个 user 消息
-                    $content = $message['content'] ?? [];
-                    if (is_array($content)) {
-                        $previousContent = $previousUserMessage['content'] ?? [];
-                        if (is_array($previousContent)) {
-                            $previousContent = array_merge($previousContent, $content);
-                        } else {
-                            $previousContent = $content;
-                        }
-                        $previousUserMessage['content'] = $previousContent;
-                    }
-                } else {
-                    // 第一个 user 消息，直接添加
-                    $previousUserMessage = $message;
-                }
-            } else {
-                // 非 user 消息，先保存之前的 user 消息，然后添加当前消息
-                if ($previousUserMessage !== null) {
-                    $filteredMessages[] = $previousUserMessage;
-                    $previousUserMessage = null;
-                }
-                $filteredMessages[] = $message;
-            }
-        }
-
-        // 添加最后一个 user 消息（如果有）
-        if ($previousUserMessage !== null) {
-            $filteredMessages[] = $previousUserMessage;
-        }
-
-        // 构建标准字段
-        $result = [
-            'model' => $request->model,
-            'messages' => $filteredMessages,
-        ];
-
-        // max_tokens 对于 Anthropic API 是必需的
-        if ($request->maxTokens !== null) {
-            $result['max_tokens'] = $request->maxTokens;
-        }
-
-        // system 字段：转换为数组格式（阿里云 Coding 要求）
-        if ($request->system !== null) {
-            // 如果是字符串，转换为数组格式
-            if (is_string($request->system)) {
-                $result['system'] = [
-                    [
-                        'type' => 'text',
-                        'text' => $request->system,
-                    ],
-                ];
-            } else {
-                // 已经是数组格式，保持不变
-                $result['system'] = $request->system;
-            }
-        }
-        if ($request->temperature !== null) {
-            $result['temperature'] = $request->temperature;
-        }
-        if ($request->topP !== null) {
-            $result['top_p'] = $request->topP;
-        }
-        if ($request->topK !== null) {
-            $result['top_k'] = $request->topK;
-        }
-        if ($request->stopSequences !== null) {
-            $result['stop_sequences'] = $request->stopSequences;
-        }
-        if ($request->stream) {
-            $result['stream'] = true;
-        }
-        if ($request->tools !== null) {
-            $result['tools'] = $request->tools;
-        }
-        if ($request->toolChoice !== null) {
-            $result['tool_choice'] = $request->toolChoice;
-        }
-        if ($request->metadata !== null) {
-            $result['metadata'] = $request->metadata;
-        }
-        if ($request->thinking !== null) {
-            $result['thinking'] = $request->thinking;
-        }
-
-        // 合并 additionalParams，但过滤掉 OpenAI 特有的字段
-        $openaiSpecificFields = ['stream_options', 'response_format', 'seed', 'logprobs', 'top_logprobs', 'n'];
-        $filteredAdditionalParams = array_filter(
-            $request->additionalParams,
-            fn ($key) => ! in_array($key, $openaiSpecificFields),
-            ARRAY_FILTER_USE_KEY
-        );
-
-        return array_merge($result, $filteredAdditionalParams);
-    }
-
-    /**
-     * 解析 Anthropic 响应为 Response
-     */
-    protected function parseAnthropicResponse(array $response): Response
-    {
-        $id = $response['id'] ?? '';
-        $model = $response['model'] ?? '';
-        $stopReason = $response['stop_reason'] ?? null;
-
-        $content = '';
-        $toolCalls = null;
-
-        // 解析内容块
-        if (isset($response['content']) && is_array($response['content'])) {
-            foreach ($response['content'] as $block) {
-                if (($block['type'] ?? '') === 'text') {
-                    $content .= $block['text'] ?? '';
-                } elseif (($block['type'] ?? '') === 'tool_use') {
-                    $toolCalls[] = ToolCall::fromAnthropic($block);
-                }
-            }
-        }
-
-        // 处理 Token 使用量
-        $usage = null;
-        if (isset($response['usage'])) {
-            $usage = Usage::fromAnthropic($response['usage']);
-        }
-
-        $finishReason = $stopReason !== null
-            ? FinishReason::fromAnthropic($stopReason)
-            : null;
-
-        return new Response(
-            id: $id,
-            model: $model,
-            choices: [[
-                'index' => 0,
-                'message' => [
-                    'role' => 'assistant',
-                    'content' => $content,
-                    'tool_calls' => $toolCalls ? array_map(fn ($tc) => $tc->toOpenAI(), $toolCalls) : null,
-                ],
-                'finish_reason' => $stopReason,
-            ]],
-            usage: $usage,
-            finishReason: $finishReason,
-            toolCalls: $toolCalls,
-            rawResponse: $response,
-        );
     }
 
     /**

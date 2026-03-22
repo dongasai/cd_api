@@ -46,10 +46,10 @@ return new class extends Migration
             $table->timestamp('created_at')->useCurrent()->comment('创建时间');
 
             // 索引
-            $table->index(['account_id', 'created_at'], 'idx_account_created');
-            $table->index(['channel_id', 'created_at'], 'idx_channel_created');
-            $table->index(['from_status', 'to_status'], 'idx_status_change');
-            $table->index(['triggered_by', 'created_at'], 'idx_triggered');
+            $table->index(['account_id', 'created_at'], 'idx_5zm_status_account_created');
+            $table->index(['channel_id', 'created_at'], 'idx_5zm_status_channel_created');
+            $table->index(['from_status', 'to_status'], 'idx_5zm_status_change');
+            $table->index(['triggered_by', 'created_at'], 'idx_5zm_triggered');
         });
     }
 

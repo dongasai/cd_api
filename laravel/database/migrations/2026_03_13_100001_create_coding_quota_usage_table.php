@@ -34,8 +34,8 @@ return new class extends Migration
             $table->unique(['account_id', 'metric', 'period_key'], 'idx_unique_quota');
 
             // 查询索引
-            $table->index(['account_id', 'period_type'], 'idx_account_period_type');
-            $table->index(['period_ends_at'], 'idx_period_ends');
+            $table->index(['account_id', 'period_type'], 'idx_quota_account_period_type');
+            $table->index(['period_ends_at'], 'idx_quota_period_ends');
         });
 
         // 创建渠道亲和力缓存表，用于替代 Redis 缓存
@@ -59,7 +59,7 @@ return new class extends Migration
             $table->unique(['rule_id', 'key_hash'], 'idx_unique_affinity');
 
             // 过期时间索引
-            $table->index(['expires_at'], 'idx_expires');
+            $table->index(['expires_at'], 'idx_affinity_expires');
 
             // 外键
             $table->foreign('channel_id')

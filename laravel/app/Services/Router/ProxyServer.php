@@ -6,6 +6,7 @@ use App\Models\Channel;
 use App\Models\RequestLog;
 use App\Services\ChannelAffinity\ChannelAffinityService;
 use App\Services\CodingStatus\ChannelCodingStatusService;
+use App\Services\Protocol\Contracts\ProtocolRequest;
 use App\Services\Protocol\ProtocolConverter;
 use App\Services\Provider\Exceptions\ProviderException;
 use App\Services\Provider\ProviderManager;
@@ -14,7 +15,6 @@ use App\Services\Router\Handler\StreamHandler;
 use App\Services\Router\Logger\AuditLogger;
 use App\Services\Router\Logger\RequestLogger;
 use App\Services\Router\Logger\ResponseLogger;
-use App\Services\Shared\DTO\Request as SharedRequest;
 use Exception;
 use Generator;
 use Illuminate\Http\Request;
@@ -112,12 +112,12 @@ class ProxyServer
      * 执行代理请求
      *
      * @param  Request  $request  HTTP 请求
-     * @param  string  $protocol  源协议类型（openai/anthropic）
+     * @param  string  $protocol  源协议类型（openai_chat_completions/anthropic_messages）
      * @return array|Generator 响应数组或流式生成器
      *
      * @throws \Exception
      */
-    public function proxy(Request $request, string $protocol = 'openai'): array|Generator
+    public function proxy(Request $request, string $protocol = 'openai_chat_completions'): array|Generator
     {
         $this->requestId = $request->attributes->get('request_id', Str::uuid()->toString());
         $request->attributes->set('request_id', $this->requestId);
@@ -141,23 +141,30 @@ class ProxyServer
 
         while ($attempt <= $this->retryHandler->getMaxRetries()) {
             try {
-                // 标准化请求
-                $standardRequest = $this->protocolConverter->normalizeRequest($rawRequest, $protocol);
+                // 解析为协议请求结构体
+                $protocolRequest = $this->protocolConverter->normalizeRequest($rawRequest, $protocol);
 
-                $this->requestLogger->updateModel($requestLog, $standardRequest);
+                // 获取模型名称
+                $modelName = $protocolRequest->getModel();
+
+                $this->requestLogger->updateModel($requestLog, $protocolRequest);
 
                 // 验证模型
-                $this->validateModel($standardRequest->model, $request);
+                $this->validateModel($modelName, $request);
 
                 // 应用 Key 级别模型映射
                 if ($apiKey && method_exists($apiKey, 'resolveModel')) {
-                    $standardRequest->model = $apiKey->resolveModel($standardRequest->model);
+                    $resolvedModel = $apiKey->resolveModel($modelName);
+                    if ($resolvedModel !== $modelName) {
+                        $protocolRequest->setModel($resolvedModel);
+                        $modelName = $resolvedModel;
+                    }
                 }
 
                 // 选择渠道
                 if ($this->selectedChannel === null || $attempt > 0) {
                     $this->selectedChannel = $this->channelSelector->select(
-                        $standardRequest->model,
+                        $modelName,
                         $apiKey,
                         $this->currentGroup,
                         $this->channelSelector->getFailedChannels(),
@@ -166,11 +173,11 @@ class ProxyServer
                 }
 
                 if ($this->selectedChannel === null) {
-                    throw new \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException('No available channel for model: '.$standardRequest->model);
+                    throw new \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException('No available channel for model: '.$modelName);
                 }
 
                 // 解析实际模型名称
-                $actualModel = $this->channelRouter->resolveModel($standardRequest->model, $this->selectedChannel);
+                $actualModel = $this->channelRouter->resolveModel($modelName, $this->selectedChannel);
 
                 // 获取渠道协议
                 $channelProtocol = $this->getChannelProtocol($this->selectedChannel);
@@ -179,21 +186,22 @@ class ProxyServer
                 $this->auditLogger->update($auditLog, [
                     'channel_id' => $this->selectedChannel?->id,
                     'channel_name' => $this->selectedChannel?->name,
-                    'model' => $standardRequest->model,
+                    'model' => $modelName,
                     'actual_model' => $actualModel,  // 添加实际模型
                     'target_protocol' => $channelProtocol,  // 添加目标协议
                     'channel_affinity' => $this->affinityService->getAffinityInfo($request),  // 记录渠道亲和性信息
                     'metadata' => $rawRequest['metadata'] ?? null,  // 记录请求元数据
                 ]);
 
-                // 构建供应商请求
-                $providerRequest = $this->buildProviderRequest(
-                    $standardRequest,
-                    $this->selectedChannel,
-                    $channelProtocol,
-                    $actualModel,
-                    $rawBodyString
-                );
+                // 更新实际模型
+                if ($actualModel !== $modelName) {
+                    $protocolRequest->setModel($actualModel);
+                }
+
+                // 判断是否需要协议转换
+                if ($channelProtocol !== $protocol) {
+                    $protocolRequest = $this->protocolConverter->convertRequest($protocolRequest, $channelProtocol);
+                }
 
                 // 更新请求日志渠道信息
                 $this->requestLogger->updateForChannel($requestLog, $this->selectedChannel, $actualModel);
@@ -201,14 +209,13 @@ class ProxyServer
                 $provider = $this->providerManager->getForChannel($this->selectedChannel, $request->headers->all());
 
                 // 创建渠道请求日志
-                $this->createChannelRequestLog($requestLog, $this->selectedChannel, $providerRequest, $channelProtocol, $provider, $auditLog);
+                $this->createChannelRequestLog($requestLog, $this->selectedChannel, $protocolRequest, $channelProtocol, $provider, $auditLog);
 
                 // 根据是否流式请求分别处理
                 if ($isStream) {
                     return $this->streamHandler->handle(
                         $request,
-                        $standardRequest,
-                        $providerRequest,
+                        $protocolRequest,
                         $provider,
                         $protocol,
                         $channelProtocol,
@@ -221,8 +228,7 @@ class ProxyServer
 
                 return $this->nonStreamHandler->handle(
                     $request,
-                    $standardRequest,
-                    $providerRequest,
+                    $protocolRequest,
                     $provider,
                     $protocol,
                     $channelProtocol,
@@ -320,54 +326,10 @@ class ProxyServer
         $provider = $channel->provider;
 
         if (in_array($provider, ['anthropic', 'claude'])) {
-            return 'anthropic';
+            return 'anthropic_messages';
         }
 
-        return 'openai';
-    }
-
-    /**
-     * 构建供应商请求
-     */
-    protected function buildProviderRequest(
-        SharedRequest $standardRequest,
-        Channel $channel,
-        string $targetProtocol,
-        string $actualModel,
-        ?string $rawBodyString = null
-    ): SharedRequest {
-        // 检查是否开启了 body 透传
-        if ($channel->shouldPassthroughBody() && $rawBodyString !== null) {
-            // 即使在透传模式下，也需要应用模型映射
-            $requestBody = json_decode($rawBodyString, true);
-
-            // 如果解析成功且有模型映射，替换模型名称
-            if (is_array($requestBody) && $actualModel !== $standardRequest->model) {
-                $requestBody['model'] = $actualModel;
-                $rawBodyString = json_encode($requestBody);
-            }
-
-            $providerRequest = SharedRequest::fromArray([]);
-            $providerRequest->rawBodyString = $rawBodyString;
-            $providerRequest->queryString = request()->getQueryString();
-
-            return $providerRequest;
-        }
-
-        if ($targetProtocol === 'anthropic') {
-            $filterThinking = $channel->shouldFilterThinking();
-            $filterRequestThinking = $channel->shouldFilterRequestThinking();
-            $requestData = $standardRequest->toAnthropic(true, $filterThinking, $filterRequestThinking);
-        } else {
-            $requestData = $standardRequest->toOpenAI();
-        }
-
-        $requestData['model'] = $actualModel;
-
-        $providerRequest = SharedRequest::fromArray($requestData);
-        $providerRequest->queryString = request()->getQueryString();
-
-        return $providerRequest;
+        return 'openai_chat_completions';
     }
 
     /**
@@ -376,10 +338,10 @@ class ProxyServer
     protected function createChannelRequestLog(
         RequestLog $requestLog,
         Channel $channel,
-        SharedRequest $providerRequest,
+        ProtocolRequest $protocolRequest,
         string $channelProtocol,
         $provider,
-        $auditLog = null  // 接收审计日志
+        $auditLog = null
     ): void {
         $baseUrl = rtrim($channel->base_url, '/');
         $path = $this->buildEndpointPath($channelProtocol);
@@ -387,19 +349,13 @@ class ProxyServer
 
         $headers = $this->getProviderHeaders($provider);
 
-        // 根据渠道协议使用正确的格式保存请求体
-        if ($channel->shouldPassthroughBody() && $providerRequest->rawBodyString !== null) {
-            $requestBody = json_decode($providerRequest->rawBodyString, true) ?? $providerRequest->rawBodyString;
-        } elseif ($channelProtocol === 'anthropic') {
-            $requestBody = $providerRequest->toAnthropicFormat();
-        } else {
-            $requestBody = $providerRequest->toOpenAIFormat();
-        }
+        // 直接使用协议结构体的 toArray 方法
+        $requestBody = $protocolRequest->toArray();
 
         $this->channelRequestLog = \App\Models\ChannelRequestLog::create([
             'request_log_id' => $requestLog->id,
             'request_id' => $this->requestId,
-            'audit_log_id' => $auditLog?->id,  // 添加审计日志ID
+            'audit_log_id' => $auditLog?->id,
             'channel_id' => $channel->id,
             'channel_name' => $channel->name,
             'provider' => $channel->provider,
@@ -431,7 +387,7 @@ class ProxyServer
      */
     protected function buildEndpointPath(string $protocol): string
     {
-        if ($protocol === 'anthropic') {
+        if ($protocol === 'anthropic_messages') {
             return '/messages';
         }
 

@@ -2,6 +2,7 @@
 
 namespace App\Services\Protocol\Driver\Anthropic;
 
+use App\Services\Protocol\Contracts\ProtocolRequest;
 use App\Services\Protocol\Driver\Concerns\Convertible;
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
 use App\Services\Protocol\Driver\Concerns\Validatable;
@@ -12,7 +13,7 @@ use App\Services\Shared\DTO\Request as SharedRequest;
  *
  * @see https://docs.anthropic.com/en/api/messages
  */
-class MessagesRequest
+class MessagesRequest implements ProtocolRequest
 {
     use Convertible;
     use JsonSerializiable;
@@ -260,5 +261,41 @@ class MessagesRequest
             thinking: $dto->thinking,
             metadata: $dto->metadata,
         );
+    }
+
+    /**
+     * 获取模型名称
+     */
+    public function getModel(): string
+    {
+        return $this->model;
+    }
+
+    /**
+     * 设置模型名称
+     */
+    public function setModel(string $model): static
+    {
+        $this->model = $model;
+
+        return $this;
+    }
+
+    /**
+     * 是否流式请求
+     */
+    public function isStream(): bool
+    {
+        return $this->stream ?? false;
+    }
+
+    /**
+     * 设置流式标志
+     */
+    public function setStream(bool $stream): static
+    {
+        $this->stream = $stream;
+
+        return $this;
     }
 }

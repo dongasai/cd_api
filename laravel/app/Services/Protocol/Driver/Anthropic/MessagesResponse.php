@@ -2,6 +2,7 @@
 
 namespace App\Services\Protocol\Driver\Anthropic;
 
+use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Protocol\Driver\Concerns\Convertible;
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
 use App\Services\Protocol\Driver\Concerns\Validatable;
@@ -13,7 +14,7 @@ use App\Services\Shared\Enums\FinishReason;
  *
  * @see https://docs.anthropic.com/en/api/messages#response-body
  */
-class MessagesResponse
+class MessagesResponse implements ProtocolResponse
 {
     use Convertible;
     use JsonSerializiable;
@@ -283,5 +284,29 @@ class MessagesResponse
             self::STOP_REASON_REFUSAL => FinishReason::Refusal,
             default => null,
         };
+    }
+
+    /**
+     * 获取响应 ID
+     */
+    public function getId(): string
+    {
+        return $this->id;
+    }
+
+    /**
+     * 获取模型名称
+     */
+    public function getModel(): string
+    {
+        return $this->model;
+    }
+
+    /**
+     * 获取使用量
+     */
+    public function getUsage(): ?object
+    {
+        return $this->usage;
     }
 }

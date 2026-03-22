@@ -2,8 +2,11 @@
 
 namespace App\Services\Provider\Driver;
 
-use App\Services\Shared\DTO\Request;
-use App\Services\Shared\DTO\Response;
+use App\Services\Protocol\Contracts\ProtocolRequest;
+use App\Services\Protocol\Contracts\ProtocolResponse;
+use App\Services\Protocol\Contracts\ProtocolResponse;
+use App\Services\Protocol\Driver\OpenAI\ChatCompletionRequest;
+use App\Services\Protocol\Driver\OpenAI\ChatCompletionResponse;
 use App\Services\Shared\DTO\StreamChunk;
 
 /**
@@ -58,10 +61,12 @@ class AzureProvider extends AbstractProvider
     /**
      * 获取 API 端点
      */
-    public function getEndpoint(Request $request): string
+    public function getEndpoint(ProtocolRequest $request): string
     {
+        // 获取模型名称
+        $model = method_exists($request, 'getModel') ? $request->getModel() : '';
         // 使用部署名称或请求中的模型名称
-        $deployment = $this->deploymentName ?: $request->model;
+        $deployment = $this->deploymentName ?: $model;
 
         return "/openai/deployments/{$deployment}/chat/completions";
     }
@@ -80,17 +85,23 @@ class AzureProvider extends AbstractProvider
     /**
      * 构建请求体
      */
-    public function buildRequestBody(Request $request): array
+    public function buildRequestBody(ProtocolRequest $request): array
     {
-        return $this->toOpenAIFormat($request);
+        // 如果是 OpenAI 协议请求，直接转数组
+        if ($request instanceof ChatCompletionRequest) {
+            return $request->toArray();
+        }
+
+        // 其他协议需要转换
+        throw new \InvalidArgumentException('AzureProvider requires ChatCompletionRequest');
     }
 
     /**
      * 解析响应
      */
-    public function parseResponse(array $response): Response
+    public function parseResponse(array $response): ProtocolResponse
     {
-        return $this->parseOpenAIResponse($response);
+        return ChatCompletionResponse::fromArray($response);
     }
 
     /**
@@ -122,11 +133,12 @@ class AzureProvider extends AbstractProvider
      *
      * Azure 需要特殊的 URL 格式，包含 api-version 参数
      */
-    protected function executeRequest(Request $request): Response
+    protected function executeRequest(ProtocolRequest $request): ProtocolResponse
     {
         // 检查是否开启了 body 透传
-        if ($request->rawBodyString !== null) {
-            $body = $request->rawBodyString;
+        $rawData = $request->toArray();
+        if (isset($rawData['rawBodyString'])) {
+            $body = $rawData['rawBodyString'];
         } else {
             $body = $this->buildRequestBody($request);
         }
@@ -168,5 +180,59 @@ class AzureProvider extends AbstractProvider
         $this->recordSuccess();
 
         return $this->parseResponse($response->json());
+    }
+
+    /**
+     * 解析 OpenAI 流式响应块
+     */
+    protected function parseOpenAIStreamChunk(string $rawChunk): ?StreamChunk
+    {
+        // 处理 "data: " 前缀
+        if (str_starts_with($rawChunk, 'data: ')) {
+            $rawChunk = substr($rawChunk, 6);
+        }
+
+        // 跳过空行和 "[DONE]"
+        if (trim($rawChunk) === '' || trim($rawChunk) === '[DONE]') {
+            return null;
+        }
+
+        $data = json_decode($rawChunk, true);
+        if ($data === null) {
+            return null;
+        }
+
+        $id = $data['id'] ?? '';
+        $model = $data['model'] ?? '';
+        $choices = $data['choices'] ?? [];
+        $choice = $choices[0] ?? [];
+
+        $delta = $choice['delta'] ?? [];
+        $finishReason = isset($choice['finish_reason']) && $choice['finish_reason'] !== null
+            ? \App\Services\Shared\Enums\FinishReason::fromOpenAI($choice['finish_reason'])
+            : null;
+
+        $contentDelta = $delta['content'] ?? null;
+        $reasoningDelta = $delta['reasoning_content'] ?? null;
+        $toolCalls = $delta['tool_calls'] ?? null;
+
+        $usage = null;
+        if (isset($data['usage'])) {
+            $usage = \App\Services\Shared\DTO\Usage::fromOpenAI($data['usage']);
+        }
+
+        return new StreamChunk(
+            id: $id,
+            model: $model,
+            contentDelta: $contentDelta,
+            finishReason: $finishReason,
+            index: $choice['index'] ?? 0,
+            usage: $usage,
+            event: '',
+            data: $data,
+            delta: $contentDelta ?? '',
+            toolCalls: $toolCalls,
+            reasoningDelta: $reasoningDelta,
+        );
     }
 }

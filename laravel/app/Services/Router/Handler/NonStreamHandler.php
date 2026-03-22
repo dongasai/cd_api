@@ -3,11 +3,12 @@
 namespace App\Services\Router\Handler;
 
 use App\Models\RequestLog;
+use App\Services\Protocol\Contracts\ProtocolRequest;
+use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Protocol\ProtocolConverter;
 use App\Services\Provider\ProviderManager;
 use App\Services\Router\Logger\AuditLogger;
 use App\Services\Router\Logger\ResponseLogger;
-use App\Services\Shared\DTO\Request;
 use Illuminate\Http\Request as HttpRequest;
 
 /**
@@ -46,8 +47,7 @@ class NonStreamHandler
      */
     public function handle(
         HttpRequest $httpRequest,
-        Request $standardRequest,
-        Request $providerRequest,
+        ProtocolRequest $protocolRequest,
         $provider,
         string $sourceProtocol,
         string $targetProtocol,
@@ -57,13 +57,16 @@ class NonStreamHandler
         $selectedChannel = null  // 接收选中的渠道
     ): array {
         $this->selectedChannel = $selectedChannel;  // 保存渠道引用
-        $providerResponse = $provider->send($providerRequest);
+        $providerResponse = $provider->send($protocolRequest);
 
         $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
 
+        // 获取模型名称
+        $modelName = $protocolRequest->getModel();
+
         // 使用传入的审计日志（如果已创建），否则创建新的
         if ($auditLog === null) {
-            $auditLog = $this->auditLogger->createInitial($httpRequest, $standardRequest->model, false, $sourceProtocol);
+            $auditLog = $this->auditLogger->createInitial($httpRequest, $modelName, false, $sourceProtocol);
         }
 
         // 更新审计日志
@@ -71,19 +74,24 @@ class NonStreamHandler
             'status_code' => 200,
             'latency_ms' => $latencyMs,
             'first_token_ms' => $latencyMs,  // 非流式请求，首字延迟=总延迟
-            'finish_reason' => $providerResponse->finishReason?->value,
         ];
 
-        // 更新 token 使用信息
-        if ($providerResponse->usage !== null) {
-            $updateData['prompt_tokens'] = $providerResponse->usage->inputTokens ?? 0;
-            $updateData['completion_tokens'] = $providerResponse->usage->outputTokens ?? 0;
-            $updateData['total_tokens'] = ($providerResponse->usage->inputTokens ?? 0) + ($providerResponse->usage->outputTokens ?? 0);
-            $updateData['cache_read_tokens'] = $providerResponse->usage->cacheReadInputTokens ?? 0;
-            $updateData['cache_write_tokens'] = $providerResponse->usage->cacheCreationInputTokens ?? 0;
+        // 获取使用量
+        $usage = $providerResponse->getUsage();
+        if ($usage !== null) {
+            $updateData['prompt_tokens'] = $usage->inputTokens ?? 0;
+            $updateData['completion_tokens'] = $usage->outputTokens ?? 0;
+            $updateData['total_tokens'] = ($usage->inputTokens ?? 0) + ($usage->outputTokens ?? 0);
+            $updateData['cache_read_tokens'] = $usage->cacheReadInputTokens ?? 0;
+            $updateData['cache_write_tokens'] = $usage->cacheCreationInputTokens ?? 0;
         }
 
         $auditLog->update($updateData);
+
+        // 如果需要协议转换，转换响应
+        if ($sourceProtocol !== $targetProtocol) {
+            $providerResponse = $this->protocolConverter->convertResponse($providerResponse, $sourceProtocol);
+        }
 
         // 构建响应
         $response = $this->protocolConverter->denormalizeResponse($providerResponse, $sourceProtocol);
@@ -96,15 +104,31 @@ class NonStreamHandler
             $latencyMs,
             $auditLog->id,
             false,
-            $providerResponse->usage,
-            $providerResponse->finishReason,
-            $providerResponse->getContent()
+            $usage,
+            null,
+            $this->extractContent($providerResponse)
         );
 
         // 记录渠道亲和性（成功请求后更新缓存）
-        $this->recordAffinity($httpRequest, $standardRequest->model);
+        $this->recordAffinity($httpRequest, $modelName);
 
         return $response;
+    }
+
+    /**
+     * 从协议响应中提取文本内容
+     */
+    protected function extractContent(ProtocolResponse $response): string
+    {
+        $sharedDTO = $response->toSharedDTO();
+        $content = '';
+        foreach ($sharedDTO->choices ?? [] as $choice) {
+            if (isset($choice['message']['content'])) {
+                $content .= $choice['message']['content'];
+            }
+        }
+
+        return $content;
     }
 
     /**

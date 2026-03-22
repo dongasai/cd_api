@@ -2,8 +2,10 @@
 
 namespace App\Services\Provider\Driver;
 
-use App\Services\Shared\DTO\Request;
-use App\Services\Shared\DTO\Response;
+use App\Services\Protocol\Contracts\ProtocolRequest;
+use App\Services\Protocol\Contracts\ProtocolResponse;
+use App\Services\Protocol\Driver\OpenAI\ChatCompletionRequest;
+use App\Services\Protocol\Driver\OpenAI\ChatCompletionResponse;
 use App\Services\Shared\DTO\StreamChunk;
 use Illuminate\Support\Facades\Log;
 
@@ -44,7 +46,7 @@ class OpenAICompatibleProvider extends AbstractProvider
         return $this->config['base_url'] ?? '';
     }
 
-    public function getEndpoint(Request $request): string
+    public function getEndpoint(ProtocolRequest $request): string
     {
         $baseUrl = $this->baseUrl ?? '';
         if (str_ends_with($baseUrl, '/v1')) {
@@ -74,14 +76,20 @@ class OpenAICompatibleProvider extends AbstractProvider
         return $this->mergeForwardedHeaders($headers);
     }
 
-    public function buildRequestBody(Request $request): array
+    public function buildRequestBody(ProtocolRequest $request): array
     {
-        return $this->toOpenAIFormat($request);
+        // 如果是 OpenAI 协议请求，直接转数组
+        if ($request instanceof ChatCompletionRequest) {
+            return $request->toArray();
+        }
+
+        // 其他协议需要转换
+        throw new \InvalidArgumentException('OpenAICompatibleProvider requires ChatCompletionRequest');
     }
 
-    public function parseResponse(array $response): Response
+    public function parseResponse(array $response): ProtocolResponse
     {
-        return $this->parseOpenAIResponse($response);
+        return ChatCompletionResponse::fromArray($response);
     }
 
     public function parseStreamChunk(string $rawChunk): ?StreamChunk
@@ -104,79 +112,9 @@ class OpenAICompatibleProvider extends AbstractProvider
     }
 
     /**
-     * 将 Request 转换为 OpenAI 格式
-     */
-    protected function toOpenAIFormat(Request $request): array
-    {
-        $result = [
-            'model' => $request->model,
-            'messages' => array_map(fn ($m) => $m->toOpenAI(), $request->messages),
-        ];
-
-        if ($request->maxTokens !== null) {
-            $result['max_tokens'] = $request->maxTokens;
-        }
-        if ($request->temperature !== null) {
-            $result['temperature'] = $request->temperature;
-        }
-        if ($request->topP !== null) {
-            $result['top_p'] = $request->topP;
-        }
-        if ($request->stream) {
-            $result['stream'] = true;
-        }
-        if ($request->tools !== null) {
-            $result['tools'] = $request->tools;
-        }
-        if ($request->toolChoice !== null) {
-            $result['tool_choice'] = $request->toolChoice;
-        }
-        if ($request->user !== null) {
-            $result['user'] = $request->user;
-        }
-
-        return array_merge($result, $request->additionalParams);
-    }
-
-    /**
-     * 解析 OpenAI 响应
-     */
-    protected function parseOpenAIResponse(array $response): Response
-    {
-        $choices = [];
-        foreach ($response['choices'] ?? [] as $choice) {
-            $choices[] = [
-                'index' => $choice['index'] ?? 0,
-                'message' => $choice['message'] ?? [],
-                'finish_reason' => $choice['finish_reason'] ?? null,
-            ];
-        }
-
-        $usage = null;
-        if (isset($response['usage'])) {
-            $usage = \App\Services\Shared\DTO\Usage::fromOpenAI($response['usage']);
-        }
-
-        $finishReason = null;
-        if (isset($response['choices'][0]['finish_reason'])) {
-            $finishReason = \App\Services\Shared\Enums\FinishReason::fromOpenAI($response['choices'][0]['finish_reason']);
-        }
-
-        return new Response(
-            id: $response['id'] ?? '',
-            model: $response['model'] ?? '',
-            choices: $choices,
-            usage: $usage,
-            finishReason: $finishReason,
-            systemFingerprint: $response['system_fingerprint'] ?? null,
-            created: $response['created'] ?? 0,
-        );
-    }
-
-    /**
      * 解析 OpenAI 流式响应块
      */
-    protected function parseOpenAIStreamChunk(string $rawChunk): ?\App\Services\Shared\DTO\StreamChunk
+    protected function parseOpenAIStreamChunk(string $rawChunk): ?StreamChunk
     {
         Log::debug("parseOpenAIStreamChunk \n".$rawChunk);
 

@@ -2,18 +2,19 @@
 
 namespace App\Services\Protocol;
 
+use App\Services\Protocol\Contracts\ProtocolRequest;
+use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Protocol\Driver\DriverInterface;
 use App\Services\Protocol\Exceptions\ConversionException;
 use App\Services\Protocol\Exceptions\UnsupportedProtocolException;
-use App\Services\Shared\DTO\Request;
-use App\Services\Shared\DTO\Response;
 use App\Services\Shared\DTO\StreamChunk;
 use Generator;
 
 /**
  * 协议转换器
  *
- * 提供便捷的协议转换方法
+ * 提供协议结构体之间的转换能力
+ * Shared\DTO 作为协议转换的中间层
  */
 class ProtocolConverter
 {
@@ -44,78 +45,84 @@ class ProtocolConverter
     }
 
     /**
-     * 转换请求
+     * 转换协议请求结构体
      *
-     * @param  array  $rawRequest  原始请求
-     * @param  string  $sourceProtocol  源协议
-     * @param  string  $targetProtocol  目标协议
-     * @return array 转换后的请求
+     * 当源协议 != 目标协议时，通过 Shared\DTO 中间层进行转换
+     *
+     * @param  ProtocolRequest  $sourceRequest  源协议请求结构体
+     * @param  string  $targetProtocol  目标协议名称
+     * @return ProtocolRequest 目标协议请求结构体
      *
      * @throws ConversionException
      */
     public function convertRequest(
-        array $rawRequest,
-        string $sourceProtocol,
+        ProtocolRequest $sourceRequest,
         string $targetProtocol
-    ): array {
-        // 如果协议相同，直接返回
-        if ($sourceProtocol === $targetProtocol) {
-            return $rawRequest;
+    ): ProtocolRequest {
+        // 获取目标协议的请求类名
+        $targetDriver = $this->driver($targetProtocol);
+        $targetRequestClass = $this->getRequestClass($targetProtocol);
+
+        // 如果是同协议，直接返回
+        if ($sourceRequest instanceof $targetRequestClass) {
+            return $sourceRequest;
         }
 
-        try {
-            // 解析源协议请求为标准格式
-            $sourceDriver = $this->driver($sourceProtocol);
-            $standardRequest = $sourceDriver->parseRequest($rawRequest);
+        // 需要转换：通过 Shared\DTO 中间层
+        $sharedDTO = $sourceRequest->toSharedDTO();
 
-            // 构建目标协议请求 - Provider 层负责
-            // 这里返回的是标准格式，由 Provider 层转换为上游格式
-            return ['_standard_request' => $standardRequest];
-        } catch (UnsupportedProtocolException $e) {
-            throw ConversionException::requestConversionFailed(
-                $sourceProtocol,
-                $targetProtocol,
-                $e->getMessage()
-            );
-        }
+        return $targetRequestClass::fromSharedDTO($sharedDTO);
     }
 
     /**
-     * 转换响应
+     * 转换协议响应结构体
      *
-     * @param  array  $rawResponse  原始响应
-     * @param  string  $sourceProtocol  源协议
-     * @param  string  $targetProtocol  目标协议
-     * @return array 转换后的响应
+     * @param  ProtocolResponse  $sourceResponse  源协议响应结构体
+     * @param  string  $targetProtocol  目标协议名称
+     * @return ProtocolResponse 目标协议响应结构体
      *
      * @throws ConversionException
      */
     public function convertResponse(
-        array $rawResponse,
-        string $sourceProtocol,
+        ProtocolResponse $sourceResponse,
         string $targetProtocol
-    ): array {
-        // 如果协议相同，直接返回
-        if ($sourceProtocol === $targetProtocol) {
-            return $rawResponse;
+    ): ProtocolResponse {
+        // 获取目标协议的响应类名
+        $targetResponseClass = $this->getResponseClass($targetProtocol);
+
+        // 如果是同协议，直接返回
+        if ($sourceResponse instanceof $targetResponseClass) {
+            return $sourceResponse;
         }
 
-        try {
-            // Provider 层已经将上游响应解析为标准格式
-            // 这里直接使用标准格式构建目标协议响应
-            $targetDriver = $this->driver($targetProtocol);
+        // 需要转换：通过 Shared\DTO 中间层
+        $sharedDTO = $sourceResponse->toSharedDTO();
 
-            // 假设 $rawResponse 已经是标准格式的数组表示
-            // 实际上，Provider 层返回的是 Response DTO
-            // 所以这里需要调整逻辑
-            return $rawResponse;
-        } catch (UnsupportedProtocolException $e) {
-            throw ConversionException::responseConversionFailed(
-                $sourceProtocol,
-                $targetProtocol,
-                $e->getMessage()
-            );
-        }
+        return $targetResponseClass::fromSharedDTO($sharedDTO);
+    }
+
+    /**
+     * 解析原始请求为协议请求结构体
+     *
+     * @param  array  $rawRequest  原始请求数据
+     * @param  string  $protocol  协议名称
+     * @return ProtocolRequest 协议请求结构体
+     */
+    public function normalizeRequest(array $rawRequest, string $protocol): ProtocolRequest
+    {
+        return $this->driver($protocol)->parseRequest($rawRequest);
+    }
+
+    /**
+     * 从协议响应结构体构建响应数组
+     *
+     * @param  ProtocolResponse  $response  协议响应结构体
+     * @param  string  $protocol  目标协议名称
+     * @return array 响应数组
+     */
+    public function denormalizeResponse(ProtocolResponse $response, string $protocol): array
+    {
+        return $this->driver($protocol)->buildResponse($response);
     }
 
     /**
@@ -167,22 +174,6 @@ class ProtocolConverter
     }
 
     /**
-     * 转换请求到标准格式
-     */
-    public function normalizeRequest(array $rawRequest, string $protocol): Request
-    {
-        return $this->driver($protocol)->parseRequest($rawRequest);
-    }
-
-    /**
-     * 从标准格式构建响应
-     */
-    public function denormalizeResponse(Response $response, string $protocol): array
-    {
-        return $this->driver($protocol)->buildResponse($response);
-    }
-
-    /**
      * 构建错误响应
      */
     public function buildErrorResponse(
@@ -208,5 +199,29 @@ class ProtocolConverter
     public function isProtocolSupported(string $protocol): bool
     {
         return $this->driverManager->hasDriver($protocol);
+    }
+
+    /**
+     * 获取协议请求类名
+     */
+    protected function getRequestClass(string $protocol): string
+    {
+        return match ($protocol) {
+            'openai_chat_completions' => \App\Services\Protocol\Driver\OpenAI\ChatCompletionRequest::class,
+            'anthropic_messages' => \App\Services\Protocol\Driver\Anthropic\MessagesRequest::class,
+            default => throw new UnsupportedProtocolException($protocol),
+        };
+    }
+
+    /**
+     * 获取协议响应类名
+     */
+    protected function getResponseClass(string $protocol): string
+    {
+        return match ($protocol) {
+            'openai_chat_completions' => \App\Services\Protocol\Driver\OpenAI\ChatCompletionResponse::class,
+            'anthropic_messages' => \App\Services\Protocol\Driver\Anthropic\MessagesResponse::class,
+            default => throw new UnsupportedProtocolException($protocol),
+        };
     }
 }

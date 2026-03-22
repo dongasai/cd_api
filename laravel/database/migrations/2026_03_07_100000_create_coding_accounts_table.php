@@ -52,7 +52,7 @@ return new class extends Migration
             $table->index('status', 'idx_status');
             $table->index('driver_class', 'idx_driver');
             $table->index('last_sync_at', 'idx_sync');
-            $table->index('expires_at', 'idx_expires');
+            $table->index('expires_at', 'idx_coding_accounts_expires');
         });
     }
 

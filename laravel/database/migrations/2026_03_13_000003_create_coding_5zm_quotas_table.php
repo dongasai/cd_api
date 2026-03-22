@@ -47,9 +47,9 @@ return new class extends Migration
             $table->timestamps();
 
             // 索引
-            $table->index(['period_5h', 'account_id'], 'idx_period_5h');
-            $table->index(['period_weekly', 'account_id'], 'idx_period_weekly');
-            $table->index(['period_monthly', 'account_id'], 'idx_period_monthly');
+            $table->index(['period_5h', 'account_id'], 'idx_5zm_quotas_period_5h');
+            $table->index(['period_weekly', 'account_id'], 'idx_5zm_quotas_period_weekly');
+            $table->index(['period_monthly', 'account_id'], 'idx_5zm_quotas_period_monthly');
         });
 
         // 从 coding_accounts 表移除配额相关字段

@@ -2,10 +2,10 @@
 
 namespace App\Services\Provider\Driver;
 
+use App\Services\Protocol\Contracts\ProtocolRequest;
+use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Provider\Exceptions\ProviderException;
 use App\Services\Shared\DTO\ActualRequestInfo;
-use App\Services\Shared\DTO\Request;
-use App\Services\Shared\DTO\Response;
 use App\Services\Shared\DTO\StreamChunk;
 use App\Services\Shared\DTO\Usage;
 use Generator;
@@ -138,12 +138,12 @@ abstract class AbstractProvider implements ProviderInterface
     /**
      * 构建请求体
      */
-    abstract public function buildRequestBody(Request $request): array;
+    abstract public function buildRequestBody(ProtocolRequest $request): array;
 
     /**
      * 解析响应
      */
-    abstract public function parseResponse(array $response): Response;
+    abstract public function parseResponse(array $response): ProtocolResponse;
 
     /**
      * 解析流式响应块
@@ -153,7 +153,7 @@ abstract class AbstractProvider implements ProviderInterface
     /**
      * 获取 API 端点
      */
-    abstract public function getEndpoint(Request $request): string;
+    abstract public function getEndpoint(ProtocolRequest $request): string;
 
     abstract public function getHeaders(): array;
 
@@ -285,7 +285,7 @@ abstract class AbstractProvider implements ProviderInterface
      *
      * 包含重试机制和熔断器保护
      */
-    public function send(Request $request): Response
+    public function send(ProtocolRequest $request): ProtocolResponse
     {
         $this->checkCircuitBreaker();
 
@@ -334,21 +334,25 @@ abstract class AbstractProvider implements ProviderInterface
      *
      * @return Generator<StreamChunk>
      */
-    public function sendStream(Request $request): Generator
+    public function sendStream(ProtocolRequest $request): Generator
     {
         $this->checkCircuitBreaker();
 
-        $request->stream = true;
+        // 设置流式标志
+        if (method_exists($request, 'setStream')) {
+            $request->setStream(true);
+        }
 
-        // 检查是否开启了 body 透传
-        if ($request->rawBodyString !== null) {
-            $body = $request->rawBodyString;
+        // 检查是否开启了 body 透传（需要通过 toArray 获取原始数据）
+        $rawData = $request->toArray();
+        if (isset($rawData['rawBodyString'])) {
+            $body = $rawData['rawBodyString'];
         } else {
             $body = $this->buildRequestBody($request);
         }
 
         $endpoint = $this->getEndpoint($request);
-        $url = $this->buildUrl($endpoint, $request->queryString);
+        $url = $this->buildUrl($endpoint, $rawData['queryString'] ?? null);
         $headers = $this->getHeaders();
 
         // 存储实际请求信息
@@ -576,17 +580,18 @@ abstract class AbstractProvider implements ProviderInterface
     /**
      * 执行 HTTP 请求
      */
-    protected function executeRequest(Request $request): Response
+    protected function executeRequest(ProtocolRequest $request): ProtocolResponse
     {
-        // 检查是否开启了 body 透传
-        if ($request->rawBodyString !== null) {
-            $body = $request->rawBodyString;
+        // 检查是否开启了 body 透传（需要通过 toArray 获取原始数据）
+        $rawData = $request->toArray();
+        if (isset($rawData['rawBodyString'])) {
+            $body = $rawData['rawBodyString'];
         } else {
             $body = $this->buildRequestBody($request);
         }
 
         $endpoint = $this->getEndpoint($request);
-        $url = $this->buildUrl($endpoint, $request->queryString);
+        $url = $this->buildUrl($endpoint, $rawData['queryString'] ?? null);
         $headers = $this->getHeaders();
 
         // 存储实际请求信息

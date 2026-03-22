@@ -3,7 +3,7 @@
 namespace App\Services\Router\Logger;
 
 use App\Models\RequestLog;
-use App\Services\Shared\DTO\Request as SharedRequest;
+use App\Services\Protocol\Contracts\ProtocolRequest;
 use Illuminate\Http\Request;
 
 /**
@@ -44,15 +44,18 @@ class RequestLogger
     /**
      * 更新请求日志的模型信息
      */
-    public function updateModel(RequestLog $log, SharedRequest $request): void
+    public function updateModel(RequestLog $log, ProtocolRequest $request): void
     {
+        // 转换为数组获取所有参数
+        $requestData = $request->toArray();
+
         $log->update([
-            'model' => $request->model,
+            'model' => $request->getModel(),
             'model_params' => [
-                'temperature' => $request->temperature,
-                'top_p' => $request->topP,
-                'max_tokens' => $request->maxTokens,
-                'stream' => $request->stream,
+                'temperature' => $requestData['temperature'] ?? null,
+                'top_p' => $requestData['top_p'] ?? null,
+                'max_tokens' => $requestData['max_tokens'] ?? $requestData['max_completion_tokens'] ?? null,
+                'stream' => $request->isStream(),
             ],
         ]);
     }

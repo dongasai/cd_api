@@ -45,12 +45,12 @@ return new class extends Migration
             $table->timestamp('created_at')->useCurrent()->comment('创建时间');
 
             // 索引
-            $table->index(['account_id', 'created_at'], 'idx_account_created');
-            $table->index(['channel_id', 'created_at'], 'idx_channel_created');
-            $table->index(['period_5h', 'account_id'], 'idx_period_5h');
-            $table->index(['period_weekly', 'account_id'], 'idx_period_weekly');
-            $table->index(['period_monthly', 'account_id'], 'idx_period_monthly');
-            $table->index(['model', 'created_at'], 'idx_model_created');
+            $table->index(['account_id', 'created_at'], 'idx_5zm_account_created');
+            $table->index(['channel_id', 'created_at'], 'idx_5zm_channel_created');
+            $table->index(['period_5h', 'account_id'], 'idx_5zm_period_5h');
+            $table->index(['period_weekly', 'account_id'], 'idx_5zm_period_weekly');
+            $table->index(['period_monthly', 'account_id'], 'idx_5zm_period_monthly');
+            $table->index(['model', 'created_at'], 'idx_5zm_model_created');
         });
     }
 

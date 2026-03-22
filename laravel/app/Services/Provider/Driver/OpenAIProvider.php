@@ -2,10 +2,11 @@
 
 namespace App\Services\Provider\Driver;
 
-use App\Services\Shared\DTO\Request;
-use App\Services\Shared\DTO\Response;
+use App\Services\Protocol\Contracts\ProtocolRequest;
+use App\Services\Protocol\Contracts\ProtocolResponse;
+use App\Services\Protocol\Driver\OpenAI\ChatCompletionRequest;
+use App\Services\Protocol\Driver\OpenAI\ChatCompletionResponse;
 use App\Services\Shared\DTO\StreamChunk;
-use App\Services\Shared\DTO\ToolCall;
 use App\Services\Shared\DTO\Usage;
 use App\Services\Shared\Enums\FinishReason;
 use Illuminate\Support\Facades\Log;
@@ -45,7 +46,7 @@ class OpenAIProvider extends AbstractProvider
     /**
      * 获取 API 端点
      */
-    public function getEndpoint(Request $request): string
+    public function getEndpoint(ProtocolRequest $request): string
     {
         return '/chat/completions';
     }
@@ -65,18 +66,28 @@ class OpenAIProvider extends AbstractProvider
 
     /**
      * 构建请求体
+     *
+     * 接收 ChatCompletionRequest 协议结构体
      */
-    public function buildRequestBody(Request $request): array
+    public function buildRequestBody(ProtocolRequest $request): array
     {
-        return $this->toOpenAIFormat($request);
+        // 如果是 OpenAI 协议请求，直接转数组
+        if ($request instanceof ChatCompletionRequest) {
+            return $request->toArray();
+        }
+
+        // 其他协议需要转换
+        throw new \InvalidArgumentException('OpenAIProvider requires ChatCompletionRequest');
     }
 
     /**
      * 解析响应
+     *
+     * 返回 ChatCompletionResponse 协议结构体
      */
-    public function parseResponse(array $response): Response
+    public function parseResponse(array $response): ProtocolResponse
     {
-        return $this->parseOpenAIResponse($response);
+        return ChatCompletionResponse::fromArray($response);
     }
 
     /**
@@ -101,117 +112,6 @@ class OpenAIProvider extends AbstractProvider
     public function getProviderName(): string
     {
         return 'openai';
-    }
-
-    /**
-     * 将 Request 转换为 OpenAI 格式
-     */
-    protected function toOpenAIFormat(Request $request): array
-    {
-        $result = [
-            'model' => $request->model,
-            'messages' => array_map(fn ($m) => $m->toArray(), $request->messages),
-        ];
-
-        if ($request->maxTokens !== null) {
-            $result['max_tokens'] = $request->maxTokens;
-        }
-        if ($request->temperature !== null) {
-            $result['temperature'] = $request->temperature;
-        }
-        if ($request->topP !== null) {
-            $result['top_p'] = $request->topP;
-        }
-        if ($request->topK !== null) {
-            $result['top_k'] = $request->topK;
-        }
-        if ($request->stream) {
-            $result['stream'] = true;
-        }
-        if ($request->stopSequences !== null) {
-            $result['stop'] = $request->stopSequences;
-        }
-        if ($request->tools !== null) {
-            $result['tools'] = $request->tools;
-        }
-        if ($request->toolChoice !== null) {
-            $result['tool_choice'] = $request->toolChoice;
-        }
-        if ($request->user !== null) {
-            $result['user'] = $request->user;
-        }
-        if ($request->metadata !== null) {
-            $result['metadata'] = $request->metadata;
-        }
-
-        // 处理 system 提示：OpenAI 将 system 作为消息的第一条
-        if ($request->system !== null) {
-            $systemContent = $request->system;
-            if (is_array($systemContent)) {
-                $text = '';
-                foreach ($systemContent as $block) {
-                    if (is_string($block)) {
-                        $text .= $block;
-                    } elseif (isset($block['text'])) {
-                        $text .= $block['text'];
-                    }
-                }
-                $systemContent = $text;
-            }
-            if ($systemContent !== '') {
-                array_unshift($result['messages'], [
-                    'role' => 'system',
-                    'content' => $systemContent,
-                ]);
-            }
-        }
-
-        return array_merge($result, $request->additionalParams);
-    }
-
-    /**
-     * 解析 OpenAI 响应为 Response
-     */
-    protected function parseOpenAIResponse(array $response): Response
-    {
-        $choices = [];
-        foreach ($response['choices'] ?? [] as $choice) {
-            $choices[] = [
-                'index' => $choice['index'] ?? 0,
-                'message' => $choice['message'] ?? [],
-                'finish_reason' => $choice['finish_reason'] ?? null,
-            ];
-        }
-
-        $usage = null;
-        if (isset($response['usage'])) {
-            $usage = Usage::fromOpenAI($response['usage']);
-        }
-
-        $finishReason = null;
-        if (isset($response['choices'][0]['finish_reason'])) {
-            $finishReason = FinishReason::fromOpenAI($response['choices'][0]['finish_reason']);
-        }
-
-        // 解析工具调用
-        $toolCalls = null;
-        if (isset($response['choices'][0]['message']['tool_calls'])) {
-            $toolCalls = array_map(
-                fn ($tc) => ToolCall::fromOpenAI($tc),
-                $response['choices'][0]['message']['tool_calls']
-            );
-        }
-
-        return new Response(
-            id: $response['id'] ?? '',
-            model: $response['model'] ?? '',
-            choices: $choices,
-            usage: $usage,
-            finishReason: $finishReason,
-            systemFingerprint: $response['system_fingerprint'] ?? null,
-            created: $response['created'] ?? 0,
-            toolCalls: $toolCalls,
-        );
     }
 
     /**
