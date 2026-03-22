@@ -208,6 +208,7 @@ class MessagesResponse
             choices: $choices,
             usage: $this->usage?->toSharedDTO(),
             finishReason: $this->mapStopReason($this->stop_reason),
+            container: $this->container?->toArray(),
         );
     }
 
@@ -250,6 +251,12 @@ class MessagesResponse
         // 映射 finish_reason
         $stopReason = $dto->finishReason?->toAnthropic();
 
+        // 解析 container
+        $container = null;
+        if (isset($dto->container) && is_array($dto->container)) {
+            $container = Container::fromArray($dto->container);
+        }
+
         return new self(
             id: $dto->id ?? 'msg_'.uniqid(),
             type: 'message',
@@ -258,6 +265,7 @@ class MessagesResponse
             model: $dto->model,
             stop_reason: $stopReason,
             usage: $dto->usage ? Usage::fromSharedDTO($dto->usage) : null,
+            container: $container,
         );
     }
 

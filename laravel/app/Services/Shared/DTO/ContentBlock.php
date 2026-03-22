@@ -12,6 +12,7 @@ class ContentBlock
     public function __construct(
         public string $type,
         public ?string $text = null,
+        public ?array $citations = null, // 文本引用列表（PDF、纯文本、内容块引用）
         public ?array $source = null,
         public ?string $imageUrl = null,
         public ?string $detail = null,
@@ -20,6 +21,7 @@ class ContentBlock
         public ?string $toolId = null,
         public ?string $toolName = null,
         public ?array $toolInput = null,
+        public ?array $caller = null, // 工具调用者信息（direct|server_tool）
         public ?string $toolResultId = null,
         public ?string $toolResultContent = null,
         public ?bool $toolResultIsError = null,
@@ -66,6 +68,7 @@ class ContentBlock
             'text' => new self(
                 type: 'text',
                 text: $block['text'] ?? '',
+                citations: $block['citations'] ?? null,
                 cacheControl: $cacheControl,
             ),
             'image' => new self(
@@ -78,6 +81,7 @@ class ContentBlock
                 toolId: $block['id'] ?? null,
                 toolName: $block['name'] ?? null,
                 toolInput: $block['input'] ?? null,
+                caller: $block['caller'] ?? null,
                 cacheControl: $cacheControl,
             ),
             'tool_result' => new self(
@@ -158,6 +162,7 @@ class ContentBlock
             'text' => [
                 'type' => 'text',
                 'text' => $this->text ?? '',
+                ...($this->citations !== null ? ['citations' => $this->citations] : []),
             ],
             'image', 'image_url' => [
                 'type' => 'image',
@@ -171,6 +176,7 @@ class ContentBlock
                 'id' => $this->toolId,
                 'name' => $this->toolName,
                 'input' => $this->toolInput ?? [],
+                ...($this->caller !== null ? ['caller' => $this->caller] : []),
             ],
             'tool_result' => [
                 'type' => 'tool_result',
@@ -204,6 +210,7 @@ class ContentBlock
         return [
             'type' => $this->type,
             'text' => $this->text,
+            'citations' => $this->citations,
             'source' => $this->source,
             'image_url' => $this->imageUrl,
             'detail' => $this->detail,
@@ -212,6 +219,7 @@ class ContentBlock
             'tool_id' => $this->toolId,
             'tool_name' => $this->toolName,
             'tool_input' => $this->toolInput,
+            'caller' => $this->caller,
             'tool_result_id' => $this->toolResultId,
             'tool_result_content' => $this->toolResultContent,
             'tool_result_is_error' => $this->toolResultIsError,

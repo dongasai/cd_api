@@ -19,6 +19,9 @@ return [
     // ViewResponseLog
     'view_response_log' => 'Response Log',
 
+    // CompareRequestDiff
+    'compare_request_diff' => 'Compare',
+
     // ViewAffinityHit
     'view_affinity_hit' => 'Affinity Hit',
 

@@ -19,6 +19,9 @@ return [
     // ViewResponseLog
     'view_response_log' => '返回日志',
 
+    // CompareRequestDiff
+    'compare_request_diff' => '比对',
+
     // ViewAffinityHit
     'view_affinity_hit' => '亲和性命中',
 

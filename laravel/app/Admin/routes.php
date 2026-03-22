@@ -58,6 +58,9 @@ Route::group([
     $router->resource('channel-request-logs', 'ChannelRequestLogController')->only(['index', 'show']);
     $router->resource('operation-logs', 'OperationLogController')->only(['index', 'show']);
 
+    // 请求差异比对
+    $router->get('request-diff/{audit_log_id}', 'RequestDiffController@show')->name('request-diff');
+
     // JSON 字段预览
     $router->get('json-preview/{table}/{id}/{field}', 'JsonPreviewController@show')->name('json-preview');
     $router->get('json-preview-embed/{table}/{id}/{field}', 'JsonPreviewController@embed')->name('json-preview-embed');

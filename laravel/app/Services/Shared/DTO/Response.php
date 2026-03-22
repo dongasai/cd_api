@@ -20,6 +20,7 @@ class Response
         public ?string $systemFingerprint = null,
         public int $created = 0,
         public ?array $toolCalls = null, // ToolCall[]
+        public ?array $container = null, // Container info (Anthropic)
         public ?array $rawResponse = null,
     ) {}
 
@@ -95,6 +96,10 @@ class Response
 
         if ($this->usage !== null) {
             $result['usage'] = $this->usage->toAnthropic();
+        }
+
+        if ($this->container !== null) {
+            $result['container'] = $this->container;
         }
 
         return $result;

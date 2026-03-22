@@ -125,6 +125,10 @@ class Usage
             totalTokens: $this->input_tokens + $this->output_tokens,
             cacheReadInputTokens: $this->cache_read_input_tokens,
             cacheCreationInputTokens: $this->cache_creation_input_tokens,
+            cacheCreation: $this->cache_creation?->toArray(),
+            inferenceGeo: $this->inference_geo,
+            serverToolUse: $this->server_tool_use,
+            serviceTier: $this->service_tier,
         );
     }
 
@@ -133,11 +137,20 @@ class Usage
      */
     public static function fromSharedDTO(object $dto): static
     {
+        $cacheCreation = null;
+        if (isset($dto->cacheCreation) && is_array($dto->cacheCreation)) {
+            $cacheCreation = CacheCreation::fromArray($dto->cacheCreation);
+        }
+
         return new self(
             input_tokens: $dto->inputTokens ?? 0,
             output_tokens: $dto->outputTokens ?? 0,
             cache_creation_input_tokens: $dto->cacheCreationInputTokens ?? null,
             cache_read_input_tokens: $dto->cacheReadInputTokens ?? null,
+            cache_creation: $cacheCreation,
+            inference_geo: $dto->inferenceGeo ?? null,
+            server_tool_use: $dto->serverToolUse ?? null,
+            service_tier: $dto->serviceTier ?? null,
         );
     }
 }

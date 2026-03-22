@@ -2,6 +2,7 @@
 
 namespace App\Admin\Controllers;
 
+use App\Admin\Actions\CompareRequestDiff;
 use App\Admin\Actions\ViewAffinityHit;
 use App\Admin\Actions\ViewChannelRequestLog;
 use App\Admin\Actions\ViewRequestLog;
@@ -183,6 +184,7 @@ class AuditLogController extends AdminController
 
             // 添加自定义行操作按钮
             $grid->actions(function (Grid\Displayers\Actions $actions) {
+                $actions->append(new CompareRequestDiff);
                 $actions->append(new ViewRequestLog);
                 $actions->append(new ViewChannelRequestLog);
                 $actions->append(new ViewResponseLog);

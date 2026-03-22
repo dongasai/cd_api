@@ -90,12 +90,17 @@ class Usage
      */
     public function toSharedDTO(): SharedUsage
     {
+        $cachedTokens = $this->prompt_tokens_details['cached_tokens'] ?? null;
+
         return new SharedUsage(
             inputTokens: $this->prompt_tokens,
             outputTokens: $this->completion_tokens ?? 0,
             totalTokens: $this->total_tokens,
-            cacheReadInputTokens: $this->prompt_tokens_details['cached_tokens'] ?? null,
+            cacheReadInputTokens: $cachedTokens,
             cacheCreationInputTokens: null,
+            cachedTokens: $cachedTokens,
+            audioTokens: $this->prompt_tokens_details['audio_tokens'] ?? null,
+            reasoningTokens: $this->completion_tokens_details['reasoning_tokens'] ?? null,
         );
     }
 
@@ -104,10 +109,32 @@ class Usage
      */
     public static function fromSharedDTO(object $dto): static
     {
+        // 构建 prompt_tokens_details
+        $promptDetails = null;
+        if ($dto->cachedTokens !== null || $dto->audioTokens !== null) {
+            $promptDetails = [];
+            if ($dto->cachedTokens !== null) {
+                $promptDetails['cached_tokens'] = $dto->cachedTokens;
+            }
+            if ($dto->audioTokens !== null) {
+                $promptDetails['audio_tokens'] = $dto->audioTokens;
+            }
+        }
+
+        // 构建 completion_tokens_details
+        $completionDetails = null;
+        if ($dto->reasoningTokens !== null) {
+            $completionDetails = [
+                'reasoning_tokens' => $dto->reasoningTokens,
+            ];
+        }
+
         return new self(
             prompt_tokens: $dto->inputTokens ?? 0,
             completion_tokens: $dto->outputTokens ?? 0,
             total_tokens: $dto->totalTokens ?? 0,
+            prompt_tokens_details: $promptDetails,
+            completion_tokens_details: $completionDetails,
         );
     }
 }
