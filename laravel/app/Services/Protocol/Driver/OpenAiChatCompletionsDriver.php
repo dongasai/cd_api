@@ -2,11 +2,11 @@
 
 namespace App\Services\Protocol\Driver;
 
-use App\Services\Shared\DTO\Message;
+use App\Services\Protocol\Driver\OpenAI\ChatCompletionRequest;
+use App\Services\Protocol\Driver\OpenAI\ChatCompletionResponse;
 use App\Services\Shared\DTO\Request;
 use App\Services\Shared\DTO\Response;
 use App\Services\Shared\DTO\StreamChunk;
-use App\Services\Shared\Enums\MessageRole;
 
 /**
  * OpenAI Chat Completions 协议驱动
@@ -28,88 +28,27 @@ class OpenAiChatCompletionsDriver extends AbstractDriver
 
     /**
      * 解析原始请求为标准格式
+     *
+     * 使用 ChatCompletionRequest 结构体进行强类型转换和验证
      */
     public function parseRequest(array $rawRequest): Request
     {
-        $messages = [];
-        $systemContent = null;
+        // 使用协议结构体进行转换和验证
+        $request = ChatCompletionRequest::fromArrayValidated($rawRequest);
 
-        foreach ($rawRequest['messages'] ?? [] as $msg) {
-            // 提取 system 消息（OpenAI 格式中 system 消息在 messages 数组中）
-            if (($msg['role'] ?? '') === 'system') {
-                // 提取 system 内容
-                if (is_string($msg['content'] ?? null)) {
-                    $systemContent = $msg['content'];
-                } elseif (is_array($msg['content'])) {
-                    // 多模态 system 消息（罕见），提取文本
-                    $texts = [];
-                    foreach ($msg['content'] as $block) {
-                        if (is_array($block) && ($block['type'] ?? '') === 'text') {
-                            $texts[] = $block['text'] ?? '';
-                        }
-                    }
-                    $systemContent = implode("\n", $texts);
-                }
-
-                // 不添加到 messages 数组，跳过 system 消息
-                continue;
-            }
-
-            // 处理 content 字段：可能是字符串或数组（多模态）
-            $content = null;
-            $contentBlocks = null;
-
-            if (isset($msg['content'])) {
-                if (is_array($msg['content'])) {
-                    // 多模态内容：转换为 ContentBlock 数组
-                    $contentBlocks = [];
-                    foreach ($msg['content'] as $block) {
-                        if (is_array($block)) {
-                            $contentBlocks[] = \App\Services\Shared\DTO\ContentBlock::fromOpenAI($block);
-                        }
-                    }
-                } else {
-                    // 纯文本内容
-                    $content = (string) $msg['content'];
-                }
-            }
-
-            $messages[] = new Message(
-                role: MessageRole::from($msg['role'] ?? 'user'),
-                content: $content,
-                contentBlocks: $contentBlocks,
-                toolCalls: $msg['tool_calls'] ?? null,
-                toolCallId: $msg['tool_call_id'] ?? null,
-            );
-        }
-
-        // 优先使用独立 system 字段（如果存在），否则使用提取的 system 消息
-        $systemField = $rawRequest['system'] ?? $systemContent;
-
-        return new Request(
-            model: $rawRequest['model'] ?? '',
-            messages: $messages,
-            maxTokens: $rawRequest['max_tokens'] ?? null,
-            temperature: $rawRequest['temperature'] ?? null,
-            topP: $rawRequest['top_p'] ?? null,
-            topK: $rawRequest['top_k'] ?? null,
-            stream: $rawRequest['stream'] ?? false,
-            stopSequences: $rawRequest['stop'] ?? null,
-            system: $systemField,
-            tools: $rawRequest['tools'] ?? null,
-            toolChoice: $rawRequest['tool_choice'] ?? null,
-            metadata: $rawRequest['metadata'] ?? null,
-            user: $rawRequest['user'] ?? null,
-            rawRequest: $rawRequest,
-        );
+        // 转换为 Shared\DTO
+        return $request->toSharedDTO();
     }
 
     /**
      * 从标准格式构建 OpenAI 响应
+     *
+     * 使用 ChatCompletionResponse 结构体进行转换
      */
     public function buildResponse(Response $response): array
     {
-        return $response->toOpenAI();
+        // 使用协议结构体进行转换
+        return ChatCompletionResponse::fromSharedDTO($response)->toArray();
     }
 
     /**

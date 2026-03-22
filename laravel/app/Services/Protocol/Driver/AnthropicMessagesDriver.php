@@ -2,11 +2,11 @@
 
 namespace App\Services\Protocol\Driver;
 
-use App\Services\Shared\DTO\Message;
+use App\Services\Protocol\Driver\Anthropic\MessagesRequest;
+use App\Services\Protocol\Driver\Anthropic\MessagesResponse;
 use App\Services\Shared\DTO\Request;
 use App\Services\Shared\DTO\Response;
 use App\Services\Shared\DTO\StreamChunk;
-use App\Services\Shared\Enums\MessageRole;
 
 /**
  * Anthropic Messages 协议驱动
@@ -72,59 +72,27 @@ class AnthropicMessagesDriver extends AbstractDriver
 
     /**
      * 解析原始请求为标准格式
+     *
+     * 使用 MessagesRequest 结构体进行强类型转换和验证
      */
     public function parseRequest(array $rawRequest): Request
     {
-        $messages = [];
-        foreach ($rawRequest['messages'] ?? [] as $msg) {
-            // 处理 content 字段：区分字符串和数组格式
-            $content = null;
-            $contentBlocks = null;
-            if (isset($msg['content'])) {
-                if (is_array($msg['content'])) {
-                    // 将 Anthropic 格式的 content blocks 转换为 ContentBlock 对象
-                    $contentBlocks = array_map(
-                        fn ($block) => \App\Services\Shared\DTO\ContentBlock::fromAnthropic($block),
-                        $msg['content']
-                    );
-                } else {
-                    $content = $msg['content'];
-                }
-            }
+        // 使用协议结构体进行转换和验证
+        $request = MessagesRequest::fromArrayValidated($rawRequest);
 
-            $messages[] = new Message(
-                role: MessageRole::from($msg['role'] ?? 'user'),
-                content: $content,
-                toolCalls: $msg['tool_calls'] ?? null,
-                toolCallId: $msg['tool_call_id'] ?? null,
-                contentBlocks: $contentBlocks,
-            );
-        }
-
-        return new Request(
-            model: $rawRequest['model'] ?? '',
-            messages: $messages,
-            maxTokens: $rawRequest['max_tokens'] ?? null,
-            temperature: $rawRequest['temperature'] ?? null,
-            topP: $rawRequest['top_p'] ?? null,
-            topK: $rawRequest['top_k'] ?? null,
-            stream: $rawRequest['stream'] ?? false,
-            stopSequences: $rawRequest['stop_sequences'] ?? null,
-            system: $rawRequest['system'] ?? null,
-            tools: $rawRequest['tools'] ?? null,
-            toolChoice: $rawRequest['tool_choice'] ?? null,
-            thinking: $rawRequest['thinking'] ?? null,
-            metadata: $rawRequest['metadata'] ?? null,
-            rawRequest: $rawRequest,
-        );
+        // 转换为 Shared\DTO
+        return $request->toSharedDTO();
     }
 
     /**
      * 从标准格式构建 Anthropic 响应
+     *
+     * 使用 MessagesResponse 结构体进行转换
      */
     public function buildResponse(Response $response): array
     {
-        return $response->toAnthropic();
+        // 使用协议结构体进行转换
+        return MessagesResponse::fromSharedDTO($response)->toArray();
     }
 
     /**

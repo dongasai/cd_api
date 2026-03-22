@@ -192,6 +192,51 @@ class ShowFieldMacro
     }
 
     /**
+     * 消息列表预览
+     *
+     * 专用于展示 messages 字段中的聊天消息列表
+     * 使用 iframe 嵌入独立页面进行渲染
+     * AI 消息显示在左边，用户消息显示在右边
+     *
+     * @return Field
+     */
+    public function messagesList()
+    {
+        return function ($height = 500) {
+            // $this 是 Field 对象
+            $field = $this;
+
+            return $this->unescape()->as(function ($value) use ($field, $height) {
+                // 如果值为空，显示占位符
+                if (empty($value)) {
+                    return '<span class="text-muted">-</span>';
+                }
+
+                // $this 在闭包中是模型对象
+                $model = $this;
+
+                // 获取字段名
+                $fieldName = $field->getName();
+
+                // 获取表名并转换为路由格式
+                $tableName = $model->getTable();
+                $routeName = str_replace('_', '-', $tableName);
+
+                // 获取记录 ID
+                $id = $model->getKey();
+
+                // 生成消息列表预览 URL
+                $url = admin_url("messages-list-embed/{$routeName}/{$id}/{$fieldName}");
+
+                // 返回 iframe
+                return '<iframe src="'.$url.'" '.
+                       'style="width: 100%; height: '.$height.'px; border: 1px solid #dee2e6; border-radius: 4px;" '.
+                       'frameborder="0"></iframe>';
+            });
+        };
+    }
+
+    /**
      * 格式化 JSON 数据为紧凑的可读字符串
      *
      * @param  mixed  $data

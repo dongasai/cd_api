@@ -282,6 +282,117 @@ class JsonPreviewController extends Controller
     }
 
     /**
+     * 消息列表预览（纯内容，无侧边栏）
+     *
+     * 专用于 iframe 嵌入展示 messages 字段
+     * AI 消息显示在左边，用户消息显示在右边
+     *
+     * @param  string  $table  表名/路由名（如 request-logs）
+     * @param  int  $id  主键ID
+     * @param  string  $field  字段名
+     */
+    public function messagesListEmbed(string $table, int $id, string $field)
+    {
+        // 将路由名转换为模型名
+        $model = $this->getModelNameFromTable($table);
+
+        // 获取模型类名
+        $modelClass = $this->getModelClass($model);
+
+        if (! $modelClass) {
+            abort(404, "模型 {$model} 不存在");
+        }
+
+        // 查找模型实例
+        $instance = $modelClass::find($id);
+
+        if (! $instance) {
+            abort(404, '记录不存在');
+        }
+
+        // 检查字段是否存在
+        if (! isset($instance->$field) && ! Schema::hasColumn($instance->getTable(), $field)) {
+            abort(404, "字段 {$field} 不存在");
+        }
+
+        // 获取字段值
+        $messages = $instance->$field;
+
+        // 如果是字符串，尝试解析为 JSON
+        if (is_string($messages)) {
+            $decoded = json_decode($messages, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $messages = $decoded;
+            }
+        }
+
+        // 如果不是数组或为空，显示空状态
+        if (! is_array($messages) || empty($messages)) {
+            return view('admin.messages-list-embed', [
+                'messages' => [],
+                'fieldLabel' => $this->getFieldLabel($field),
+            ]);
+        }
+
+        // 处理消息内容，提取文本
+        $processedMessages = [];
+        foreach ($messages as $msg) {
+            $role = $msg['role'] ?? 'unknown';
+            $content = $msg['content'] ?? '';
+
+            // 处理多模态内容（数组形式）
+            if (is_array($content)) {
+                $textParts = [];
+                foreach ($content as $part) {
+                    if (isset($part['type']) && $part['type'] === 'text') {
+                        $textParts[] = [
+                            'type' => 'text',
+                            'text' => $part['text'] ?? '',
+                        ];
+                    } elseif (isset($part['type']) && $part['type'] === 'image_url') {
+                        $textParts[] = [
+                            'type' => 'image',
+                            'text' => '[图片]',
+                        ];
+                    } elseif (isset($part['type']) && $part['type'] === 'tool_use') {
+                        // 工具调用
+                        $textParts[] = [
+                            'type' => 'tool_use',
+                            'name' => $part['name'] ?? 'unknown',
+                            'id' => $part['id'] ?? '',
+                            'input' => $part['input'] ?? [],
+                        ];
+                    } elseif (isset($part['type']) && $part['type'] === 'tool_result') {
+                        // 工具结果
+                        $textParts[] = [
+                            'type' => 'tool_result',
+                            'text' => is_string($part['content'] ?? '') ? $part['content'] : json_encode($part['content'] ?? '', JSON_UNESCAPED_UNICODE),
+                        ];
+                    } else {
+                        $textParts[] = [
+                            'type' => 'other',
+                            'text' => json_encode($part, JSON_UNESCAPED_UNICODE),
+                        ];
+                    }
+                }
+                $content = $textParts;
+            }
+
+            $processedMessages[] = [
+                'role' => $role,
+                'content' => $content,
+                'isUser' => $role === 'user',
+                'isAssistant' => $role === 'assistant',
+            ];
+        }
+
+        return view('admin.messages-list-embed', [
+            'messages' => $processedMessages,
+            'fieldLabel' => $this->getFieldLabel($field),
+        ]);
+    }
+
+    /**
      * 将路由名转换为模型名
      */
     protected function getModelNameFromTable(string $table): string
@@ -344,6 +455,7 @@ class JsonPreviewController extends Controller
             'usage' => '使用量',
             'metadata' => '元数据',
             'config' => '配置',
+            'messages' => '消息列表',
         ];
 
         return $labels[$field] ?? Str::title(Str::snake($field, ' '));

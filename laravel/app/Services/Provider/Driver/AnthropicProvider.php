@@ -238,8 +238,19 @@ class AnthropicProvider extends AbstractProvider
         if ($request->metadata !== null) {
             $result['metadata'] = $request->metadata;
         }
+        if ($request->thinking !== null) {
+            $result['thinking'] = $request->thinking;
+        }
 
-        return array_merge($result, $request->additionalParams);
+        // 合并 additionalParams，但过滤掉 OpenAI 特有的字段
+        $openaiSpecificFields = ['stream_options', 'response_format', 'seed', 'logprobs', 'top_logprobs', 'n'];
+        $filteredAdditionalParams = array_filter(
+            $request->additionalParams,
+            fn ($key) => ! in_array($key, $openaiSpecificFields),
+            ARRAY_FILTER_USE_KEY
+        );
+
+        return array_merge($result, $filteredAdditionalParams);
     }
 
     /**

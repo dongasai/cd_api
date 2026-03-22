@@ -130,8 +130,7 @@ class RequestLogController extends AdminController
 
             $show->field('model_params', '模型参数')->json();
 
-            $show->field('messages', '消息列表')->json_view();
-            
+            $show->field('messages', '消息列表')->messagesList();
 
             $show->field('metadata', '元数据')->json_view();
 
@@ -143,8 +142,6 @@ class RequestLogController extends AdminController
             // // 请求体使用代码高亮
             $show->field('body_text', '请求体')->json_view();
 
-          
-            
             // 敏感数据标记
             $show->field('has_sensitive', '包含敏感数据')->using([
                 0 => '否',
