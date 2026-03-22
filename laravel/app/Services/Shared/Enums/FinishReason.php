@@ -12,6 +12,8 @@ enum FinishReason: string
     case MaxTokens = 'max_tokens';              // 达到最大 token 限制
     case ToolUse = 'tool_use';                  // 调用工具
     case StopSequence = 'stop_sequence';        // 遇到停止序列（Anthropic）
+    case PauseTurn = 'pause_turn';              // 暂停轮次（Anthropic）
+    case Refusal = 'refusal';                   // 拒绝响应（Anthropic）
 
     /**
      * 转换为 OpenAI 格式
@@ -35,6 +37,8 @@ enum FinishReason: string
             self::Stop => 'end_turn',
             self::ToolUse => 'tool_use',
             self::MaxTokens => 'max_tokens',
+            self::PauseTurn => 'pause_turn',
+            self::Refusal => 'refusal',
             default => $this->value,
         };
     }
@@ -62,6 +66,8 @@ enum FinishReason: string
             'max_tokens' => self::MaxTokens,
             'stop_sequence' => self::StopSequence,
             'tool_use' => self::ToolUse,
+            'pause_turn' => self::PauseTurn,
+            'refusal' => self::Refusal,
             default => self::EndTurn,
         };
     }

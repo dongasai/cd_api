@@ -20,16 +20,26 @@ class Message
     /**
      * @param  string  $role  角色（system|user|assistant|tool）
      * @param  string|ContentPart[]|null  $content  内容（字符串或 ContentPart 数组）
-     * @param  array|null  $tool_calls  工具调用
-     * @param  string|null  $tool_call_id  工具调用ID（tool 角色时必需）
+     * @param  ToolCall[]|null  $toolCalls  工具调用列表（响应中使用）
+     * @param  FunctionCall|null  $functionCall  函数调用（已废弃，但旧模型可能返回）
+     * @param  string|null  $toolCallId  工具调用ID（tool 角色时必需）
      * @param  string|null  $name  名称
+     * @param  string|null  $reasoningContent  推理内容（o1 等模型）
+     * @param  Annotation[]|null  $annotations  注解列表（用于搜索引用）
+     * @param  MessageAudio|null  $audio  音频输出
+     * @param  MessageImage[]|null  $images  图片输出列表
      */
     public function __construct(
         public string $role,
         public string|array|null $content = null,
-        public ?array $tool_calls = null,
-        public ?string $tool_call_id = null,
+        public ?array $toolCalls = null,
+        public ?FunctionCall $functionCall = null,
+        public ?string $toolCallId = null,
         public ?string $name = null,
+        public ?string $reasoningContent = null,
+        public ?array $annotations = null,
+        public ?MessageAudio $audio = null,
+        public ?array $images = null,
     ) {}
 
     /**
@@ -41,8 +51,13 @@ class Message
             'role' => 'required|string|in:system,user,assistant,tool',
             'content' => 'nullable',
             'tool_calls' => 'nullable|array',
+            'function_call' => 'nullable|array',
             'tool_call_id' => 'required_if:role,tool|nullable|string',
             'name' => 'nullable|string',
+            'reasoning_content' => 'nullable|string',
+            'annotations' => 'nullable|array',
+            'audio' => 'nullable|array',
+            'images' => 'nullable|array',
         ];
     }
 
@@ -61,12 +76,56 @@ class Message
             );
         }
 
+        // 解析 tool_calls
+        $toolCalls = null;
+        if (isset($data['tool_calls']) && is_array($data['tool_calls'])) {
+            $toolCalls = array_map(
+                fn (array $tc) => ToolCall::fromArray($tc),
+                $data['tool_calls']
+            );
+        }
+
+        // 解析 function_call（已废弃字段）
+        $functionCall = null;
+        if (isset($data['function_call']) && is_array($data['function_call'])) {
+            $functionCall = FunctionCall::fromArray($data['function_call']);
+        }
+
+        // 解析 annotations
+        $annotations = null;
+        if (isset($data['annotations']) && is_array($data['annotations'])) {
+            $annotations = array_map(
+                fn (array $ann) => Annotation::fromArray($ann),
+                $data['annotations']
+            );
+        }
+
+        // 解析 audio
+        $audio = null;
+        if (isset($data['audio']) && is_array($data['audio'])) {
+            $audio = MessageAudio::fromArray($data['audio']);
+        }
+
+        // 解析 images
+        $images = null;
+        if (isset($data['images']) && is_array($data['images'])) {
+            $images = array_map(
+                fn (array $img) => MessageImage::fromArray($img),
+                $data['images']
+            );
+        }
+
         return new self(
             role: $data['role'] ?? 'user',
             content: $content,
-            tool_calls: $data['tool_calls'] ?? null,
-            tool_call_id: $data['tool_call_id'] ?? null,
+            toolCalls: $toolCalls,
+            functionCall: $functionCall,
+            toolCallId: $data['tool_call_id'] ?? null,
             name: $data['name'] ?? null,
+            reasoningContent: $data['reasoning_content'] ?? null,
+            annotations: $annotations,
+            audio: $audio,
+            images: $images,
         );
     }
 
@@ -91,16 +150,45 @@ class Message
             }
         }
 
-        if ($this->tool_calls !== null) {
-            $result['tool_calls'] = $this->tool_calls;
+        if ($this->toolCalls !== null) {
+            $result['tool_calls'] = array_map(
+                fn (ToolCall $tc) => $tc->toArray(),
+                $this->toolCalls
+            );
         }
 
-        if ($this->tool_call_id !== null) {
-            $result['tool_call_id'] = $this->tool_call_id;
+        if ($this->functionCall !== null) {
+            $result['function_call'] = $this->functionCall->toArray();
+        }
+
+        if ($this->toolCallId !== null) {
+            $result['tool_call_id'] = $this->toolCallId;
         }
 
         if ($this->name !== null) {
             $result['name'] = $this->name;
+        }
+
+        if ($this->reasoningContent !== null) {
+            $result['reasoning_content'] = $this->reasoningContent;
+        }
+
+        if ($this->annotations !== null && count($this->annotations) > 0) {
+            $result['annotations'] = array_map(
+                fn (Annotation $ann) => $ann->toArray(),
+                $this->annotations
+            );
+        }
+
+        if ($this->audio !== null) {
+            $result['audio'] = $this->audio->toArray();
+        }
+
+        if ($this->images !== null && count($this->images) > 0) {
+            $result['images'] = array_map(
+                fn (MessageImage $img) => $img->toArray(),
+                $this->images
+            );
         }
 
         return $result;
@@ -129,11 +217,31 @@ class Message
             }
         }
 
+        // 转换 toolCalls
+        $toolCalls = null;
+        if ($this->toolCalls !== null) {
+            $toolCalls = array_map(
+                fn (ToolCall $tc) => $tc->toArray(),
+                $this->toolCalls
+            );
+        }
+
+        // 转换 functionCall（如果存在）
+        if ($this->functionCall !== null) {
+            // 将 function_call 转换为 tool_calls 格式
+            $toolCalls = $toolCalls ?? [];
+            $toolCalls[] = [
+                'id' => 'call_'.uniqid(),
+                'type' => 'function',
+                'function' => $this->functionCall->toArray(),
+            ];
+        }
+
         return new SharedMessage(
             role: MessageRole::from($this->role),
             content: $content,
-            toolCalls: $this->tool_calls,
-            toolCallId: $this->tool_call_id,
+            toolCalls: $toolCalls,
+            toolCallId: $this->toolCallId,
             contentBlocks: $contentBlocks,
             name: $this->name,
         );
@@ -157,11 +265,20 @@ class Message
             );
         }
 
+        // 处理 toolCalls
+        $toolCalls = null;
+        if ($dto->toolCalls !== null) {
+            $toolCalls = array_map(
+                fn (array $tc) => ToolCall::fromArray($tc),
+                $dto->toolCalls
+            );
+        }
+
         return new self(
             role: $dto->role->value,
             content: $content,
-            tool_calls: $dto->toolCalls,
-            tool_call_id: $dto->toolCallId,
+            toolCalls: $toolCalls,
+            toolCallId: $dto->toolCallId,
             name: $dto->name ?? null,
         );
     }

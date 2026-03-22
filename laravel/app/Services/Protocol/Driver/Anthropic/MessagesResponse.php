@@ -20,6 +20,21 @@ class MessagesResponse
     use Validatable;
 
     /**
+     * 停止原因常量
+     */
+    public const STOP_REASON_END_TURN = 'end_turn';
+
+    public const STOP_REASON_MAX_TOKENS = 'max_tokens';
+
+    public const STOP_REASON_STOP_SEQUENCE = 'stop_sequence';
+
+    public const STOP_REASON_TOOL_USE = 'tool_use';
+
+    public const STOP_REASON_PAUSE_TURN = 'pause_turn';
+
+    public const STOP_REASON_REFUSAL = 'refusal';
+
+    /**
      * @param  string  $id  响应 ID
      * @param  string  $type  对象类型
      * @param  string  $role  角色
@@ -28,6 +43,8 @@ class MessagesResponse
      * @param  string|null  $stop_reason  结束原因
      * @param  string|null  $stop_sequence  停止序列
      * @param  Usage  $usage  Token 使用量
+     * @param  Container|null  $container  容器信息（用于代码执行工具）
+     * @param  array  $additionalData  额外字段（透传）
      */
     public function __construct(
         public string $id = '',
@@ -38,6 +55,8 @@ class MessagesResponse
         public ?string $stop_reason = null,
         public ?string $stop_sequence = null,
         public ?Usage $usage = null,
+        public ?Container $container = null,
+        public array $additionalData = [],
     ) {}
 
     /**
@@ -45,15 +64,25 @@ class MessagesResponse
      */
     public function validationRules(): array
     {
+        $validStopReasons = implode(',', [
+            self::STOP_REASON_END_TURN,
+            self::STOP_REASON_MAX_TOKENS,
+            self::STOP_REASON_STOP_SEQUENCE,
+            self::STOP_REASON_TOOL_USE,
+            self::STOP_REASON_PAUSE_TURN,
+            self::STOP_REASON_REFUSAL,
+        ]);
+
         return [
             'id' => 'required|string',
             'type' => 'required|string',
             'role' => 'required|string',
             'content' => 'required|array',
             'model' => 'required|string',
-            'stop_reason' => 'nullable|string|in:end_turn,max_tokens,stop_sequence,tool_use',
+            'stop_reason' => "nullable|string|in:{$validStopReasons}",
             'stop_sequence' => 'nullable|string',
-            'usage' => 'nullable|array',
+            'usage' => 'nullable',
+            'container' => 'nullable',
         ];
     }
 
@@ -76,6 +105,20 @@ class MessagesResponse
             $usage = Usage::fromArray($data['usage']);
         }
 
+        // 解析 container
+        $container = null;
+        if (isset($data['container']) && is_array($data['container'])) {
+            $container = Container::fromArray($data['container']);
+        }
+
+        // 提取已知字段
+        $knownKeys = [
+            'id', 'type', 'role', 'content', 'model',
+            'stop_reason', 'stop_sequence', 'usage', 'container',
+        ];
+
+        $additionalData = array_diff_key($data, array_flip($knownKeys));
+
         return new self(
             id: $data['id'] ?? '',
             type: $data['type'] ?? 'message',
@@ -85,6 +128,8 @@ class MessagesResponse
             stop_reason: $data['stop_reason'] ?? null,
             stop_sequence: $data['stop_sequence'] ?? null,
             usage: $usage,
+            container: $container,
+            additionalData: $additionalData,
         );
     }
 
@@ -113,7 +158,12 @@ class MessagesResponse
             $result['usage'] = $this->usage->toArray();
         }
 
-        return $result;
+        if ($this->container !== null) {
+            $result['container'] = $this->container->toArray();
+        }
+
+        // 合并额外字段（透传）
+        return array_merge($result, $this->additionalData);
     }
 
     /**
@@ -217,10 +267,12 @@ class MessagesResponse
     private function mapStopReason(?string $reason): ?FinishReason
     {
         return match ($reason) {
-            'end_turn' => FinishReason::EndTurn,
-            'max_tokens' => FinishReason::MaxTokens,
-            'stop_sequence' => FinishReason::StopSequence,
-            'tool_use' => FinishReason::ToolUse,
+            self::STOP_REASON_END_TURN => FinishReason::EndTurn,
+            self::STOP_REASON_MAX_TOKENS => FinishReason::MaxTokens,
+            self::STOP_REASON_STOP_SEQUENCE => FinishReason::StopSequence,
+            self::STOP_REASON_TOOL_USE => FinishReason::ToolUse,
+            self::STOP_REASON_PAUSE_TURN => FinishReason::PauseTurn,
+            self::STOP_REASON_REFUSAL => FinishReason::Refusal,
             default => null,
         };
     }

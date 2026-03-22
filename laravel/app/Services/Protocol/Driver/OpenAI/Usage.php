@@ -18,14 +18,14 @@ class Usage
 
     /**
      * @param  int  $prompt_tokens  输入 token 数
-     * @param  int  $completion_tokens  输出 token 数
+     * @param  int|null  $completion_tokens  输出 token 数（可能为空）
      * @param  int  $total_tokens  总 token 数
      * @param  array|null  $prompt_tokens_details  输入 token 详情
      * @param  array|null  $completion_tokens_details  输出 token 详情
      */
     public function __construct(
         public int $prompt_tokens = 0,
-        public int $completion_tokens = 0,
+        public ?int $completion_tokens = null,
         public int $total_tokens = 0,
         public ?array $prompt_tokens_details = null,
         public ?array $completion_tokens_details = null,
@@ -38,7 +38,7 @@ class Usage
     {
         return [
             'prompt_tokens' => 'required|integer|min:0',
-            'completion_tokens' => 'required|integer|min:0',
+            'completion_tokens' => 'nullable|integer|min:0',
             'total_tokens' => 'required|integer|min:0',
             'prompt_tokens_details' => 'nullable|array',
             'completion_tokens_details' => 'nullable|array',
@@ -66,9 +66,13 @@ class Usage
     {
         $result = [
             'prompt_tokens' => $this->prompt_tokens,
-            'completion_tokens' => $this->completion_tokens,
             'total_tokens' => $this->total_tokens,
         ];
+
+        // completion_tokens 可能为空（预检响应等情况）
+        if ($this->completion_tokens !== null) {
+            $result['completion_tokens'] = $this->completion_tokens;
+        }
 
         if ($this->prompt_tokens_details !== null) {
             $result['prompt_tokens_details'] = $this->prompt_tokens_details;
@@ -88,7 +92,7 @@ class Usage
     {
         return new SharedUsage(
             inputTokens: $this->prompt_tokens,
-            outputTokens: $this->completion_tokens,
+            outputTokens: $this->completion_tokens ?? 0,
             totalTokens: $this->total_tokens,
             cacheReadInputTokens: $this->prompt_tokens_details['cached_tokens'] ?? null,
             cacheCreationInputTokens: null,

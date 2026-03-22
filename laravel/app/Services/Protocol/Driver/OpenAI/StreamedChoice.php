@@ -5,26 +5,25 @@ namespace App\Services\Protocol\Driver\OpenAI;
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
 
 /**
- * OpenAI 响应选择结构体（非流式）
+ * OpenAI 流式响应选择结构体
  *
- * 非流式响应使用 message 字段
- * 流式响应请使用 StreamedChoice 类（使用 delta 字段）
+ * 专用于流式响应，使用 delta 而非 message
  *
- * @see https://platform.openai.com/docs/api-reference/chat/object#chat/object-choices
+ * @see https://platform.openai.com/docs/api-reference/chat/streaming#chat/streaming-choices
  */
-class Choice
+class StreamedChoice
 {
     use JsonSerializiable;
 
     /**
      * @param  int  $index  选择索引
-     * @param  Message  $message  完整消息（非流式）
+     * @param  Message|null  $delta  增量消息（流式）
      * @param  string|null  $finishReason  结束原因
      * @param  Logprobs|null  $logprobs  对数概率信息
      */
     public function __construct(
         public int $index = 0,
-        public Message $message = new Message('assistant'),
+        public ?Message $delta = null,
         public ?string $finishReason = null,
         public ?Logprobs $logprobs = null,
     ) {}
@@ -36,7 +35,7 @@ class Choice
     {
         return [
             'index' => 'required|integer|min:0',
-            'message' => 'required|array',
+            'delta' => 'nullable|array',
             'finish_reason' => 'nullable|string|in:stop,length,tool_calls,content_filter,function_call',
             'logprobs' => 'nullable|array',
         ];
@@ -47,7 +46,10 @@ class Choice
      */
     public static function fromArray(array $data): static
     {
-        $message = Message::fromArray($data['message'] ?? ['role' => 'assistant']);
+        $delta = null;
+        if (isset($data['delta']) && is_array($data['delta'])) {
+            $delta = Message::fromArray($data['delta']);
+        }
 
         $logprobs = null;
         if (isset($data['logprobs']) && is_array($data['logprobs'])) {
@@ -56,7 +58,7 @@ class Choice
 
         return new self(
             index: $data['index'] ?? 0,
-            message: $message,
+            delta: $delta,
             finishReason: $data['finish_reason'] ?? null,
             logprobs: $logprobs,
         );
@@ -69,8 +71,11 @@ class Choice
     {
         $result = [
             'index' => $this->index,
-            'message' => $this->message->toArray(),
         ];
+
+        if ($this->delta !== null) {
+            $result['delta'] = $this->delta->toArray();
+        }
 
         if ($this->finishReason !== null) {
             $result['finish_reason'] = $this->finishReason;

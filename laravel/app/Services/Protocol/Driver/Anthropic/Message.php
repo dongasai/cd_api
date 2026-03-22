@@ -8,9 +8,13 @@ use App\Services\Shared\DTO\Message as SharedMessage;
 use App\Services\Shared\Enums\MessageRole;
 
 /**
- * Anthropic 消息结构体
+ * Anthropic 消息参数结构体
+ *
+ * 注意：此类对应官方 SDK 的 MessageParam（请求消息参数）
+ * 官方 SDK 的 Message 类对应本项目中的 MessagesResponse（响应消息）
  *
  * @see https://docs.anthropic.com/en/api/messages#request-body-messages
+ * @see \Anthropic\Messages\MessageParam 官方 SDK 对应类
  */
 class Message
 {

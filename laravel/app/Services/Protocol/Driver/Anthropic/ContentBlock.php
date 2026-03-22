@@ -17,30 +17,67 @@ class ContentBlock
     use JsonSerializiable;
 
     /**
-     * @param  string  $type  类型（text|image|tool_use|tool_result|thinking）
-     * @param  string|null  $text  文本内容
-     * @param  array|null  $source  图片源
-     * @param  string|null  $id  工具调用 ID
-     * @param  string|null  $name  工具名称
-     * @param  array|null  $input  工具输入
-     * @param  string|null  $tool_use_id  工具结果 ID
-     * @param  string|array|null  $content  工具结果内容
-     * @param  bool|null  $is_error  是否错误
-     * @param  string|null  $thinking  推理内容
-     * @param  string|null  $signature  签名
+     * 支持的内容块类型
+     */
+    public const TYPE_TEXT = 'text';
+
+    public const TYPE_IMAGE = 'image';
+
+    public const TYPE_TOOL_USE = 'tool_use';
+
+    public const TYPE_TOOL_RESULT = 'tool_result';
+
+    public const TYPE_THINKING = 'thinking';
+
+    public const TYPE_REDACTED_THINKING = 'redacted_thinking';
+
+    public const TYPE_SERVER_TOOL_USE = 'server_tool_use';
+
+    public const TYPE_WEB_SEARCH_TOOL_RESULT = 'web_search_tool_result';
+
+    public const TYPE_WEB_FETCH_TOOL_RESULT = 'web_fetch_tool_result';
+
+    public const TYPE_CODE_EXECUTION_TOOL_RESULT = 'code_execution_tool_result';
+
+    public const TYPE_BASH_CODE_EXECUTION_TOOL_RESULT = 'bash_code_execution_tool_result';
+
+    public const TYPE_TEXT_EDITOR_CODE_EXECUTION_TOOL_RESULT = 'text_editor_code_execution_tool_result';
+
+    public const TYPE_TOOL_SEARCH_TOOL_RESULT = 'tool_search_tool_result';
+
+    public const TYPE_CONTAINER_UPLOAD = 'container_upload';
+
+    /**
+     * @param  string  $type  类型
+     * @param  string|null  $text  文本内容 (text 类型)
+     * @param  array|null  $citations  文本引用列表 (text 类型，支持 PDF、纯文本、内容块的引用)
+     * @param  array|null  $source  图片源 (image 类型)
+     * @param  string|null  $id  工具调用 ID (tool_use 类型)
+     * @param  string|null  $name  工具名称 (tool_use 类型)
+     * @param  array|null  $input  工具输入 (tool_use 类型)
+     * @param  array|null  $caller  调用者信息 (tool_use 类型，包含 type: direct|server_tool 等信息)
+     * @param  string|null  $tool_use_id  工具结果 ID (tool_result 类型)
+     * @param  string|array|null  $content  工具结果内容 (tool_result 类型)
+     * @param  bool|null  $is_error  是否错误 (tool_result 类型)
+     * @param  string|null  $thinking  推理内容 (thinking 类型)
+     * @param  string|null  $signature  签名 (thinking 类型)
+     * @param  array  $additionalData  额外字段（用于透传新字段）
      */
     public function __construct(
         public string $type = 'text',
         public ?string $text = null,
+        public ?array $citations = null,
         public ?array $source = null,
         public ?string $id = null,
         public ?string $name = null,
         public ?array $input = null,
+        public ?array $caller = null,
         public ?string $tool_use_id = null,
         public string|array|null $content = null,
         public ?bool $is_error = null,
         public ?string $thinking = null,
         public ?string $signature = null,
+        public array $additionalData = [],
     ) {}
 
     /**
@@ -48,17 +85,36 @@ class ContentBlock
      */
     public function validationRules(): array
     {
+        $validTypes = implode(',', [
+            self::TYPE_TEXT,
+            self::TYPE_IMAGE,
+            self::TYPE_TOOL_USE,
+            self::TYPE_TOOL_RESULT,
+            self::TYPE_THINKING,
+            self::TYPE_REDACTED_THINKING,
+            self::TYPE_SERVER_TOOL_USE,
+            self::TYPE_WEB_SEARCH_TOOL_RESULT,
+            self::TYPE_WEB_FETCH_TOOL_RESULT,
+            self::TYPE_CODE_EXECUTION_TOOL_RESULT,
+            self::TYPE_BASH_CODE_EXECUTION_TOOL_RESULT,
+            self::TYPE_TEXT_EDITOR_CODE_EXECUTION_TOOL_RESULT,
+            self::TYPE_TOOL_SEARCH_TOOL_RESULT,
+            self::TYPE_CONTAINER_UPLOAD,
+        ]);
+
         return [
-            'type' => 'required|string|in:text,image,tool_use,tool_result,thinking',
-            'text' => 'required_if:type,text|nullable|string',
-            'source' => 'required_if:type,image|nullable|array',
-            'id' => 'required_if:type,tool_use|nullable|string',
-            'name' => 'required_if:type,tool_use|nullable|string',
+            'type' => "required|string|in:{$validTypes}",
+            'text' => 'nullable|string',
+            'citations' => 'nullable|array',
+            'source' => 'nullable|array',
+            'id' => 'nullable|string',
+            'name' => 'nullable|string',
             'input' => 'nullable|array',
-            'tool_use_id' => 'required_if:type,tool_result|nullable|string',
+            'caller' => 'nullable|array',
+            'tool_use_id' => 'nullable|string',
             'content' => 'nullable',
             'is_error' => 'nullable|boolean',
-            'thinking' => 'required_if:type,thinking|nullable|string',
+            'thinking' => 'nullable|string',
             'signature' => 'nullable|string',
         ];
     }
@@ -68,18 +124,29 @@ class ContentBlock
      */
     public static function fromArray(array $data): static
     {
+        // 提取已知字段
+        $knownKeys = [
+            'type', 'text', 'citations', 'source', 'id', 'name', 'input', 'caller',
+            'tool_use_id', 'content', 'is_error', 'thinking', 'signature',
+        ];
+
+        $additionalData = array_diff_key($data, array_flip($knownKeys));
+
         return new self(
             type: $data['type'] ?? 'text',
             text: $data['text'] ?? null,
+            citations: $data['citations'] ?? null,
             source: $data['source'] ?? null,
             id: $data['id'] ?? null,
             name: $data['name'] ?? null,
             input: $data['input'] ?? null,
+            caller: $data['caller'] ?? null,
             tool_use_id: $data['tool_use_id'] ?? null,
             content: $data['content'] ?? null,
             is_error: $data['is_error'] ?? null,
             thinking: $data['thinking'] ?? null,
             signature: $data['signature'] ?? null,
+            additionalData: $additionalData,
         );
     }
 
@@ -96,6 +163,10 @@ class ContentBlock
             $result['text'] = $this->text;
         }
 
+        if ($this->citations !== null) {
+            $result['citations'] = $this->citations;
+        }
+
         if ($this->source !== null) {
             $result['source'] = $this->source;
         }
@@ -110,6 +181,10 @@ class ContentBlock
 
         if ($this->input !== null) {
             $result['input'] = $this->input;
+        }
+
+        if ($this->caller !== null) {
+            $result['caller'] = $this->caller;
         }
 
         if ($this->tool_use_id !== null) {
@@ -132,7 +207,8 @@ class ContentBlock
             $result['signature'] = $this->signature;
         }
 
-        return $result;
+        // 合并额外字段（透传）
+        return array_merge($result, $this->additionalData);
     }
 
     /**

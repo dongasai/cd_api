@@ -20,7 +20,7 @@ class ChatCompletionResponse
     use Validatable;
 
     /**
-     * @param  string  $id  响应 ID
+     * @param  string|null  $id  响应 ID（可能为空）
      * @param  string  $object  对象类型
      * @param  int  $created  创建时间戳
      * @param  string  $model  模型名称
@@ -29,7 +29,7 @@ class ChatCompletionResponse
      * @param  string|null  $system_fingerprint  系统指纹
      */
     public function __construct(
-        public string $id = '',
+        public ?string $id = null,
         public string $object = 'chat.completion',
         public int $created = 0,
         public string $model = '',
@@ -72,7 +72,7 @@ class ChatCompletionResponse
         }
 
         return new self(
-            id: $data['id'] ?? '',
+            id: $data['id'] ?? null,
             object: $data['object'] ?? 'chat.completion',
             created: $data['created'] ?? time(),
             model: $data['model'] ?? '',
@@ -88,12 +88,16 @@ class ChatCompletionResponse
     public function toArray(): array
     {
         $result = [
-            'id' => $this->id,
             'object' => $this->object,
             'created' => $this->created,
             'model' => $this->model,
             'choices' => array_map(fn (Choice $choice) => $choice->toArray(), $this->choices),
         ];
+
+        // id 可能为空
+        if ($this->id !== null) {
+            $result['id'] = $this->id;
+        }
 
         if ($this->usage !== null) {
             $result['usage'] = $this->usage->toArray();
@@ -116,19 +120,15 @@ class ChatCompletionResponse
         $finishReason = null;
 
         foreach ($this->choices as $index => $choice) {
-            $message = $choice->message ?? $choice->delta;
-
-            if ($message !== null) {
-                $sharedChoices[] = [
-                    'index' => $index,
-                    'message' => $message->toSharedDTO(),
-                    'finish_reason' => $choice->finish_reason,
-                ];
-            }
+            $sharedChoices[] = [
+                'index' => $index,
+                'message' => $choice->message->toSharedDTO(),
+                'finish_reason' => $choice->finishReason,
+            ];
 
             // 提取第一个 finish_reason
-            if ($finishReason === null && $choice->finish_reason !== null) {
-                $finishReason = $this->mapFinishReason($choice->finish_reason);
+            if ($finishReason === null && $choice->finishReason !== null) {
+                $finishReason = $this->mapFinishReason($choice->finishReason);
             }
         }
 
@@ -164,7 +164,7 @@ class ChatCompletionResponse
             $choices[] = new Choice(
                 index: $choiceData['index'] ?? 0,
                 message: $message,
-                finish_reason: $finishReason,
+                finishReason: $finishReason,
             );
         }
 

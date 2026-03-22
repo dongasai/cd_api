@@ -32,6 +32,11 @@ class MessagesRequest
      * @param  mixed  $tool_choice  工具选择策略
      * @param  array|null  $metadata  元数据
      * @param  array|null  $thinking  推理参数
+     * @param  string|null  $container  容器标识符
+     * @param  string|null  $inference_geo  推理地理位置
+     * @param  string|null  $service_tier  服务层级
+     * @param  array|null  $output_config  输出配置
+     * @param  array|null  $cache_control  缓存控制
      * @param  array  $additionalParams  额外参数
      */
     public function __construct(
@@ -48,6 +53,11 @@ class MessagesRequest
         public mixed $tool_choice = null,
         public ?array $metadata = null,
         public ?array $thinking = null,
+        public ?string $container = null,
+        public ?string $inference_geo = null,
+        public ?string $service_tier = null,
+        public ?array $output_config = null,
+        public ?array $cache_control = null,
         public array $additionalParams = [],
     ) {}
 
@@ -70,6 +80,11 @@ class MessagesRequest
             'tool_choice' => 'nullable',
             'metadata' => 'nullable|array',
             'thinking' => 'nullable|array',
+            'container' => 'nullable|string',
+            'inference_geo' => 'nullable|string',
+            'service_tier' => 'nullable|string|in:priority,standard,batch',
+            'output_config' => 'nullable|array',
+            'cache_control' => 'nullable|array',
         ];
     }
 
@@ -100,6 +115,7 @@ class MessagesRequest
             'model', 'messages', 'max_tokens', 'system',
             'temperature', 'top_p', 'top_k', 'stop_sequences',
             'stream', 'tools', 'tool_choice', 'metadata', 'thinking',
+            'container', 'inference_geo', 'service_tier', 'output_config', 'cache_control',
         ];
 
         $additionalParams = array_diff_key($data, array_flip($knownKeys));
@@ -118,6 +134,11 @@ class MessagesRequest
             tool_choice: $data['tool_choice'] ?? null,
             metadata: $data['metadata'] ?? null,
             thinking: $data['thinking'] ?? null,
+            container: $data['container'] ?? null,
+            inference_geo: $data['inference_geo'] ?? null,
+            service_tier: $data['service_tier'] ?? null,
+            output_config: $data['output_config'] ?? null,
+            cache_control: $data['cache_control'] ?? null,
             additionalParams: $additionalParams,
         );
     }
@@ -163,6 +184,21 @@ class MessagesRequest
         }
         if ($this->thinking !== null) {
             $result['thinking'] = $this->thinking;
+        }
+        if ($this->container !== null) {
+            $result['container'] = $this->container;
+        }
+        if ($this->inference_geo !== null) {
+            $result['inference_geo'] = $this->inference_geo;
+        }
+        if ($this->service_tier !== null) {
+            $result['service_tier'] = $this->service_tier;
+        }
+        if ($this->output_config !== null) {
+            $result['output_config'] = $this->output_config;
+        }
+        if ($this->cache_control !== null) {
+            $result['cache_control'] = $this->cache_control;
         }
 
         // 合并额外参数
