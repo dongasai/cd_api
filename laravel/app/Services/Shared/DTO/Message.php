@@ -17,6 +17,7 @@ class Message
         public ?array $toolCalls = null, // ToolCall[]
         public ?string $toolCallId = null,
         public ?array $contentBlocks = null, // ContentBlock[] (Anthropic)
+        public ?string $name = null, // 消息作者名称 (OpenAI)
     ) {}
 
     /**
@@ -52,6 +53,11 @@ class Message
     public function toOpenAI(): array
     {
         $result = ['role' => $this->role->value];
+
+        // 添加 name 字段（如果存在）
+        if ($this->name !== null) {
+            $result['name'] = $this->name;
+        }
 
         // 处理内容
         if ($this->role === MessageRole::Tool) {
@@ -182,6 +188,10 @@ class Message
     public function toArray(): array
     {
         $result = ['role' => $this->role->value];
+
+        if ($this->name !== null) {
+            $result['name'] = $this->name;
+        }
 
         if ($this->contentBlocks !== null) {
             $result['content_blocks'] = array_map(fn ($b) => $b->toArray(), $this->contentBlocks);

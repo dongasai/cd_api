@@ -74,8 +74,17 @@ class StreamHandler
         $collectedUsage = null;
         $collectedFinishReason = null;
 
+        // 检查是否需要过滤 thinking 内容
+        $shouldFilterThinking = $selectedChannel !== null && $selectedChannel->shouldFilterThinking();
+
         foreach ($stream as $chunk) {
             if ($chunk instanceof StreamChunk) {
+                // 如果开启了 thinking 过滤，跳过 reasoning_delta
+                if ($shouldFilterThinking && $chunk->reasoningDelta !== null) {
+                    // 跳过推理内容块
+                    continue;
+                }
+
                 // 记录首字延迟（包括文本内容、推理内容或工具调用）
                 if ($firstTokenMs === null &&
                     ($chunk->delta !== '' ||

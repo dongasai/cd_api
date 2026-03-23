@@ -206,6 +206,8 @@ class ProtocolConverter
      */
     protected function getRequestClass(string $protocol): string
     {
+        $protocol = $this->normalizeProtocolName($protocol);
+
         return match ($protocol) {
             'openai_chat_completions' => \App\Services\Protocol\Driver\OpenAI\ChatCompletionRequest::class,
             'anthropic_messages' => \App\Services\Protocol\Driver\Anthropic\MessagesRequest::class,
@@ -218,10 +220,28 @@ class ProtocolConverter
      */
     protected function getResponseClass(string $protocol): string
     {
+        $protocol = $this->normalizeProtocolName($protocol);
+
         return match ($protocol) {
             'openai_chat_completions' => \App\Services\Protocol\Driver\OpenAI\ChatCompletionResponse::class,
             'anthropic_messages' => \App\Services\Protocol\Driver\Anthropic\MessagesResponse::class,
             default => throw new UnsupportedProtocolException($protocol),
+        };
+    }
+
+    /**
+     * 标准化协议名称
+     *
+     * 将简短协议名转换为完整协议名：
+     * - anthropic -> anthropic_messages
+     * - openai -> openai_chat_completions
+     */
+    protected function normalizeProtocolName(string $protocol): string
+    {
+        return match ($protocol) {
+            'anthropic' => 'anthropic_messages',
+            'openai' => 'openai_chat_completions',
+            default => $protocol,
         };
     }
 }

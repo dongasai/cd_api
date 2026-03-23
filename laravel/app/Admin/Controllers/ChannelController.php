@@ -66,14 +66,8 @@ class ChannelController extends AdminController
 
                 return '<span class="text-muted">-</span>';
             });
-            $grid->column('status')->display(function ($value) {
-                $status = $value instanceof ChannelStatus ? $value : ChannelStatus::tryFrom($value);
-                if ($status) {
-                    return '<span class="badge bg-' . $status->labelStyle() . '">' . $status->label() . '</span>';
-                }
-
-                return $value;
-            });
+            // 状态列 - 支持直接切换（启用/禁用）
+            $grid->column('status')->select(ChannelStatus::options());
             $grid->column('status2', admin_trans_field('health_status'))->display(function ($value) {
                 $status = $value instanceof ChannelHealthStatus ? $value : ChannelHealthStatus::tryFrom($value);
                 if (! $status) {

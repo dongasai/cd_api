@@ -8,7 +8,7 @@ namespace App\Enums;
 enum ChannelStatus: string
 {
     /**
-     * 正常
+     * 启用
      */
     case ACTIVE = 'active';
 
@@ -18,21 +18,15 @@ enum ChannelStatus: string
     case DISABLED = 'disabled';
 
     /**
-     * 维护中
-     */
-    case MAINTENANCE = 'maintenance';
-
-    /**
-     * 获取所有选项
+     * 获取所有选项（带多语言支持）
      *
      * @return array<string, string>
      */
     public static function options(): array
     {
         return [
-            self::ACTIVE->value => '正常',
-            self::DISABLED->value => '禁用',
-            self::MAINTENANCE->value => '维护中',
+            self::ACTIVE->value => trans('admin-channel.options.status.active'),
+            self::DISABLED->value => trans('admin-channel.options.status.disabled'),
         ];
     }
 
@@ -44,7 +38,6 @@ enum ChannelStatus: string
         return match ($this) {
             self::ACTIVE => 'success',
             self::DISABLED => 'default',
-            self::MAINTENANCE => 'warning',
         };
     }
 

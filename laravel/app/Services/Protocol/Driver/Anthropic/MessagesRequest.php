@@ -60,6 +60,8 @@ class MessagesRequest implements ProtocolRequest
         public ?array $output_config = null,
         public ?array $cache_control = null,
         public array $additionalParams = [],
+        // Body 透传：原始请求体字符串
+        public ?string $rawBodyString = null,
     ) {}
 
     /**
@@ -202,6 +204,11 @@ class MessagesRequest implements ProtocolRequest
             $result['cache_control'] = $this->cache_control;
         }
 
+        // Body 透传：如果设置了原始请求体，返回特殊格式
+        if ($this->rawBodyString !== null) {
+            return ['rawBodyString' => $this->rawBodyString];
+        }
+
         // 合并额外参数
         return array_merge($result, $this->additionalParams);
     }
@@ -295,6 +302,42 @@ class MessagesRequest implements ProtocolRequest
     public function setStream(bool $stream): static
     {
         $this->stream = $stream;
+
+        return $this;
+    }
+
+    /**
+     * 过滤请求中的 thinking 内容块
+     *
+     * @param  bool  $filter  是否过滤
+     */
+    public function filterRequestThinking(bool $filter = true): static
+    {
+        if (! $filter) {
+            return $this;
+        }
+
+        // 过滤每条消息中的 thinking 内容块
+        foreach ($this->messages as $message) {
+            if (is_array($message->content)) {
+                $message->content = array_values(
+                    array_filter(
+                        $message->content,
+                        fn ($block) => ! ($block instanceof ContentBlock && $block->type === 'thinking')
+                    )
+                );
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * 设置原始请求体（用于 body_passthrough）
+     */
+    public function setRawBodyString(string $rawBody): static
+    {
+        $this->rawBodyString = $rawBody;
 
         return $this;
     }

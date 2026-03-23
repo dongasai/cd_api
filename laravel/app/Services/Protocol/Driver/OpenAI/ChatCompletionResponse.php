@@ -217,4 +217,34 @@ class ChatCompletionResponse implements ProtocolResponse
     {
         return $this->usage;
     }
+
+    /**
+     * 过滤响应中的 thinking 内容块
+     *
+     * @param  bool  $filter  是否过滤
+     */
+    public function filterThinking(bool $filter = true): static
+    {
+        if (! $filter) {
+            return $this;
+        }
+
+        // 过滤每个 choice 的 message 中的 thinking 相关内容
+        foreach ($this->choices as $choice) {
+            // 清除 reasoning_content（推理内容）
+            $choice->message->reasoningContent = null;
+
+            // 如果 content 是数组形式，过滤 thinking 类型的内容块
+            if (is_array($choice->message->content)) {
+                $choice->message->content = array_values(
+                    array_filter(
+                        $choice->message->content,
+                        fn ($part) => ! ($part instanceof ContentPart && $part->type === 'thinking')
+                    )
+                );
+            }
+        }
+
+        return $this;
+    }
 }

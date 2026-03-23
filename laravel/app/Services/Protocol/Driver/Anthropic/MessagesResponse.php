@@ -225,8 +225,18 @@ class MessagesResponse implements ProtocolResponse
             $message = $choiceData['message'] ?? null;
 
             if ($message !== null) {
+                // 处理 SharedMessage 对象或数组
+                if ($message instanceof \App\Services\Shared\DTO\Message) {
+                    // SharedMessage 对象
+                    $textContent = $message->content;
+                    $toolCalls = $message->toolCalls;
+                } else {
+                    // 数组格式
+                    $textContent = $message['content'] ?? null;
+                    $toolCalls = $message['tool_calls'] ?? null;
+                }
+
                 // 文本内容
-                $textContent = $message['content'] ?? null;
                 if ($textContent !== null) {
                     $content[] = new ContentBlock(
                         type: 'text',
@@ -235,15 +245,17 @@ class MessagesResponse implements ProtocolResponse
                 }
 
                 // 工具调用
-                $toolCalls = $message['tool_calls'] ?? null;
                 if ($toolCalls !== null) {
                     foreach ($toolCalls as $index => $tc) {
-                        $content[] = new ContentBlock(
-                            type: 'tool_use',
-                            id: $tc['id'] ?? "toolu_{$index}",
-                            name: $tc['function']['name'] ?? '',
-                            input: json_decode($tc['function']['arguments'] ?? '{}', true),
-                        );
+                        // 处理数组格式的 toolCall
+                        if (is_array($tc)) {
+                            $content[] = new ContentBlock(
+                                type: 'tool_use',
+                                id: $tc['id'] ?? "toolu_{$index}",
+                                name: $tc['function']['name'] ?? '',
+                                input: json_decode($tc['function']['arguments'] ?? '{}', true),
+                            );
+                        }
                     }
                 }
             }
@@ -308,5 +320,27 @@ class MessagesResponse implements ProtocolResponse
     public function getUsage(): ?object
     {
         return $this->usage;
+    }
+
+    /**
+     * 过滤响应中的 thinking 内容块
+     *
+     * @param  bool  $filter  是否过滤
+     */
+    public function filterThinking(bool $filter = true): static
+    {
+        if (! $filter) {
+            return $this;
+        }
+
+        // 过滤 content 中的 thinking 类型块
+        $this->content = array_values(
+            array_filter(
+                $this->content,
+                fn (ContentBlock $block) => $block->type !== 'thinking'
+            )
+        );
+
+        return $this;
     }
 }

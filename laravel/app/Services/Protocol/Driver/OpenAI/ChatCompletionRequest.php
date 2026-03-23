@@ -64,6 +64,8 @@ class ChatCompletionRequest implements ProtocolRequest
         public mixed $response_format = null,
         public mixed $seed = null,
         public array $additionalParams = [],
+        // Body 透传：原始请求体字符串
+        public ?string $rawBodyString = null,
     ) {}
 
     /**
@@ -218,6 +220,11 @@ class ChatCompletionRequest implements ProtocolRequest
             $result['seed'] = $this->seed;
         }
 
+        // Body 透传：如果设置了原始请求体，返回特殊格式
+        if ($this->rawBodyString !== null) {
+            return ['rawBodyString' => $this->rawBodyString];
+        }
+
         // 合并额外参数
         return array_merge($result, $this->additionalParams);
     }
@@ -279,6 +286,15 @@ class ChatCompletionRequest implements ProtocolRequest
             ));
         }
 
+        // 转换 tools 数组为 Tool 对象
+        $tools = null;
+        if ($dto->tools !== null) {
+            $tools = [];
+            foreach ($dto->tools as $tool) {
+                $tools[] = Tool::fromArray($tool);
+            }
+        }
+
         return new self(
             model: $dto->model,
             messages: $messages,
@@ -287,8 +303,7 @@ class ChatCompletionRequest implements ProtocolRequest
             top_p: $dto->topP,
             stream: $dto->stream,
             stop: $dto->stopSequences,
-            system: null, // OpenAI 不使用独立 system 字段
-            tools: $dto->tools,
+            tools: $tools,
             tool_choice: $dto->toolChoice,
             user: $dto->user,
         );
@@ -326,6 +341,42 @@ class ChatCompletionRequest implements ProtocolRequest
     public function setStream(bool $stream): static
     {
         $this->stream = $stream;
+
+        return $this;
+    }
+
+    /**
+     * 过滤请求中的 thinking 内容块
+     *
+     * @param  bool  $filter  是否过滤
+     */
+    public function filterRequestThinking(bool $filter = true): static
+    {
+        if (! $filter) {
+            return $this;
+        }
+
+        // 过滤每条消息中的 thinking 内容块
+        foreach ($this->messages as $message) {
+            if (is_array($message->content)) {
+                $message->content = array_values(
+                    array_filter(
+                        $message->content,
+                        fn ($part) => ! ($part instanceof ContentPart && $part->type === 'thinking')
+                    )
+                );
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * 设置原始请求体（用于 body_passthrough）
+     */
+    public function setRawBodyString(string $rawBody): static
+    {
+        $this->rawBodyString = $rawBody;
 
         return $this;
     }

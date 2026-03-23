@@ -4,6 +4,7 @@ namespace App\Services\Router\Logger;
 
 use App\Models\RequestLog;
 use App\Models\ResponseLog;
+use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Shared\DTO\Response;
 use App\Services\Shared\DTO\Usage;
 
@@ -18,11 +19,11 @@ class ResponseLogger
     public function create(
         RequestLog $requestLog,
         array $response,
-        ?Response $providerResponse,
+        ProtocolResponse|Response|null $providerResponse,
         int $latencyMs,
         ?int $auditLogId,
         bool $isStream,
-        ?Usage $usage = null,
+        ?object $usage = null,
         $finishReason = null,
         ?string $content = null,
         ?array $streamChunks = null
@@ -43,13 +44,7 @@ class ResponseLogger
             'finish_reason' => $finishReason,
             'generated_text' => $content,
             'generated_chunks' => $streamChunks,
-            'usage' => $usage ? [
-                'prompt_tokens' => $usage->inputTokens ?? 0,
-                'completion_tokens' => $usage->outputTokens ?? 0,
-                'total_tokens' => ($usage->inputTokens ?? 0) + ($usage->outputTokens ?? 0),
-                'cache_read_tokens' => $usage->cacheReadInputTokens ?? 0,
-                'cache_write_tokens' => $usage->cacheWriteInputTokens ?? 0,
-            ] : null,
+            'usage' => $usage ? $this->normalizeUsage($usage) : null,
             'upstream_provider' => null,
             'upstream_model' => $providerResponse?->model,
             'upstream_latency_ms' => $latencyMs,
@@ -103,5 +98,27 @@ class ResponseLogger
         }
 
         return substr($body, 0, $maxLength).'...[truncated]';
+    }
+
+    /**
+     * 标准化 Usage 对象
+     *
+     * 兼容 Shared\DTO\Usage 和协议特定的 Usage 对象
+     */
+    protected function normalizeUsage(object $usage): array
+    {
+        // 如果有 toSharedDTO 方法，先转换
+        if (method_exists($usage, 'toSharedDTO')) {
+            $usage = $usage->toSharedDTO();
+        }
+
+        // 从对象属性获取值（兼容 Shared\DTO\Usage 和协议特定 Usage）
+        return [
+            'prompt_tokens' => $usage->inputTokens ?? $usage->prompt_tokens ?? 0,
+            'completion_tokens' => $usage->outputTokens ?? $usage->completion_tokens ?? 0,
+            'total_tokens' => $usage->totalTokens ?? $usage->total_tokens ?? 0,
+            'cache_read_tokens' => $usage->cacheReadInputTokens ?? $usage->cache_read_tokens ?? 0,
+            'cache_write_tokens' => $usage->cacheCreationInputTokens ?? $usage->cache_write_tokens ?? 0,
+        ];
     }
 }

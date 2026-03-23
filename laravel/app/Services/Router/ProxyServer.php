@@ -198,9 +198,24 @@ class ProxyServer
                     $protocolRequest->setModel($actualModel);
                 }
 
-                // 判断是否需要协议转换
-                if ($channelProtocol !== $protocol) {
-                    $protocolRequest = $this->protocolConverter->convertRequest($protocolRequest, $channelProtocol);
+                // 检查是否开启 body_passthrough（透传模式）
+                if ($this->selectedChannel->shouldPassthroughBody()) {
+                    // 透传模式：直接使用原始请求体，跳过协议转换和过滤
+                    $protocolRequest->setRawBodyString($rawBodyString);
+                } else {
+                    // 正常模式：进行协议转换和过滤
+
+                    // 判断是否需要协议转换
+                    if ($channelProtocol !== $protocol) {
+                        $protocolRequest = $this->protocolConverter->convertRequest($protocolRequest, $channelProtocol);
+                    }
+
+                    // 应用渠道配置：过滤请求中的 thinking 内容块
+                    if ($this->selectedChannel->shouldFilterRequestThinking()) {
+                        if (method_exists($protocolRequest, 'filterRequestThinking')) {
+                            $protocolRequest->filterRequestThinking(true);
+                        }
+                    }
                 }
 
                 // 更新请求日志渠道信息

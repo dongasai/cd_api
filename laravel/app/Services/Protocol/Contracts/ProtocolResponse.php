@@ -45,4 +45,9 @@ interface ProtocolResponse
      * 获取使用量
      */
     public function getUsage(): ?object;
+
+    /**
+     * 过滤响应中的 thinking 内容块
+     */
+    public function filterThinking(bool $filter = true): static;
 }

@@ -50,4 +50,9 @@ interface ProtocolRequest
      * 设置流式标志
      */
     public function setStream(bool $stream): static;
+
+    /**
+     * 设置原始请求体（用于 body_passthrough）
+     */
+    public function setRawBodyString(string $rawBody): static;
 }

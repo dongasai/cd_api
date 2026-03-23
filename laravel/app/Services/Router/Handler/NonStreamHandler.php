@@ -88,6 +88,11 @@ class NonStreamHandler
 
         $auditLog->update($updateData);
 
+        // 应用渠道配置：过滤响应中的 thinking 内容块
+        if ($selectedChannel !== null && $selectedChannel->shouldFilterThinking()) {
+            $providerResponse->filterThinking(true);
+        }
+
         // 如果需要协议转换，转换响应
         if ($sourceProtocol !== $targetProtocol) {
             $providerResponse = $this->protocolConverter->convertResponse($providerResponse, $sourceProtocol);

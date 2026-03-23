@@ -2,6 +2,7 @@
 
 namespace App\Admin\Grids;
 
+use App\Enums\ChannelStatus;
 use App\Models\Channel;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Grid\LazyRenderable;
@@ -24,11 +25,14 @@ class ChannelSelectGrid extends LazyRenderable
             $grid->column('name', '渠道名称');
             $grid->column('slug', '标识符');
             $grid->column('provider', '提供商');
-            $grid->column('status', '状态')->using([
-                'active' => '正常',
-                'disabled' => '禁用',
-                'maintenance' => '维护中',
-            ]);
+            $grid->column('status', '状态')->display(function ($value) {
+                // 处理枚举类型
+                if ($value instanceof \BackedEnum) {
+                    $options = ChannelStatus::options();
+                    return $options[$value->value] ?? $value->value;
+                }
+                return $value;
+            });
 
             $grid->quickSearch(['id', 'name', 'slug']);
             $grid->paginate(10);
