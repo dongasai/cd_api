@@ -5,28 +5,28 @@ namespace App\Enums;
 /**
  * 渠道运营状态枚举
  */
-enum ChannelStatus: string
+enum ChannelStatus: int
 {
-    /**
-     * 启用
-     */
-    case ACTIVE = 'active';
-
     /**
      * 禁用
      */
-    case DISABLED = 'disabled';
+    case DISABLED = 0;
+
+    /**
+     * 启用
+     */
+    case ACTIVE = 1;
 
     /**
      * 获取所有选项（带多语言支持）
      *
-     * @return array<string, string>
+     * @return array<int, string>
      */
     public static function options(): array
     {
         return [
-            self::ACTIVE->value => trans('admin-channel.options.status.active'),
-            self::DISABLED->value => trans('admin-channel.options.status.disabled'),
+            self::ACTIVE->value => admin_trans('admin-channel.options.status.active'),
+            self::DISABLED->value => admin_trans('admin-channel.options.status.disabled'),
         ];
     }
 
@@ -42,7 +42,7 @@ enum ChannelStatus: string
     }
 
     /**
-     * 获取中文标签
+     * 获取标签
      */
     public function label(): string
     {

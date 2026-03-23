@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "15e506d76f4b9eb41aec89399782fd9a",
+    "content-hash": "033721c08dc10faf004183131595f6ec",
     "packages": [
         {
             "name": "anthropic-ai/sdk",
@@ -601,23 +601,17 @@
         },
         {
             "name": "dongasai/dcat-admin2",
-            "version": "v12.0.0",
+            "version": "dev-laravel12",
             "source": {
                 "type": "git",
                 "url": "https://github.com/dongasai/dcat-admin2.git",
-                "reference": "55237f4b6dae61b352d9d542ab699bf2e8189147"
+                "reference": "d3d41cfaa85446c8811e4242a55fb9d589eb6def"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/dongasai/dcat-admin2/zipball/55237f4b6dae61b352d9d542ab699bf2e8189147",
-                "reference": "55237f4b6dae61b352d9d542ab699bf2e8189147",
-                "shasum": "",
-                "mirrors": [
-                    {
-                        "url": "https://mirrors.aliyun.com/composer/dists/%package%/%reference%.%type%",
-                        "preferred": true
-                    }
-                ]
+                "url": "https://api.github.com/repos/dongasai/dcat-admin2/zipball/d3d41cfaa85446c8811e4242a55fb9d589eb6def",
+                "reference": "d3d41cfaa85446c8811e4242a55fb9d589eb6def",
+                "shasum": ""
             },
             "require": {
                 "doctrine/dbal": "*",
@@ -674,9 +668,9 @@
             ],
             "support": {
                 "issues": "https://github.com/dongasai/dcat-admin2/issues",
-                "source": "https://github.com/dongasai/dcat-admin2/tree/v12.0.0"
+                "source": "https://github.com/dongasai/dcat-admin2/tree/laravel12"
             },
-            "time": "2025-10-31T07:37:13+00:00"
+            "time": "2026-03-23T16:53:34+00:00"
         },
         {
             "name": "dragonmantank/cron-expression",
@@ -9541,7 +9535,9 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "dongasai/dcat-admin2": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {

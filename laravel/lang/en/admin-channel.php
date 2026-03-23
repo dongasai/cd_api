@@ -107,9 +107,8 @@ return [
     ],
     'options' => [
         'status' => [
-            'active' => 'Normal',
-            'disabled' => 'Disabled',
-            'maintenance' => 'Maintenance',
+            1 => 'Enabled',
+            0 => 'Disabled',
         ],
         'status2' => [
             'normal' => 'Normal',

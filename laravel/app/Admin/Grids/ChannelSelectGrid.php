@@ -28,10 +28,12 @@ class ChannelSelectGrid extends LazyRenderable
             $grid->column('status', '状态')->display(function ($value) {
                 // 处理枚举类型
                 if ($value instanceof \BackedEnum) {
-                    $options = ChannelStatus::options();
-                    return $options[$value->value] ?? $value->value;
+                    return $value->label();
                 }
-                return $value;
+                // 处理整数值
+                $status = ChannelStatus::tryFrom((int) $value);
+
+                return $status ? $status->label() : $value;
             });
 
             $grid->quickSearch(['id', 'name', 'slug']);

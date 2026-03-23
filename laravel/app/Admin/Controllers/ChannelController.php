@@ -36,7 +36,7 @@ class ChannelController extends AdminController
             // 列字段配置 - 自动读取 channel.php 语言包 fields 翻译
             $grid->column('id')->sortable();
             $grid->column('name')->link(function () {
-                return admin_url('channels/' . $this->id);
+                return admin_url('channels/'.$this->id);
             });
             $grid->column('slug');
             $grid->column('provider');
@@ -59,7 +59,7 @@ class ChannelController extends AdminController
                     ];
                     $color = $colors[$status] ?? 'secondary';
 
-                    $url = admin_url('coding-accounts/' . $this->codingAccount->id);
+                    $url = admin_url('coding-accounts/'.$this->codingAccount->id);
 
                     return "<a href='{$url}'><span class='badge bg-{$color}'>{$this->codingAccount->name} ({$statusLabel})</span></a>";
                 }
@@ -67,7 +67,7 @@ class ChannelController extends AdminController
                 return '<span class="text-muted">-</span>';
             });
             // 状态列 - 支持直接切换（启用/禁用）
-            $grid->column('status')->select(ChannelStatus::options());
+            $grid->column('status')->switch();
             $grid->column('status2', admin_trans_field('health_status'))->display(function ($value) {
                 $status = $value instanceof ChannelHealthStatus ? $value : ChannelHealthStatus::tryFrom($value);
                 if (! $status) {
@@ -75,19 +75,19 @@ class ChannelController extends AdminController
                 }
 
                 if ($status === ChannelHealthStatus::NORMAL) {
-                    return '<span class="badge bg-success">' . admin_trans_option('normal', 'status2') . '</span>';
+                    return '<span class="badge bg-success">'.admin_trans_option('normal', 'status2').'</span>';
                 }
 
-                $html = '<span class="badge bg-danger">' . admin_trans_option('disabled', 'status2') . '</span>';
+                $html = '<span class="badge bg-danger">'.admin_trans_option('disabled', 'status2').'</span>';
 
                 if ($this->status2_remark) {
-                    $html .= ' <span class="text-danger small">' . $this->status2_remark . '</span>';
+                    $html .= ' <span class="text-danger small">'.$this->status2_remark.'</span>';
                 }
 
                 return $html;
             });
             $grid->column('success_rate')->display(function ($value) {
-                return $value ? number_format($value * 100, 2) . '%' : '-';
+                return $value ? number_format($value * 100, 2).'%' : '-';
             });
             $grid->column('total_requests')->sortable();
             $grid->column('last_check_at')->sortable();
@@ -111,7 +111,7 @@ class ChannelController extends AdminController
 
             // 操作按钮
             $grid->actions(function (Grid\Displayers\Actions $actions) {
-                $actions->append('<a href="' . admin_url('channels/' . $this->id) . '" class="btn btn-primary btn-sm mr-1"><i class="fa fa-eye"></i> ' . admin_trans_label('view') . '</a>');
+                $actions->append('<a href="'.admin_url('channels/'.$this->id).'" class="btn btn-primary btn-sm mr-1"><i class="fa fa-eye"></i> '.admin_trans_label('view').'</a>');
                 $actions->append(new CopyChannel);
             });
 
@@ -158,18 +158,18 @@ class ChannelController extends AdminController
                     ];
                     $color = $colors[$status] ?? 'secondary';
 
-                    $url = admin_url('coding-accounts/' . $this->codingAccount->id);
+                    $url = admin_url('coding-accounts/'.$this->codingAccount->id);
 
                     return "<a href='{$url}'><span class='badge bg-{$color}'>{$this->codingAccount->name} ({$statusLabel})</span></a>";
                 }
 
-                return '<span class="text-muted">' . admin_trans_label('not_related') . '</span>';
+                return '<span class="text-muted">'.admin_trans_label('not_related').'</span>';
             })->width(6);
 
             $show->field('status')->as(function ($value) {
                 $status = $value instanceof ChannelStatus ? $value : ChannelStatus::tryFrom($value);
                 if ($status) {
-                    return '<span class="badge bg-' . $status->labelStyle() . '">' . $status->label() . '</span>';
+                    return '<span class="badge bg-'.$status->labelStyle().'">'.$status->label().'</span>';
                 }
 
                 return $value;
@@ -180,10 +180,10 @@ class ChannelController extends AdminController
                     return $value;
                 }
 
-                $html = '<span class="badge bg-' . $status->labelStyle() . '">' . $status->label() . '</span>';
+                $html = '<span class="badge bg-'.$status->labelStyle().'">'.$status->label().'</span>';
 
                 if ($status === ChannelHealthStatus::DISABLED && $this->status2_remark) {
-                    $html .= ' <small class="text-muted">(' . $this->status2_remark . ')</small>';
+                    $html .= ' <small class="text-muted">('.$this->status2_remark.')</small>';
                 }
 
                 return $html;
@@ -196,22 +196,22 @@ class ChannelController extends AdminController
             $show->field('inherit_mode')->using(admin_trans_options('inherit_mode'))->width(3);
             $show->field('parent_id')->width(3);
             $show->field('api_key_hash', admin_trans_label('api_key_fingerprint'))->as(function ($value) {
-                return $value ? '<code>' . substr($value, 0, 8) . '...</code>' : '-';
+                return $value ? '<code>'.substr($value, 0, 8).'...</code>' : '-';
             })->width(3);
             $show->field('description');
 
             $show->divider(admin_trans_label('runtime_stats'));
 
             $show->field('success_count')->as(function ($value) {
-                return '<span class="text-success font-weight-bold" style="font-size:1.2em">' . ($value ?? 0) . '</span>';
+                return '<span class="text-success font-weight-bold" style="font-size:1.2em">'.($value ?? 0).'</span>';
             })->unescape()->width(3);
             $show->field('failure_count')->as(function ($value) {
-                return '<span class="text-danger font-weight-bold" style="font-size:1.2em">' . ($value ?? 0) . '</span>';
+                return '<span class="text-danger font-weight-bold" style="font-size:1.2em">'.($value ?? 0).'</span>';
             })->unescape()->width(3);
             $show->field('total_requests')->as(function () {
                 $total = ($this->success_count ?? 0) + ($this->failure_count ?? 0);
 
-                return '<span class="text-primary font-weight-bold" style="font-size:1.2em">' . $total . '</span>';
+                return '<span class="text-primary font-weight-bold" style="font-size:1.2em">'.$total.'</span>';
             })->unescape()->width(3);
             $show->field('success_rate')->as(function () {
                 $successCount = $this->success_count ?? 0;
@@ -221,13 +221,13 @@ class ChannelController extends AdminController
                 $rate = $total > 0 ? ($successCount / $total) * 100 : 0;
                 $color = $rate >= 95 ? 'success' : ($rate >= 80 ? 'warning' : 'danger');
 
-                return '<span class="text-' . $color . ' font-weight-bold" style="font-size:1.2em">' . number_format($rate, 2) . '%</span>';
+                return '<span class="text-'.$color.' font-weight-bold" style="font-size:1.2em">'.number_format($rate, 2).'%</span>';
             })->unescape()->width(3);
             $show->field('total_cost')->as(function ($value) {
-                return '<span class="text-info font-weight-bold">$' . number_format($value ?? 0, 4) . '</span>';
+                return '<span class="text-info font-weight-bold">$'.number_format($value ?? 0, 4).'</span>';
             })->unescape()->width(3);
             $show->field('avg_latency_ms')->as(function ($value) {
-                return '<span class="text-muted">' . ($value ? number_format($value, 2) . ' ms' : '-') . '</span>';
+                return '<span class="text-muted">'.($value ? number_format($value, 2).' ms' : '-').'</span>';
             })->unescape()->width(3);
 
             $show->divider(admin_trans_label('time_records'));
@@ -293,8 +293,8 @@ class ChannelController extends AdminController
 
             // 状态设置
             $form->tab(admin_trans_label('status_settings'), function (Form $form) {
-                $form->select('status')->options(admin_trans_options('status'))
-                    ->default('active')->required();
+                $form->select('status')->options(ChannelStatus::options())
+                    ->default(1)->required();
 
                 $form->select('status2', admin_trans_field('health_status'))
                     ->options(admin_trans_options('status2'))
@@ -322,7 +322,7 @@ class ChannelController extends AdminController
                 $form->display('total_requests');
                 $form->display('total_cost');
                 $form->display('success_rate')->with(function ($value) {
-                    return $value ? number_format($value * 100, 2) . '%' : '-';
+                    return $value ? number_format($value * 100, 2).'%' : '-';
                 });
                 $form->display('last_check_at');
                 $form->display('last_success_at');
@@ -391,7 +391,7 @@ class ChannelController extends AdminController
                     ->help(admin_trans_label('allowed_user_agents_help'));
 
                 $form->display('has_user_agent_restriction', admin_trans_label('restriction_status'))->with(function ($value) {
-                    return $value ? '<span class="badge badge-warning">' . admin_trans_label('restriction_enabled') . '</span>' : '<span class="badge badge-success">' . admin_trans_label('restriction_disabled') . '</span>';
+                    return $value ? '<span class="badge badge-warning">'.admin_trans_label('restriction_enabled').'</span>' : '<span class="badge badge-success">'.admin_trans_label('restriction_disabled').'</span>';
                 });
             });
 

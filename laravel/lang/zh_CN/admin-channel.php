@@ -107,9 +107,8 @@ return [
     ],
     'options' => [
         'status' => [
-            'active' => '正常',
-            'disabled' => '禁用',
-            'maintenance' => '维护中',
+            1 => '启用',
+            0 => '禁用',
         ],
         'status2' => [
             'normal' => '正常',

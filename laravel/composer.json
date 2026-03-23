@@ -8,7 +8,7 @@
     "require": {
         "php": "^8.2",
         "anthropic-ai/sdk": "^0.6.0",
-        "dongasai/dcat-admin2": "*",
+        "dongasai/dcat-admin2": "dev-laravel12",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
         "openai-php/client": "^0.19.1",
