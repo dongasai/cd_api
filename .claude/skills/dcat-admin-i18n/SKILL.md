@@ -9,6 +9,7 @@ description: |
   - 询问语言包命名或结构
   - 需要翻译字段、标签或选项
   - 创建菜单需要翻译
+  - 解决后台翻译问题
 
   自动应用项目多语言规则，生成符合规范的语言包文件。
 ---
@@ -162,21 +163,50 @@ $grid->column('name', admin_trans_field('name'));  // 冗余，不推荐
 
 **原理**：Dcat Admin 会自动查找 `{translation}.fields.{字段名}` 的翻译。
 
-### 4.2 翻译函数对照表
+### 4.2 翻译助手函数对照表
 
-| 场景 | 函数 | 示例 |
-|------|------|------|
-| 字段翻译 | 自动（省略参数） | `$grid->column('name')` |
-| 标签翻译 | `admin_trans_label()` | `admin_trans_label('basic_info')` |
-| 选项组数组 | `admin_trans_options()` | `$show->field('status')->using(admin_trans_options('status'))` |
-| 单个选项值翻译 | `admin_trans_option()` | `admin_trans_option('active', 'status')` |
-| Action 标题 | `admin_trans_action()` | `admin_trans_action('reset_api_key')` |
+| 函数 | 返回类型 | 用途 | 示例 |
+|------|---------|------|------|
+| `admin_trans_field($field)` | string | 字段名称翻译 | `admin_trans_field('name')` → '渠道名称' |
+| `admin_trans_label($label)` | string | 标签翻译（帮助文本、按钮等） | `admin_trans_label('basic_info')` → '基本信息' |
+| `admin_trans_options($group)` | array | 获取整个选项组数组 | `admin_trans_options('status')` → ['active' => '正常', ...] |
+| `admin_trans_option($value, $group)` | string | 获取单个选项值翻译 | `admin_trans_option('active', 'status')` → '正常' |
+| `admin_trans_action($action)` | string | Action 操作标题翻译 | `admin_trans_action('reset_api_key')` → '重置API Key' |
+| `admin_trans($key)` | string/array | 通用翻译（不推荐用于选项） | `admin_trans('admin-channel.labels.title')` |
 
-**重要说明**：
-- `->using()` 方法需要传入数组，使用 `admin_trans_options('选项组名')` 获取整个选项组数组
-- `admin_trans()` 返回字符串，不能用于 `->using()` 方法
+### 4.3 选项翻译使用
 
-### 3.1 Action 实现示例
+**`->options()` 和 `->using()` 方法需要传入数组，必须使用 `admin_trans_options()`：**
+
+```php
+// ✅ 正确：使用 admin_trans_options() 获取选项数组
+$form->select('status')->options(admin_trans_options('status'));
+$show->field('provider')->using(admin_trans_options('provider'));
+
+// ❌ 错误：admin_trans() 返回字符串，无法用于 options()
+$form->select('status')->options(admin_trans('admin-channel.options.status'));  // 错误！
+```
+
+**显示单个选项值翻译：**
+
+```php
+// 在 display() 回调中显示单个选项翻译
+$grid->column('status')->display(function ($value) {
+    return admin_trans_option($value, 'status');
+});
+```
+
+### 4.4 跨控制器翻译
+
+当需要在其他控制器中引用某控制器的翻译时，可以传入控制器名：
+
+```php
+// 在其他控制器中引用 channel 的翻译
+admin_trans_options('status', 'channel')  // 获取 admin-channel.options.status
+admin_trans_option('active', 'status', 'channel')  // 获取单个值
+```
+
+### 4.5 Action 实现示例
 
 **RowAction 示例：**
 ```php
@@ -255,6 +285,8 @@ menu.php：'data_statistics' => '数据统计'
 | `channel.php`（缺少前缀） | `admin-channel.php` |
 | 菜单翻译放在 `admin.php` | 菜单翻译放在 `menu.php` |
 | `$grid->column('name', '渠道名称')` | `$grid->column('name')` |
+| `$form->select('status')->options(admin_trans('admin-channel.options.status'))` | `$form->select('status')->options(admin_trans_options('status'))` |
+| 控制器缺少 `$translation` 属性 | 添加 `public $translation = 'admin-channel';` |
 
 ## 七、参考模板
 
