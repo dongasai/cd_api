@@ -257,7 +257,7 @@ class Request
             $result['stream'] = true;
         }
         if ($this->tools !== null) {
-            $result['tools'] = $this->tools;
+            $result['tools'] = array_map(fn (Tool $t) => $t->toArray(), $this->tools);
         }
         if ($this->toolChoice !== null) {
             $result['tool_choice'] = $this->toolChoice;

@@ -136,3 +136,6 @@ php artisan cdapi:coding:sync-quota
 # 备份核心表
 php artisan cdapi:backup:table --group=core
 ```
+
+## 格式转化
+1. OpenAi请求提

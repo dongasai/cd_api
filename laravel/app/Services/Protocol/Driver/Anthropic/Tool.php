@@ -61,9 +61,24 @@ class Tool
 
     /**
      * 从数组创建
+     *
+     * 支持 Anthropic 格式和 OpenAI 格式：
+     * - Anthropic: {name, input_schema, description}
+     * - OpenAI: {type: 'function', function: {name, description, parameters}}
      */
     public static function fromArray(array $data): static
     {
+        // 检测并转换 OpenAI 格式
+        if (isset($data['function']) && ! isset($data['input_schema'])) {
+            // OpenAI 格式转换为 Anthropic 格式
+            $data = [
+                'name' => $data['function']['name'] ?? '',
+                'input_schema' => $data['function']['parameters'] ?? [],
+                'description' => $data['function']['description'] ?? null,
+                'type' => $data['type'] ?? null,
+            ];
+        }
+
         // 提取已知字段
         $knownKeys = [
             'name', 'input_schema', 'description', 'type',

@@ -253,6 +253,15 @@ class MessagesRequest implements ProtocolRequest
             $messages[] = Message::fromSharedDTO($msg);
         }
 
+        // 转换 tools 数组为 Tool 对象
+        $tools = null;
+        if ($dto->tools !== null) {
+            $tools = [];
+            foreach ($dto->tools as $tool) {
+                $tools[] = Tool::fromArray($tool);
+            }
+        }
+
         return new self(
             model: $dto->model,
             messages: $messages,
@@ -263,7 +272,7 @@ class MessagesRequest implements ProtocolRequest
             top_k: $dto->topK,
             stream: $dto->stream,
             stop_sequences: $dto->stopSequences,
-            tools: $dto->tools,
+            tools: $tools,
             tool_choice: $dto->toolChoice,
             thinking: $dto->thinking,
             metadata: $dto->metadata,
