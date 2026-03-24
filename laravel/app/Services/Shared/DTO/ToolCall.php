@@ -2,8 +2,6 @@
 
 namespace App\Services\Shared\DTO;
 
-use App\Services\Shared\Enums\ToolType;
-
 /**
  * 工具调用 DTO
  *
@@ -11,47 +9,35 @@ use App\Services\Shared\Enums\ToolType;
  */
 class ToolCall
 {
-    public function __construct(
-        public ?string $id = null,
-        public ToolType $type = ToolType::Function,
-        public ?string $name = null,
-        public ?string $arguments = null,         // 字符串形式
-        public ?int $index = null,                // 流式场景中的索引
-        public ?string $callId = null,            // Anthropic uses tool_use_id
-    ) {}
+    /**
+     * 工具调用 ID
+     */
+    public ?string $id = null;
 
     /**
-     * 从 OpenAI 格式创建
+     * 工具调用类型
      */
-    public static function fromOpenAI(array $data): self
-    {
-        return new self(
-            id: $data['id'] ?? null,
-            type: ToolType::from($data['type'] ?? 'function'),
-            name: $data['function']['name'] ?? null,
-            arguments: $data['function']['arguments'] ?? null,
-            index: $data['index'] ?? null,
-        );
-    }
+    public string $type = 'function';
 
     /**
-     * 从 Anthropic 格式创建
+     * 工具名称
      */
-    public static function fromAnthropic(array $data): self
-    {
-        $arguments = $data['input'] ?? [];
-        if (is_array($arguments)) {
-            $arguments = json_encode($arguments, JSON_UNESCAPED_UNICODE);
-        }
+    public ?string $name = null;
 
-        return new self(
-            id: $data['id'] ?? null,
-            type: ToolType::Function, // Anthropic 的 tool_use 对应 function 类型
-            name: $data['name'] ?? null,
-            arguments: $arguments,
-            callId: $data['id'] ?? null,
-        );
-    }
+    /**
+     * 工具参数（字符串形式）
+     */
+    public ?string $arguments = null;
+
+    /**
+     * 流式场景中的索引
+     */
+    public ?int $index = null;
+
+    /**
+     * Anthropic tool_use_id
+     */
+    public ?string $callId = null;
 
     /**
      * 获取解析后的参数
@@ -67,50 +53,5 @@ class ToolCall
         }
 
         return json_decode($this->arguments, true) ?? [];
-    }
-
-    /**
-     * 转换为 OpenAI 格式
-     */
-    public function toOpenAI(): array
-    {
-        return [
-            'id' => $this->id ?? '',
-            'type' => $this->type->value,
-            'function' => [
-                'name' => $this->name ?? '',
-                'arguments' => $this->arguments ?? '',
-            ],
-        ];
-    }
-
-    /**
-     * 转换为 Anthropic 格式
-     */
-    public function toAnthropic(): array
-    {
-        $input = $this->getParsedArguments();
-
-        return [
-            'type' => 'tool_use',
-            'id' => $this->id ?? $this->callId ?? '',
-            'name' => $this->name ?? '',
-            'input' => $input,
-        ];
-    }
-
-    /**
-     * 转换为数组
-     */
-    public function toArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'type' => $this->type->value,
-            'name' => $this->name,
-            'arguments' => $this->arguments,
-            'index' => $this->index,
-            'call_id' => $this->callId,
-        ];
     }
 }

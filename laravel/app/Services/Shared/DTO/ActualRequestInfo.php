@@ -9,23 +9,23 @@ namespace App\Services\Shared\DTO;
  */
 class ActualRequestInfo
 {
-    public function __construct(
-        public string $url,
-        public string $path,
-        public array $headers,
-        public array $body,
-    ) {}
+    /**
+     * 请求完整 URL
+     */
+    public string $url;
 
     /**
-     * 转换为数组
+     * 请求路径
      */
-    public function toArray(): array
-    {
-        return [
-            'url' => $this->url,
-            'path' => $this->path,
-            'headers' => $this->headers,
-            'body' => $this->body,
-        ];
-    }
+    public string $path;
+
+    /**
+     * 请求头
+     */
+    public array $headers;
+
+    /**
+     * 请求体
+     */
+    public array $body;
 }

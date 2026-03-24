@@ -9,27 +9,101 @@ namespace App\Services\Shared\DTO;
  */
 class Request
 {
-    public function __construct(
-        public string $model,
-        public array $messages, // Message[]
-        public ?int $maxTokens = null,
-        public ?float $temperature = null,
-        public ?float $topP = null,
-        public ?int $topK = null,
-        public ?bool $stream = false,
-        public ?array $stopSequences = null,
-        public string|array|null $system = null,
-        public ?array $tools = null,
-        public $toolChoice = null,
-        public ?array $thinking = null,
-        public ?array $metadata = null,
-        public ?string $user = null,
-        public array $additionalParams = [],
-        public ?array $rawRequest = null,
-        // Body 透传：原始请求体字符串
-        public ?string $rawBodyString = null,
-        public ?string $queryString = null,
-    ) {}
+    /**
+     * 模型名称
+     */
+    public string $model;
+
+    /**
+     * 消息列表
+     *
+     * @var array Message[]
+     */
+    public array $messages;
+
+    /**
+     * 最大 Token 数量
+     */
+    public ?int $maxTokens = null;
+
+    /**
+     * 温度参数
+     */
+    public ?float $temperature = null;
+
+    /**
+     * Top P 参数
+     */
+    public ?float $topP = null;
+
+    /**
+     * Top K 参数
+     */
+    public ?int $topK = null;
+
+    /**
+     * 是否流式输出
+     */
+    public ?bool $stream = false;
+
+    /**
+     * 停止序列
+     */
+    public ?array $stopSequences = null;
+
+    /**
+     * 系统提示
+     */
+    public string|array|null $system = null;
+
+    /**
+     * 工具列表
+     *
+     * @var array|null Tool[]
+     */
+    public ?array $tools = null;
+
+    /**
+     * 工具选择
+     *
+     * @var mixed
+     */
+    public $toolChoice = null;
+
+    /**
+     * 思考配置
+     */
+    public ?array $thinking = null;
+
+    /**
+     * 元数据
+     */
+    public ?array $metadata = null;
+
+    /**
+     * 用户标识
+     */
+    public ?string $user = null;
+
+    /**
+     * 额外参数
+     */
+    public array $additionalParams = [];
+
+    /**
+     * 原始请求
+     */
+    public ?array $rawRequest = null;
+
+    /**
+     * 原始请求体字符串（Body 透传）
+     */
+    public ?string $rawBodyString = null;
+
+    /**
+     * 查询字符串
+     */
+    public ?string $queryString = null;
 
     /**
      * 获取消息数量
@@ -76,227 +150,6 @@ class Request
     }
 
     /**
-     * 转换为数组
-     */
-    public function toArray(): array
-    {
-        return [
-            'model' => $this->model,
-            'messages' => array_map(fn ($m) => $m->toArray(), $this->messages),
-            'max_tokens' => $this->maxTokens,
-            'temperature' => $this->temperature,
-            'top_p' => $this->topP,
-            'top_k' => $this->topK,
-            'stream' => $this->stream,
-            'stop_sequences' => $this->stopSequences,
-            'system' => $this->system,
-            'tools' => $this->tools,
-            'tool_choice' => $this->toolChoice,
-            'thinking' => $this->thinking,
-            'metadata' => $this->metadata,
-            'user' => $this->user,
-            'additional_params' => $this->additionalParams,
-        ];
-    }
-
-    /**
-     * 转换为 OpenAI 格式数组
-     */
-    public function toOpenAI(): array
-    {
-        $result = [
-            'model' => $this->model,
-            'messages' => array_map(fn ($m) => $m->toOpenAI(), $this->messages),
-        ];
-
-        if ($this->maxTokens !== null) {
-            $result['max_tokens'] = $this->maxTokens;
-        }
-        if ($this->temperature !== null) {
-            $result['temperature'] = $this->temperature;
-        }
-        if ($this->topP !== null) {
-            $result['top_p'] = $this->topP;
-        }
-        if ($this->topK !== null) {
-            $result['top_k'] = $this->topK;
-        }
-        if ($this->stream) {
-            $result['stream'] = true;
-        }
-        if ($this->stopSequences !== null) {
-            $result['stop'] = $this->stopSequences;
-        }
-        if ($this->tools !== null) {
-            $result['tools'] = $this->tools;
-        }
-        if ($this->toolChoice !== null) {
-            $result['tool_choice'] = $this->toolChoice;
-        }
-        if ($this->user !== null) {
-            $result['user'] = $this->user;
-        }
-        if ($this->metadata !== null) {
-            $result['metadata'] = $this->metadata;
-        }
-
-        // 处理 system 提示：OpenAI 将 system 作为消息的第一条
-        if ($this->system !== null) {
-            $systemContent = $this->system;
-            if (is_array($systemContent)) {
-                $text = '';
-                foreach ($systemContent as $block) {
-                    if (is_string($block)) {
-                        $text .= $block;
-                    } elseif (isset($block['text'])) {
-                        $text .= $block['text'];
-                    }
-                }
-                $systemContent = $text;
-            }
-            if ($systemContent !== '') {
-                array_unshift($result['messages'], [
-                    'role' => 'system',
-                    'content' => $systemContent,
-                ]);
-            }
-        }
-
-        return array_merge($result, $this->additionalParams);
-    }
-
-    /**
-     * 转换为 Anthropic 格式数组
-     */
-    public function toAnthropic(bool $includeCacheControl = true, bool $filterThinking = true, bool $filterRequestThinking = false): array
-    {
-        $messages = [];
-
-        foreach ($this->messages as $message) {
-            // 跳过 system 消息（Anthropic API 不允许 messages 中有 system 角色）
-            if ($message->role === \App\Services\Shared\Enums\MessageRole::System) {
-                continue;
-            }
-            $messages[] = $message->toAnthropic($includeCacheControl, $filterThinking, $filterRequestThinking);
-        }
-
-        // 合并连续的 user 消息（Anthropic 要求 tool_result 和其他内容在同一个 user 消息中）
-        $filteredMessages = [];
-        $previousUserMessage = null;
-
-        foreach ($messages as $message) {
-            if ($message['role'] === 'user') {
-                if ($previousUserMessage !== null) {
-                    // 合并到前一个 user 消息
-                    $content = $message['content'] ?? [];
-                    if (is_array($content)) {
-                        $previousContent = $previousUserMessage['content'] ?? [];
-                        if (is_array($previousContent)) {
-                            $previousContent = array_merge($previousContent, $content);
-                        } else {
-                            $previousContent = $content;
-                        }
-                        $previousUserMessage['content'] = $previousContent;
-                    }
-                } else {
-                    // 第一个 user 消息，直接添加
-                    $previousUserMessage = $message;
-                }
-            } else {
-                // 非 user 消息，先保存之前的 user 消息，然后添加当前消息
-                if ($previousUserMessage !== null) {
-                    $filteredMessages[] = $previousUserMessage;
-                    $previousUserMessage = null;
-                }
-                $filteredMessages[] = $message;
-            }
-        }
-
-        // 添加最后一个 user 消息（如果有）
-        if ($previousUserMessage !== null) {
-            $filteredMessages[] = $previousUserMessage;
-        }
-
-        // 构建标准字段
-        $result = [
-            'model' => $this->model,
-            'messages' => $filteredMessages,
-        ];
-
-        // max_tokens 对于 Anthropic API 是必需的，如果没有提供则使用默认值
-        $result['max_tokens'] = $this->maxTokens ?? 4096;
-
-        // system 字段：转换为数组格式（阿里云 Coding 要求）
-        if ($this->system !== null) {
-            // 如果是字符串，转换为数组格式
-            if (is_string($this->system)) {
-                $result['system'] = [
-                    [
-                        'type' => 'text',
-                        'text' => $this->system,
-                    ],
-                ];
-            } else {
-                // 已经是数组格式，保持不变
-                $result['system'] = $this->system;
-            }
-        }
-        if ($this->temperature !== null) {
-            $result['temperature'] = $this->temperature;
-        }
-        if ($this->topP !== null) {
-            $result['top_p'] = $this->topP;
-        }
-        if ($this->topK !== null) {
-            $result['top_k'] = $this->topK;
-        }
-        if ($this->stopSequences !== null) {
-            $result['stop_sequences'] = $this->stopSequences;
-        }
-        if ($this->stream) {
-            $result['stream'] = true;
-        }
-        if ($this->tools !== null) {
-            $result['tools'] = array_map(fn (Tool $t) => $t->toArray(), $this->tools);
-        }
-        if ($this->toolChoice !== null) {
-            $result['tool_choice'] = $this->toolChoice;
-        }
-        if ($this->metadata !== null) {
-            $result['metadata'] = $this->metadata;
-        }
-        if ($this->thinking !== null) {
-            $result['thinking'] = $this->thinking;
-        }
-
-        // 合并 additionalParams，但过滤掉 OpenAI 特有的字段
-        $openaiSpecificFields = ['stream_options', 'response_format', 'seed', 'logprobs', 'top_logprobs', 'n'];
-        $filteredAdditionalParams = array_filter(
-            $this->additionalParams,
-            fn ($key) => !in_array($key, $openaiSpecificFields),
-            ARRAY_FILTER_USE_KEY
-        );
-
-        return array_merge($result, $filteredAdditionalParams);
-    }
-
-    /**
-     * 获取 OpenAI 格式的请求体
-     */
-    public function toOpenAIFormat(): array
-    {
-        return $this->toOpenAI();
-    }
-
-    /**
-     * 获取 Anthropic 格式的请求体
-     */
-    public function toAnthropicFormat(): array
-    {
-        return $this->toAnthropic();
-    }
-
-    /**
      * 从数组创建实例
      */
     public static function fromArray(array $data): self
@@ -338,7 +191,7 @@ class Request
                         $contentBlocks = [];
                         foreach ($msg['content'] as $block) {
                             if (is_array($block)) {
-                                $contentBlocks[] = \App\Services\Shared\DTO\ContentBlock::fromOpenAI($block);
+                                $contentBlocks[] = ContentBlock::fromArray($block);
                             }
                         }
                     } else {
@@ -352,13 +205,13 @@ class Request
                     $contentBlocks = $msg['content_blocks'];
                 }
 
-                $messages[] = new Message(
-                    role: \App\Services\Shared\Enums\MessageRole::from($msg['role'] ?? 'user'),
-                    content: $content,
-                    toolCalls: $msg['tool_calls'] ?? null,
-                    toolCallId: $msg['tool_call_id'] ?? null,
-                    contentBlocks: $contentBlocks,
-                );
+                $message = new Message;
+                $message->role = \App\Services\Shared\Enums\MessageRole::from($msg['role'] ?? 'user');
+                $message->content = $content;
+                $message->toolCalls = $msg['tool_calls'] ?? null;
+                $message->toolCallId = $msg['tool_call_id'] ?? null;
+                $message->contentBlocks = $contentBlocks;
+                $messages[] = $message;
             }
         }
 
@@ -374,30 +227,31 @@ class Request
         ];
         $additionalParams = $data['additional_params'] ?? [];
         foreach ($data as $key => $value) {
-            if (!in_array($key, $knownFields) && !isset($additionalParams[$key])) {
+            if (! in_array($key, $knownFields) && ! isset($additionalParams[$key])) {
                 $additionalParams[$key] = $value;
             }
         }
 
-        return new self(
-            model: $data['model'] ?? '',
-            messages: $messages,
-            maxTokens: $data['max_tokens'] ?? null,
-            temperature: $data['temperature'] ?? null,
-            topP: $data['top_p'] ?? null,
-            topK: $data['top_k'] ?? null,
-            stream: $data['stream'] ?? false,
-            stopSequences: $data['stop_sequences'] ?? $data['stop'] ?? null,
-            system: $systemField,
-            tools: $data['tools'] ?? null,
-            toolChoice: $data['tool_choice'] ?? null,
-            thinking: $data['thinking'] ?? null,
-            metadata: $data['metadata'] ?? null,
-            user: $data['user'] ?? null,
-            additionalParams: $additionalParams,
-            rawRequest: $data['rawRequest'] ?? $data ?? null,
-            rawBodyString: $data['rawBodyString'] ?? null,
-            queryString: $data['queryString'] ?? null,
-        );
+        $request = new self;
+        $request->model = $data['model'] ?? '';
+        $request->messages = $messages;
+        $request->maxTokens = $data['max_tokens'] ?? null;
+        $request->temperature = $data['temperature'] ?? null;
+        $request->topP = $data['top_p'] ?? null;
+        $request->topK = $data['top_k'] ?? null;
+        $request->stream = $data['stream'] ?? false;
+        $request->stopSequences = $data['stop_sequences'] ?? $data['stop'] ?? null;
+        $request->system = $systemField;
+        $request->tools = $data['tools'] ?? null;
+        $request->toolChoice = $data['tool_choice'] ?? null;
+        $request->thinking = $data['thinking'] ?? null;
+        $request->metadata = $data['metadata'] ?? null;
+        $request->user = $data['user'] ?? null;
+        $request->additionalParams = $additionalParams;
+        $request->rawRequest = $data['rawRequest'] ?? $data ?? null;
+        $request->rawBodyString = $data['rawBodyString'] ?? null;
+        $request->queryString = $data['queryString'] ?? null;
+
+        return $request;
     }
 }

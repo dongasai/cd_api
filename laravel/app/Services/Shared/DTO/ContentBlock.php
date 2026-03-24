@@ -9,222 +9,125 @@ namespace App\Services\Shared\DTO;
  */
 class ContentBlock
 {
-    public function __construct(
-        public string $type,
-        public ?string $text = null,
-        public ?array $citations = null, // 文本引用列表（PDF、纯文本、内容块引用）
-        public ?array $source = null,
-        public ?string $imageUrl = null,
-        public ?string $detail = null,
-        public ?string $audioData = null,
-        public ?string $audioFormat = null,
-        public ?string $toolId = null,
-        public ?string $toolName = null,
-        public ?array $toolInput = null,
-        public ?array $caller = null, // 工具调用者信息（direct|server_tool）
-        public ?string $toolResultId = null,
-        public ?string $toolResultContent = null,
-        public ?bool $toolResultIsError = null,
-        public ?string $thinking = null,
-        public ?string $signature = null,
-        public ?array $cacheControl = null,
-    ) {}
+    /**
+     * 内容块类型
+     *
+     * @var string (text|image|tool_use|tool_result|thinking)
+     */
+    public string $type;
 
     /**
-     * 从 OpenAI 格式创建
+     * 文本内容
      */
-    public static function fromOpenAI(array $block): self
-    {
-        $type = $block['type'] ?? 'text';
-
-        return match ($type) {
-            'text' => new self(
-                type: 'text',
-                text: $block['text'] ?? '',
-            ),
-            'image_url' => new self(
-                type: 'image_url',
-                imageUrl: $block['image_url']['url'] ?? null,
-                detail: $block['image_url']['detail'] ?? null,
-            ),
-            'input_audio' => new self(
-                type: 'audio',
-                audioData: $block['input_audio']['data'] ?? null,
-                audioFormat: $block['input_audio']['format'] ?? null,
-            ),
-            default => new self(type: $type, text: $block['text'] ?? null),
-        };
-    }
+    public ?string $text = null;
 
     /**
-     * 从 Anthropic 格式创建
+     * 文本引用列表（PDF、纯文本、内容块引用）
      */
-    public static function fromAnthropic(array $block): self
-    {
-        $type = $block['type'] ?? 'text';
-        $cacheControl = $block['cache_control'] ?? null;
-
-        return match ($type) {
-            'text' => new self(
-                type: 'text',
-                text: $block['text'] ?? '',
-                citations: $block['citations'] ?? null,
-                cacheControl: $cacheControl,
-            ),
-            'image' => new self(
-                type: 'image',
-                source: $block['source'] ?? null,
-                cacheControl: $cacheControl,
-            ),
-            'tool_use' => new self(
-                type: 'tool_use',
-                toolId: $block['id'] ?? null,
-                toolName: $block['name'] ?? null,
-                toolInput: $block['input'] ?? null,
-                caller: $block['caller'] ?? null,
-                cacheControl: $cacheControl,
-            ),
-            'tool_result' => new self(
-                type: 'tool_result',
-                toolResultId: $block['tool_use_id'] ?? null,
-                toolResultContent: is_array($block['content'] ?? null)
-                    ? json_encode($block['content'])
-                    : $block['content'],
-                toolResultIsError: $block['is_error'] ?? null,
-                cacheControl: $cacheControl,
-            ),
-            'thinking' => new self(
-                type: 'thinking',
-                thinking: $block['thinking'] ?? '',
-                signature: $block['signature'] ?? null,
-                cacheControl: $cacheControl,
-            ),
-            default => new self(type: $type, text: $block['text'] ?? null, cacheControl: $cacheControl),
-        };
-    }
+    public ?array $citations = null;
 
     /**
-     * 转换为 OpenAI 格式
+     * 图片/音频来源
      */
-    public function toOpenAI(): array
-    {
-        $result = match ($this->type) {
-            'text' => [
-                'type' => 'text',
-                'text' => $this->text ?? '',
-            ],
-            'image', 'image_url' => [
-                'type' => 'image_url',
-                'image_url' => array_filter([
-                    'url' => $this->imageUrl ?? $this->source['url'] ?? null,
-                    'detail' => $this->detail,
-                ], fn ($v) => $v !== null),
-            ],
-            'audio' => [
-                'type' => 'input_audio',
-                'input_audio' => array_filter([
-                    'data' => $this->audioData,
-                    'format' => $this->audioFormat,
-                ], fn ($v) => $v !== null),
-            ],
-            'tool_result' => [
-                'type' => 'text',
-                'text' => $this->toolResultContent ?? '',
-            ],
-            'tool_use' => [
-                'type' => 'text',
-                'text' => json_encode([
-                    'tool_call_id' => $this->toolId,
-                    'name' => $this->toolName,
-                    'arguments' => $this->toolInput,
-                ], JSON_UNESCAPED_UNICODE),
-            ],
-            'thinking' => [
-                'type' => 'text',
-                'text' => $this->thinking ?? '',
-            ],
-            default => [
-                'type' => 'text',
-                'text' => $this->text ?? '',
-            ],
-        };
-
-        // 只保留必要的字段,过滤掉null值,避免上游API误判
-        return array_filter($result, fn ($v) => $v !== null && $v !== []);
-    }
+    public ?array $source = null;
 
     /**
-     * 转换为 Anthropic 格式
+     * 图片 URL
      */
-    public function toAnthropic(bool $includeCacheControl = true): array
-    {
-        $result = match ($this->type) {
-            'text' => [
-                'type' => 'text',
-                'text' => $this->text ?? '',
-                ...($this->citations !== null ? ['citations' => $this->citations] : []),
-            ],
-            'image', 'image_url' => [
-                'type' => 'image',
-                'source' => $this->source ?? [
-                    'type' => 'url',
-                    'url' => $this->imageUrl,
-                ],
-            ],
-            'tool_use' => [
-                'type' => 'tool_use',
-                'id' => $this->toolId,
-                'name' => $this->toolName,
-                'input' => $this->toolInput ?? [],
-                ...($this->caller !== null ? ['caller' => $this->caller] : []),
-            ],
-            'tool_result' => [
-                'type' => 'tool_result',
-                'content' => $this->toolResultContent,
-                ...($this->toolResultIsError === true ? ['is_error' => true] : []),
-                'tool_use_id' => $this->toolResultId,
-            ],
-            'thinking' => [
-                'type' => 'thinking',
-                'thinking' => $this->thinking ?? '',
-                ...($this->signature !== null ? ['signature' => $this->signature] : []),
-            ],
-            default => [
-                'type' => $this->type,
-                'text' => $this->text,
-            ],
-        };
-
-        if ($includeCacheControl && $this->cacheControl !== null) {
-            $result['cache_control'] = $this->cacheControl;
-        }
-
-        return $result;
-    }
+    public ?string $imageUrl = null;
 
     /**
-     * 转换为数组
+     * 图片详情级别
      */
-    public function toArray(): array
+    public ?string $detail = null;
+
+    /**
+     * 音频数据
+     */
+    public ?string $audioData = null;
+
+    /**
+     * 音频格式
+     */
+    public ?string $audioFormat = null;
+
+    /**
+     * 工具调用 ID
+     */
+    public ?string $toolId = null;
+
+    /**
+     * 工具名称
+     */
+    public ?string $toolName = null;
+
+    /**
+     * 工具输入参数
+     */
+    public ?array $toolInput = null;
+
+    /**
+     * 工具调用者信息
+     *
+     * @var array|null (direct|server_tool)
+     */
+    public ?array $caller = null;
+
+    /**
+     * 工具结果 ID
+     */
+    public ?string $toolResultId = null;
+
+    /**
+     * 工具结果内容
+     */
+    public ?string $toolResultContent = null;
+
+    /**
+     * 工具结果是否为错误
+     */
+    public ?bool $toolResultIsError = null;
+
+    /**
+     * 思考内容
+     */
+    public ?string $thinking = null;
+
+    /**
+     * 签名
+     */
+    public ?string $signature = null;
+
+    /**
+     * 缓存控制
+     */
+    public ?array $cacheControl = null;
+
+    /**
+     * 从数组创建
+     */
+    public static function fromArray(array $block): self
     {
-        return [
-            'type' => $this->type,
-            'text' => $this->text,
-            'citations' => $this->citations,
-            'source' => $this->source,
-            'image_url' => $this->imageUrl,
-            'detail' => $this->detail,
-            'audio_data' => $this->audioData,
-            'audio_format' => $this->audioFormat,
-            'tool_id' => $this->toolId,
-            'tool_name' => $this->toolName,
-            'tool_input' => $this->toolInput,
-            'caller' => $this->caller,
-            'tool_result_id' => $this->toolResultId,
-            'tool_result_content' => $this->toolResultContent,
-            'tool_result_is_error' => $this->toolResultIsError,
-            'thinking' => $this->thinking,
-            'signature' => $this->signature,
-        ];
+        $dto = new self;
+        $dto->type = $block['type'] ?? 'text';
+        $dto->text = $block['text'] ?? null;
+        $dto->citations = $block['citations'] ?? null;
+        $dto->source = $block['source'] ?? null;
+        $dto->imageUrl = $block['image_url']['url'] ?? $block['image_url'] ?? null;
+        $dto->detail = $block['image_url']['detail'] ?? $block['detail'] ?? null;
+        $dto->audioData = $block['audio_data'] ?? $block['input_audio']['data'] ?? null;
+        $dto->audioFormat = $block['audio_format'] ?? $block['input_audio']['format'] ?? null;
+        $dto->toolId = $block['tool_id'] ?? $block['id'] ?? null;
+        $dto->toolName = $block['tool_name'] ?? $block['name'] ?? null;
+        $dto->toolInput = $block['tool_input'] ?? $block['input'] ?? null;
+        $dto->caller = $block['caller'] ?? null;
+        $dto->toolResultId = $block['tool_result_id'] ?? $block['tool_use_id'] ?? null;
+        $dto->toolResultContent = $block['tool_result_content'] ?? (is_array($block['content'] ?? null) ? json_encode($block['content']) : ($block['content'] ?? null));
+        $dto->toolResultIsError = $block['tool_result_is_error'] ?? $block['is_error'] ?? null;
+        $dto->thinking = $block['thinking'] ?? null;
+        $dto->signature = $block['signature'] ?? null;
+        $dto->cacheControl = $block['cache_control'] ?? $block['cacheControl'] ?? null;
+
+        return $dto;
     }
 }

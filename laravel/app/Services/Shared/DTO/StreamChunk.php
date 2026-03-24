@@ -13,28 +13,100 @@ use App\Services\Shared\Enums\StreamEventType;
  */
 class StreamChunk
 {
-    public function __construct(
-        public string $id = '',
-        public string $model = '',
-        public ?string $contentDelta = null,
-        public ?FinishReason $finishReason = null,
-        public ?int $index = 0,
-        public StreamEventType $type = StreamEventType::ContentDelta,
-        public ?ToolCall $toolCall = null,
-        public ?string $reasoningDelta = null,
-        public ?string $signature = null,
-        public ?Usage $usage = null,
-        public ?string $rawEvent = null,
-        public ?string $error = null,
-        public ?ErrorType $errorType = null,
-        public bool $isPartial = false,
-        public ?string $parseError = null,
-        // 兼容旧字段（临时保留）
-        public string $event = '',
-        public array $data = [],
-        public string $delta = '',
-        public ?array $toolCalls = null,
-    ) {}
+    /**
+     * 响应 ID
+     */
+    public string $id = '';
+
+    /**
+     * 模型名称
+     */
+    public string $model = '';
+
+    /**
+     * 内容增量
+     */
+    public ?string $contentDelta = null;
+
+    /**
+     * 结束原因
+     */
+    public ?FinishReason $finishReason = null;
+
+    /**
+     * 索引
+     */
+    public ?int $index = 0;
+
+    /**
+     * 事件类型
+     */
+    public StreamEventType $type = StreamEventType::ContentDelta;
+
+    /**
+     * 工具调用
+     */
+    public ?ToolCall $toolCall = null;
+
+    /**
+     * 推理增量
+     */
+    public ?string $reasoningDelta = null;
+
+    /**
+     * 签名
+     */
+    public ?string $signature = null;
+
+    /**
+     * 使用量
+     */
+    public ?Usage $usage = null;
+
+    /**
+     * 原始事件
+     */
+    public ?string $rawEvent = null;
+
+    /**
+     * 错误信息
+     */
+    public ?string $error = null;
+
+    /**
+     * 错误类型
+     */
+    public ?ErrorType $errorType = null;
+
+    /**
+     * 是否为部分数据
+     */
+    public bool $isPartial = false;
+
+    /**
+     * 解析错误
+     */
+    public ?string $parseError = null;
+
+    /**
+     * 事件名称（兼容旧字段）
+     */
+    public string $event = '';
+
+    /**
+     * 数据（兼容旧字段）
+     */
+    public array $data = [];
+
+    /**
+     * 增量（兼容旧字段）
+     */
+    public string $delta = '';
+
+    /**
+     * 工具调用列表（兼容旧字段）
+     */
+    public ?array $toolCalls = null;
 
     /**
      * 是否为空数据块
@@ -66,26 +138,5 @@ class StreamChunk
     public function isDone(): bool
     {
         return $this->event === 'message_stop' || $this->finishReason !== null;
-    }
-
-    /**
-     * 转换为数组格式
-     */
-    public function toArray(): array
-    {
-        return [
-            'id' => $this->id,
-            'model' => $this->model,
-            'content_delta' => $this->contentDelta,
-            'finish_reason' => $this->finishReason?->value,
-            'index' => $this->index,
-            'type' => $this->type->value,
-            'tool_call' => $this->toolCall?->toArray(),
-            'reasoning_delta' => $this->reasoningDelta,
-            'usage' => $this->usage?->toArray(),
-            'event' => $this->event,
-            'data' => $this->data,
-            'delta' => $this->delta,
-        ];
     }
 }
