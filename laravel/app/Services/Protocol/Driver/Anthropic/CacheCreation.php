@@ -4,6 +4,7 @@ namespace App\Services\Protocol\Driver\Anthropic;
 
 use App\Services\Protocol\Driver\Concerns\Convertible;
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
+use App\Services\Shared\DTO\CacheCreation as SharedCacheCreation;
 
 /**
  * Anthropic 缓存创建信息结构体
@@ -55,5 +56,28 @@ class CacheCreation
             'ephemeral_1h_input_tokens' => $this->ephemeral_1h_input_tokens,
             'ephemeral_5m_input_tokens' => $this->ephemeral_5m_input_tokens,
         ];
+    }
+
+    /**
+     * 转换为 Shared\DTO
+     */
+    public function toSharedDTO(): SharedCacheCreation
+    {
+        $dto = new SharedCacheCreation;
+        $dto->ephemeral1hInputTokens = $this->ephemeral_1h_input_tokens;
+        $dto->ephemeral5mInputTokens = $this->ephemeral_5m_input_tokens;
+
+        return $dto;
+    }
+
+    /**
+     * 从 Shared\DTO 创建
+     */
+    public static function fromSharedDTO(object $dto): static
+    {
+        return new self(
+            ephemeral_1h_input_tokens: $dto->ephemeral1hInputTokens ?? 0,
+            ephemeral_5m_input_tokens: $dto->ephemeral5mInputTokens ?? 0,
+        );
     }
 }

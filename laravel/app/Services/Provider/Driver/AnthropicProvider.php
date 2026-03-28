@@ -168,7 +168,11 @@ class AnthropicProvider extends AbstractProvider
                 $id = $message['id'] ?? null;
                 $model = $message['model'] ?? null;
                 if (isset($message['usage'])) {
-                    $usage = Usage::fromAnthropic($message['usage']);
+                    $usage = new Usage;
+                    $usage->inputTokens = $message['usage']['input_tokens'] ?? 0;
+                    $usage->outputTokens = $message['usage']['output_tokens'] ?? 0;
+                    $usage->cacheReadInputTokens = $message['usage']['cache_read_input_tokens'] ?? null;
+                    $usage->cacheCreationInputTokens = $message['usage']['cache_creation_input_tokens'] ?? null;
                 }
                 break;
 
@@ -216,12 +220,24 @@ class AnthropicProvider extends AbstractProvider
                 break;
 
             case 'message_delta':
-                $usage = isset($parsed['usage'])
-                    ? Usage::fromAnthropic($parsed['usage'])
-                    : null;
+                if (isset($parsed['usage'])) {
+                    $usage = new Usage;
+                    $usage->inputTokens = $parsed['usage']['input_tokens'] ?? 0;
+                    $usage->outputTokens = $parsed['usage']['output_tokens'] ?? 0;
+                    $usage->cacheReadInputTokens = $parsed['usage']['cache_read_input_tokens'] ?? null;
+                    $usage->cacheCreationInputTokens = $parsed['usage']['cache_creation_input_tokens'] ?? null;
+                }
                 $stopReason = $parsed['delta']['stop_reason'] ?? null;
                 if ($stopReason !== null) {
-                    $finishReason = FinishReason::fromAnthropic($stopReason);
+                    $finishReason = match ($stopReason) {
+                        'end_turn' => FinishReason::EndTurn,
+                        'max_tokens' => FinishReason::MaxTokens,
+                        'stop_sequence' => FinishReason::StopSequence,
+                        'tool_use' => FinishReason::ToolUse,
+                        'pause_turn' => FinishReason::PauseTurn,
+                        'refusal' => FinishReason::Refusal,
+                        default => FinishReason::EndTurn,
+                    };
                 }
                 break;
 
@@ -230,18 +246,19 @@ class AnthropicProvider extends AbstractProvider
                 break;
         }
 
-        return new StreamChunk(
-            id: $id ?? '',
-            model: $model ?? '',
-            contentDelta: $delta !== '' ? $delta : null,
-            finishReason: $finishReason,
-            index: 0,
-            usage: $usage,
-            event: $event,
-            data: $parsed,
-            delta: $delta,
-            toolCalls: $toolCalls,
-            reasoningDelta: $reasoningDelta,
-        );
+        $chunk = new StreamChunk;
+        $chunk->id = $id ?? '';
+        $chunk->model = $model ?? '';
+        $chunk->contentDelta = $delta !== '' ? $delta : null;
+        $chunk->finishReason = $finishReason;
+        $chunk->index = 0;
+        $chunk->usage = $usage;
+        $chunk->event = $event;
+        $chunk->data = $parsed;
+        $chunk->delta = $delta;
+        $chunk->toolCalls = $toolCalls;
+        $chunk->reasoningDelta = $reasoningDelta;
+
+        return $chunk;
     }
 }

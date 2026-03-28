@@ -3,6 +3,7 @@
 namespace App\Services\Protocol\Driver\OpenAI;
 
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
+use App\Services\Shared\DTO\Tool as SharedTool;
 
 /**
  * OpenAI 工具定义结构体
@@ -34,27 +35,10 @@ class Tool
     }
 
     /**
-     * 从数组创建
-     *
-     * 支持 OpenAI 格式和 Anthropic 格式：
-     * - OpenAI: {type: 'function', function: {name, description, parameters}}
-     * - Anthropic: {name, input_schema, description}
+     * 从数组创建（仅处理 OpenAI 格式）
      */
     public static function fromArray(array $data): static
     {
-        // 检测并转换 Anthropic 格式
-        if (isset($data['input_schema']) && ! isset($data['function'])) {
-            // Anthropic 格式转换为 OpenAI 格式
-            $data = [
-                'type' => $data['type'] ?? 'function',
-                'function' => [
-                    'name' => $data['name'] ?? '',
-                    'description' => $data['description'] ?? '',
-                    'parameters' => $data['input_schema'] ?? [],
-                ],
-            ];
-        }
-
         $function = null;
         if (isset($data['function']) && is_array($data['function'])) {
             $function = FunctionDef::fromArray($data['function']);
@@ -80,5 +64,33 @@ class Tool
         }
 
         return $result;
+    }
+
+    /**
+     * 从 Shared\DTO 创建
+     */
+    public static function fromSharedDTO(SharedTool $dto): static
+    {
+        return new self(
+            type: 'function',
+            function: new FunctionDef(
+                name: $dto->name,
+                description: $dto->description,
+                parameters: $dto->parameters,
+            ),
+        );
+    }
+
+    /**
+     * 转换为 Shared\DTO
+     */
+    public function toSharedDTO(): SharedTool
+    {
+        $dto = new SharedTool;
+        $dto->name = $this->function?->name ?? '';
+        $dto->parameters = $this->function?->parameters ?? [];
+        $dto->description = $this->function?->description;
+
+        return $dto;
     }
 }

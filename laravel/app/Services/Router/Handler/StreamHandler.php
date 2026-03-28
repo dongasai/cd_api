@@ -94,8 +94,8 @@ class StreamHandler
                     $firstTokenMs = (int) ((microtime(true) - $startTime) * 1000);
                 }
 
-                // 收集流式块
-                $streamChunks[] = $chunk->toArray();
+                // 收集流式块（直接存储对象）
+                $streamChunks[] = $chunk;
 
                 // 收集 usage（来自最后一个有 usage 的 chunk）
                 if ($chunk->usage !== null) {
@@ -200,12 +200,12 @@ class StreamHandler
 
         foreach ($streamChunks as $chunk) {
             // 优先使用 content_delta
-            if (! empty($chunk['content_delta'])) {
-                $text .= $chunk['content_delta'];
+            if (! empty($chunk->contentDelta)) {
+                $text .= $chunk->contentDelta;
             }
             // 兼容旧字段 delta
-            elseif (! empty($chunk['delta'])) {
-                $text .= $chunk['delta'];
+            elseif (! empty($chunk->delta)) {
+                $text .= $chunk->delta;
             }
         }
 
@@ -220,8 +220,8 @@ class StreamHandler
         // 提取 ID（从第一个有效的 chunk）
         $id = '';
         foreach ($streamChunks as $chunk) {
-            if (! empty($chunk['id'])) {
-                $id = $chunk['id'];
+            if (! empty($chunk->id)) {
+                $id = $chunk->id;
                 break;
             }
         }
@@ -232,8 +232,8 @@ class StreamHandler
         // 提取推理内容
         $reasoningContent = '';
         foreach ($streamChunks as $chunk) {
-            if (! empty($chunk['reasoning_delta'])) {
-                $reasoningContent .= $chunk['reasoning_delta'];
+            if (! empty($chunk->reasoningDelta)) {
+                $reasoningContent .= $chunk->reasoningDelta;
             }
         }
 

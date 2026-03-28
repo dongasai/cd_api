@@ -119,17 +119,18 @@ class Usage
      */
     public function toSharedDTO(): SharedUsage
     {
-        return new SharedUsage(
-            inputTokens: $this->input_tokens,
-            outputTokens: $this->output_tokens,
-            totalTokens: $this->input_tokens + $this->output_tokens,
-            cacheReadInputTokens: $this->cache_read_input_tokens,
-            cacheCreationInputTokens: $this->cache_creation_input_tokens,
-            cacheCreation: $this->cache_creation?->toArray(),
-            inferenceGeo: $this->inference_geo,
-            serverToolUse: $this->server_tool_use,
-            serviceTier: $this->service_tier,
-        );
+        $dto = new SharedUsage;
+        $dto->inputTokens = $this->input_tokens;
+        $dto->outputTokens = $this->output_tokens;
+        $dto->totalTokens = $this->input_tokens + $this->output_tokens;
+        $dto->cacheReadInputTokens = $this->cache_read_input_tokens;
+        $dto->cacheCreationInputTokens = $this->cache_creation_input_tokens;
+        $dto->cacheCreation = $this->cache_creation?->toSharedDTO();
+        $dto->inferenceGeo = $this->inference_geo;
+        $dto->serverToolUse = $this->server_tool_use;
+        $dto->serviceTier = $this->service_tier;
+
+        return $dto;
     }
 
     /**
@@ -138,8 +139,8 @@ class Usage
     public static function fromSharedDTO(object $dto): static
     {
         $cacheCreation = null;
-        if (isset($dto->cacheCreation) && is_array($dto->cacheCreation)) {
-            $cacheCreation = CacheCreation::fromArray($dto->cacheCreation);
+        if ($dto->cacheCreation !== null) {
+            $cacheCreation = CacheCreation::fromSharedDTO($dto->cacheCreation);
         }
 
         return new self(

@@ -356,12 +356,11 @@ abstract class AbstractProvider implements ProviderInterface
         $headers = $this->getHeaders();
 
         // 存储实际请求信息
-        $this->lastRequestInfo = new ActualRequestInfo(
-            url: $url,
-            path: $endpoint,
-            headers: $headers,
-            body: is_string($body) ? json_decode($body, true) ?? $body : $body,
-        );
+        $this->lastRequestInfo = new ActualRequestInfo;
+        $this->lastRequestInfo->url = $url;
+        $this->lastRequestInfo->path = $endpoint;
+        $this->lastRequestInfo->headers = $headers;
+        $this->lastRequestInfo->body = is_string($body) ? json_decode($body, true) ?? $body : $body;
 
         try {
             // 根据 body 类型选择发送方式
@@ -554,27 +553,41 @@ abstract class AbstractProvider implements ProviderInterface
         }
 
         if (isset($choice['finish_reason']) && $choice['finish_reason'] !== null) {
-            $finishReason = \App\Services\Shared\Enums\FinishReason::fromOpenAI($choice['finish_reason']);
+            $finishReason = match ($choice['finish_reason']) {
+                'stop' => \App\Services\Shared\Enums\FinishReason::Stop,
+                'tool_calls' => \App\Services\Shared\Enums\FinishReason::ToolUse,
+                'length' => \App\Services\Shared\Enums\FinishReason::MaxTokens,
+                default => \App\Services\Shared\Enums\FinishReason::Stop,
+            };
         } elseif (isset($data['finish_reason']) && $data['finish_reason'] !== null) {
-            $finishReason = \App\Services\Shared\Enums\FinishReason::fromOpenAI($data['finish_reason']);
+            $finishReason = match ($data['finish_reason']) {
+                'stop' => \App\Services\Shared\Enums\FinishReason::Stop,
+                'tool_calls' => \App\Services\Shared\Enums\FinishReason::ToolUse,
+                'length' => \App\Services\Shared\Enums\FinishReason::MaxTokens,
+                default => \App\Services\Shared\Enums\FinishReason::Stop,
+            };
         }
 
         // 提取 usage
         if (isset($data['usage'])) {
-            $usage = Usage::fromOpenAI($data['usage']);
+            $usage = new Usage;
+            $usage->inputTokens = $data['usage']['prompt_tokens'] ?? 0;
+            $usage->outputTokens = $data['usage']['completion_tokens'] ?? 0;
+            $usage->cacheReadInputTokens = $data['usage']['prompt_tokens_details']['cached_tokens'] ?? null;
         }
 
-        return new StreamChunk(
-            id: $id,
-            model: $model,
-            contentDelta: $content !== '' ? $content : null,
-            finishReason: $finishReason,
-            usage: $usage,
-            event: 'done',
-            data: $data,
-            delta: $content,
-            toolCalls: $toolCalls,
-        );
+        $chunk = new StreamChunk;
+        $chunk->id = $id;
+        $chunk->model = $model;
+        $chunk->contentDelta = $content !== '' ? $content : null;
+        $chunk->finishReason = $finishReason;
+        $chunk->usage = $usage;
+        $chunk->event = 'done';
+        $chunk->data = $data;
+        $chunk->delta = $content;
+        $chunk->toolCalls = $toolCalls;
+
+        return $chunk;
     }
 
     /**
@@ -595,12 +608,11 @@ abstract class AbstractProvider implements ProviderInterface
         $headers = $this->getHeaders();
 
         // 存储实际请求信息
-        $this->lastRequestInfo = new ActualRequestInfo(
-            url: $url,
-            path: $endpoint,
-            headers: $headers,
-            body: is_string($body) ? json_decode($body, true) ?? $body : $body,
-        );
+        $this->lastRequestInfo = new ActualRequestInfo;
+        $this->lastRequestInfo->url = $url;
+        $this->lastRequestInfo->path = $endpoint;
+        $this->lastRequestInfo->headers = $headers;
+        $this->lastRequestInfo->body = is_string($body) ? json_decode($body, true) ?? $body : $body;
 
         // 根据 body 类型选择发送方式
         if (is_string($body)) {
@@ -846,5 +858,72 @@ abstract class AbstractProvider implements ProviderInterface
         } catch (\JsonException $e) {
             return $default;
         }
+    }
+
+    /**
+     * 解析 OpenAI 格式的流式响应块
+     *
+     * 适用于 OpenAI、Azure、DeepSeek 等兼容 OpenAI 格式的供应商
+     */
+    protected function parseOpenAIStreamChunk(string $rawChunk): ?StreamChunk
+    {
+        Log::debug("parseOpenAIStreamChunk \n".$rawChunk);
+
+        // 处理 "data: " 前缀
+        if (str_starts_with($rawChunk, 'data: ')) {
+            $rawChunk = substr($rawChunk, 6);
+        }
+
+        // 跳过空行和 "[DONE]"
+        if (trim($rawChunk) === '' || trim($rawChunk) === '[DONE]') {
+            return null;
+        }
+
+        $data = json_decode($rawChunk, true);
+        if ($data === null) {
+            return null;
+        }
+
+        $id = $data['id'] ?? '';
+        $model = $data['model'] ?? '';
+        $choices = $data['choices'] ?? [];
+        $choice = $choices[0] ?? [];
+
+        $delta = $choice['delta'] ?? [];
+        $finishReason = isset($choice['finish_reason']) && $choice['finish_reason'] !== null
+            ? match ($choice['finish_reason']) {
+                'stop' => \App\Services\Shared\Enums\FinishReason::Stop,
+                'tool_calls' => \App\Services\Shared\Enums\FinishReason::ToolUse,
+                'length' => \App\Services\Shared\Enums\FinishReason::MaxTokens,
+                default => \App\Services\Shared\Enums\FinishReason::Stop,
+            }
+        : null;
+
+        $contentDelta = $delta['content'] ?? null;
+        $reasoningDelta = $delta['reasoning_content'] ?? null;
+        $toolCalls = $delta['tool_calls'] ?? null;
+
+        $usage = null;
+        if (isset($data['usage'])) {
+            $usage = new Usage;
+            $usage->inputTokens = $data['usage']['prompt_tokens'] ?? 0;
+            $usage->outputTokens = $data['usage']['completion_tokens'] ?? 0;
+            $usage->cacheReadInputTokens = $data['usage']['prompt_tokens_details']['cached_tokens'] ?? null;
+        }
+
+        $chunk = new StreamChunk;
+        $chunk->id = $id;
+        $chunk->model = $model;
+        $chunk->contentDelta = $contentDelta;
+        $chunk->finishReason = $finishReason;
+        $chunk->index = $choice['index'] ?? 0;
+        $chunk->usage = $usage;
+        $chunk->event = '';
+        $chunk->data = $data;
+        $chunk->delta = $contentDelta ?? '';
+        $chunk->toolCalls = $toolCalls;
+        $chunk->reasoningDelta = $reasoningDelta;
+
+        return $chunk;
     }
 }

@@ -3,6 +3,8 @@
 namespace App\Services\Protocol\Driver\OpenAI;
 
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
+use App\Services\Shared\DTO\ToolCall as SharedToolCall;
+use App\Services\Shared\Enums\ToolType;
 
 /**
  * OpenAI 工具调用结构体
@@ -79,5 +81,36 @@ class ToolCall
         }
 
         return $result;
+    }
+
+    /**
+     * 从 Shared\DTO 创建
+     */
+    public static function fromSharedDTO(SharedToolCall $dto): static
+    {
+        return new self(
+            id: $dto->id ?? '',
+            type: $dto->type->value ?? 'function',
+            function: new ToolCallFunction(
+                name: $dto->name ?? '',
+                arguments: $dto->arguments ?? '',
+            ),
+            index: $dto->index,
+        );
+    }
+
+    /**
+     * 转换为 Shared\DTO
+     */
+    public function toSharedDTO(): SharedToolCall
+    {
+        $dto = new SharedToolCall;
+        $dto->id = $this->id;
+        $dto->type = ToolType::from($this->type);
+        $dto->name = $this->function?->name;
+        $dto->arguments = $this->function?->arguments;
+        $dto->index = $this->index;
+
+        return $dto;
     }
 }

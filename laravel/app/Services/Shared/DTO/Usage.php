@@ -2,6 +2,8 @@
 
 namespace App\Services\Shared\DTO;
 
+use App\Services\Shared\DTO\CacheCreation as CacheCreationDTO;
+
 /**
  * 使用量 DTO（合并 TokenUsage + StandardUsage）
  *
@@ -40,9 +42,9 @@ class Usage
     public ?int $cachedTokens = null;
 
     /**
-     * 缓存创建详情（Anthropic）
+     * 缓存创建详情
      */
-    public ?array $cacheCreation = null;
+    public ?CacheCreationDTO $cacheCreation = null;
 
     /**
      * 推理地理位置（Anthropic）

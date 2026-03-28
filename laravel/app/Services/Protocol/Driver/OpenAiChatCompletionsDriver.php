@@ -82,14 +82,18 @@ class OpenAiChatCompletionsDriver extends AbstractDriver
                 [
                     'index' => $chunk->index ?? 0,
                     'delta' => $delta,
-                    'finish_reason' => $chunk->finishReason?->toOpenAI(),
+                    'finish_reason' => $chunk->finishReason?->value,
                 ],
             ],
         ];
 
         // 添加 usage
         if ($chunk->usage !== null) {
-            $result['usage'] = $chunk->usage->toOpenAI();
+            $result['usage'] = [
+                'prompt_tokens' => $chunk->usage->inputTokens,
+                'completion_tokens' => $chunk->usage->outputTokens,
+                'total_tokens' => $chunk->usage->getTotalTokens(),
+            ];
         }
 
         // 处理工具调用

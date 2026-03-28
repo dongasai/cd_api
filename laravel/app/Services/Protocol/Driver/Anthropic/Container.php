@@ -2,7 +2,9 @@
 
 namespace App\Services\Protocol\Driver\Anthropic;
 
+use App\Services\Protocol\Driver\Concerns\Convertible;
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
+use App\Services\Shared\DTO\Container as SharedContainer;
 
 /**
  * Anthropic 容器信息结构体
@@ -13,6 +15,7 @@ use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
  */
 class Container
 {
+    use Convertible;
     use JsonSerializiable;
 
     /**
@@ -69,5 +72,28 @@ class Container
 
         // 合并额外字段（透传）
         return array_merge($result, $this->additionalData);
+    }
+
+    /**
+     * 转换为 Shared\DTO
+     */
+    public function toSharedDTO(): SharedContainer
+    {
+        $dto = new SharedContainer;
+        $dto->id = $this->id;
+        $dto->expiresAt = $this->expires_at;
+
+        return $dto;
+    }
+
+    /**
+     * 从 Shared\DTO 创建
+     */
+    public static function fromSharedDTO(object $dto): static
+    {
+        return new self(
+            id: $dto->id ?? '',
+            expires_at: $dto->expiresAt ?? null,
+        );
     }
 }

@@ -224,22 +224,29 @@ class MessagesRequest implements ProtocolRequest
             $this->messages
         );
 
-        return new SharedRequest(
-            model: $this->model,
-            messages: $sharedMessages,
-            maxTokens: $this->max_tokens,
-            temperature: $this->temperature,
-            topP: $this->top_p,
-            topK: $this->top_k,
-            stream: $this->stream ?? false,
-            stopSequences: $this->stop_sequences,
-            system: $this->system,
-            tools: $this->tools ? array_map(fn (Tool $t) => $t->toArray(), $this->tools) : null,
-            toolChoice: $this->tool_choice,
-            thinking: $this->thinking,
-            metadata: $this->metadata,
-            rawRequest: $this->toArray(),
-        );
+        // 转换 tools 为 SharedDTO\Tool 对象数组
+        $sharedTools = null;
+        if ($this->tools !== null) {
+            $sharedTools = array_map(fn (Tool $t) => $t->toSharedDTO(), $this->tools);
+        }
+
+        $dto = new SharedRequest;
+        $dto->model = $this->model;
+        $dto->messages = $sharedMessages;
+        $dto->maxTokens = $this->max_tokens;
+        $dto->temperature = $this->temperature;
+        $dto->topP = $this->top_p;
+        $dto->topK = $this->top_k;
+        $dto->stream = $this->stream ?? false;
+        $dto->stopSequences = $this->stop_sequences;
+        $dto->system = $this->system;
+        $dto->tools = $sharedTools;
+        $dto->toolChoice = $this->tool_choice;
+        $dto->thinking = $this->thinking;
+        $dto->metadata = $this->metadata;
+        $dto->rawRequest = $this->toArray();
+
+        return $dto;
     }
 
     /**
@@ -253,12 +260,12 @@ class MessagesRequest implements ProtocolRequest
             $messages[] = Message::fromSharedDTO($msg);
         }
 
-        // 转换 tools 数组为 Tool 对象
+        // 转换 tools（SharedDTO\Tool 对象数组）为 Anthropic Tool 对象
         $tools = null;
         if ($dto->tools !== null) {
             $tools = [];
             foreach ($dto->tools as $tool) {
-                $tools[] = Tool::fromArray($tool);
+                $tools[] = Tool::fromSharedDTO($tool);
             }
         }
 

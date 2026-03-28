@@ -100,16 +100,18 @@ class Message
                 if ($block instanceof ContentBlock) {
                     $contentBlocks[] = $block->toSharedDTO();
                 } elseif (is_array($block)) {
-                    $contentBlocks[] = \App\Services\Shared\DTO\ContentBlock::fromAnthropic($block);
+                    // 直接构建 ContentBlock，不调用 fromAnthropic
+                    $contentBlocks[] = \App\Services\Shared\DTO\ContentBlock::fromArray($block);
                 }
             }
         }
 
-        return new SharedMessage(
-            role: MessageRole::from($this->role),
-            content: $content,
-            contentBlocks: $contentBlocks,
-        );
+        $dto = new SharedMessage;
+        $dto->role = MessageRole::from($this->role);
+        $dto->content = $content;
+        $dto->contentBlocks = $contentBlocks;
+
+        return $dto;
     }
 
     /**

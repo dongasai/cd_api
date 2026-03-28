@@ -212,7 +212,8 @@ class Message
                 if ($part instanceof ContentPart) {
                     $contentBlocks[] = $part->toSharedDTO();
                 } elseif (is_array($part)) {
-                    $contentBlocks[] = \App\Services\Shared\DTO\ContentBlock::fromOpenAI($part);
+                    // 直接构建 ContentBlock，不调用 fromOpenAI
+                    $contentBlocks[] = \App\Services\Shared\DTO\ContentBlock::fromArray($part);
                 }
             }
         }
@@ -237,14 +238,15 @@ class Message
             ];
         }
 
-        return new SharedMessage(
-            role: MessageRole::from($this->role),
-            content: $content,
-            toolCalls: $toolCalls,
-            toolCallId: $this->toolCallId,
-            contentBlocks: $contentBlocks,
-            name: $this->name,
-        );
+        $dto = new SharedMessage;
+        $dto->role = MessageRole::from($this->role);
+        $dto->content = $content;
+        $dto->toolCalls = $toolCalls;
+        $dto->toolCallId = $this->toolCallId;
+        $dto->contentBlocks = $contentBlocks;
+        $dto->name = $this->name;
+
+        return $dto;
     }
 
     /**

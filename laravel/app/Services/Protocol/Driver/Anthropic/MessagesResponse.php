@@ -203,14 +203,15 @@ class MessagesResponse implements ProtocolResponse
             'finish_reason' => $this->stop_reason,
         ];
 
-        return new SharedResponse(
-            id: $this->id,
-            model: $this->model,
-            choices: $choices,
-            usage: $this->usage?->toSharedDTO(),
-            finishReason: $this->mapStopReason($this->stop_reason),
-            container: $this->container?->toArray(),
-        );
+        $dto = new SharedResponse;
+        $dto->id = $this->id;
+        $dto->model = $this->model;
+        $dto->choices = $choices;
+        $dto->usage = $this->usage?->toSharedDTO();
+        $dto->finishReason = $this->mapStopReason($this->stop_reason);
+        $dto->container = $this->container?->toSharedDTO();
+
+        return $dto;
     }
 
     /**
@@ -262,12 +263,12 @@ class MessagesResponse implements ProtocolResponse
         }
 
         // 映射 finish_reason
-        $stopReason = $dto->finishReason?->toAnthropic();
+        $stopReason = $dto->finishReason?->value;
 
         // 解析 container
         $container = null;
-        if (isset($dto->container) && is_array($dto->container)) {
-            $container = Container::fromArray($dto->container);
+        if ($dto->container !== null) {
+            $container = Container::fromSharedDTO($dto->container);
         }
 
         return new self(

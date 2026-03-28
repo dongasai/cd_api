@@ -4,7 +4,6 @@ namespace App\Services\Provider\Driver;
 
 use App\Services\Protocol\Contracts\ProtocolRequest;
 use App\Services\Protocol\Contracts\ProtocolResponse;
-use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Protocol\Driver\OpenAI\ChatCompletionRequest;
 use App\Services\Protocol\Driver\OpenAI\ChatCompletionResponse;
 use App\Services\Shared\DTO\StreamChunk;
@@ -180,59 +179,5 @@ class AzureProvider extends AbstractProvider
         $this->recordSuccess();
 
         return $this->parseResponse($response->json());
-    }
-
-    /**
-     * 解析 OpenAI 流式响应块
-     */
-    protected function parseOpenAIStreamChunk(string $rawChunk): ?StreamChunk
-    {
-        // 处理 "data: " 前缀
-        if (str_starts_with($rawChunk, 'data: ')) {
-            $rawChunk = substr($rawChunk, 6);
-        }
-
-        // 跳过空行和 "[DONE]"
-        if (trim($rawChunk) === '' || trim($rawChunk) === '[DONE]') {
-            return null;
-        }
-
-        $data = json_decode($rawChunk, true);
-        if ($data === null) {
-            return null;
-        }
-
-        $id = $data['id'] ?? '';
-        $model = $data['model'] ?? '';
-        $choices = $data['choices'] ?? [];
-        $choice = $choices[0] ?? [];
-
-        $delta = $choice['delta'] ?? [];
-        $finishReason = isset($choice['finish_reason']) && $choice['finish_reason'] !== null
-            ? \App\Services\Shared\Enums\FinishReason::fromOpenAI($choice['finish_reason'])
-            : null;
-
-        $contentDelta = $delta['content'] ?? null;
-        $reasoningDelta = $delta['reasoning_content'] ?? null;
-        $toolCalls = $delta['tool_calls'] ?? null;
-
-        $usage = null;
-        if (isset($data['usage'])) {
-            $usage = \App\Services\Shared\DTO\Usage::fromOpenAI($data['usage']);
-        }
-
-        return new StreamChunk(
-            id: $id,
-            model: $model,
-            contentDelta: $contentDelta,
-            finishReason: $finishReason,
-            index: $choice['index'] ?? 0,
-            usage: $usage,
-            event: '',
-            data: $data,
-            delta: $contentDelta ?? '',
-            toolCalls: $toolCalls,
-            reasoningDelta: $reasoningDelta,
-        );
     }
 }

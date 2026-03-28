@@ -47,38 +47,35 @@ class ContentBlock
 
     public const TYPE_CONTAINER_UPLOAD = 'container_upload';
 
-    /**
-     * @param  string  $type  类型
-     * @param  string|null  $text  文本内容 (text 类型)
-     * @param  array|null  $citations  文本引用列表 (text 类型，支持 PDF、纯文本、内容块的引用)
-     * @param  array|null  $source  图片源 (image 类型)
-     * @param  string|null  $id  工具调用 ID (tool_use 类型)
-     * @param  string|null  $name  工具名称 (tool_use 类型)
-     * @param  array|null  $input  工具输入 (tool_use 类型)
-     * @param  array|null  $caller  调用者信息 (tool_use 类型，包含 type: direct|server_tool 等信息)
-     * @param  string|null  $tool_use_id  工具结果 ID (tool_result 类型)
-     * @param  string|array|null  $content  工具结果内容 (tool_result 类型)
-     * @param  bool|null  $is_error  是否错误 (tool_result 类型)
-     * @param  string|null  $thinking  推理内容 (thinking 类型)
-     * @param  string|null  $signature  签名 (thinking 类型)
-     * @param  array  $additionalData  额外字段（用于透传新字段）
-     */
-    public function __construct(
-        public string $type = 'text',
-        public ?string $text = null,
-        public ?array $citations = null,
-        public ?array $source = null,
-        public ?string $id = null,
-        public ?string $name = null,
-        public ?array $input = null,
-        public ?array $caller = null,
-        public ?string $tool_use_id = null,
-        public string|array|null $content = null,
-        public ?bool $is_error = null,
-        public ?string $thinking = null,
-        public ?string $signature = null,
-        public array $additionalData = [],
-    ) {}
+    public string $type = 'text';
+
+    public ?string $text = null;
+
+    public ?array $citations = null;
+
+    public ?array $source = null;
+
+    public ?string $id = null;
+
+    public ?string $name = null;
+
+    public ?array $input = null;
+
+    public ?array $caller = null;
+
+    public ?string $tool_use_id = null;
+
+    public string|array|null $content = null;
+
+    public ?bool $is_error = null;
+
+    public ?string $thinking = null;
+
+    public ?string $signature = null;
+
+    public ?array $cache_control = null;
+
+    public array $additionalData = [];
 
     /**
      * 验证规则
@@ -116,6 +113,7 @@ class ContentBlock
             'is_error' => 'nullable|boolean',
             'thinking' => 'nullable|string',
             'signature' => 'nullable|string',
+            'cache_control' => 'nullable|array',
         ];
     }
 
@@ -124,30 +122,30 @@ class ContentBlock
      */
     public static function fromArray(array $data): static
     {
+        $instance = new self;
+        $instance->type = $data['type'] ?? 'text';
+        $instance->text = $data['text'] ?? null;
+        $instance->citations = $data['citations'] ?? null;
+        $instance->source = $data['source'] ?? null;
+        $instance->id = $data['id'] ?? null;
+        $instance->name = $data['name'] ?? null;
+        $instance->input = $data['input'] ?? null;
+        $instance->caller = $data['caller'] ?? null;
+        $instance->tool_use_id = $data['tool_use_id'] ?? null;
+        $instance->content = $data['content'] ?? null;
+        $instance->is_error = $data['is_error'] ?? null;
+        $instance->thinking = $data['thinking'] ?? null;
+        $instance->signature = $data['signature'] ?? null;
+        $instance->cache_control = $data['cache_control'] ?? null;
+
         // 提取已知字段
         $knownKeys = [
             'type', 'text', 'citations', 'source', 'id', 'name', 'input', 'caller',
-            'tool_use_id', 'content', 'is_error', 'thinking', 'signature',
+            'tool_use_id', 'content', 'is_error', 'thinking', 'signature', 'cache_control',
         ];
+        $instance->additionalData = array_diff_key($data, array_flip($knownKeys));
 
-        $additionalData = array_diff_key($data, array_flip($knownKeys));
-
-        return new self(
-            type: $data['type'] ?? 'text',
-            text: $data['text'] ?? null,
-            citations: $data['citations'] ?? null,
-            source: $data['source'] ?? null,
-            id: $data['id'] ?? null,
-            name: $data['name'] ?? null,
-            input: $data['input'] ?? null,
-            caller: $data['caller'] ?? null,
-            tool_use_id: $data['tool_use_id'] ?? null,
-            content: $data['content'] ?? null,
-            is_error: $data['is_error'] ?? null,
-            thinking: $data['thinking'] ?? null,
-            signature: $data['signature'] ?? null,
-            additionalData: $additionalData,
-        );
+        return $instance;
     }
 
     /**
@@ -207,6 +205,10 @@ class ContentBlock
             $result['signature'] = $this->signature;
         }
 
+        if ($this->cache_control !== null) {
+            $result['cache_control'] = $this->cache_control;
+        }
+
         // 合并额外字段（透传）
         return array_merge($result, $this->additionalData);
     }
@@ -216,7 +218,24 @@ class ContentBlock
      */
     public function toSharedDTO(): SharedContentBlock
     {
-        return SharedContentBlock::fromAnthropic($this->toArray());
+        // 直接构建 DTO，不调用 fromAnthropic
+        $dto = new SharedContentBlock;
+        $dto->type = $this->type;
+        $dto->text = $this->text;
+        $dto->citations = $this->citations;
+        $dto->source = $this->source;
+        $dto->toolId = $this->id;
+        $dto->toolName = $this->name;
+        $dto->toolInput = $this->input;
+        $dto->caller = $this->caller;
+        $dto->toolResultId = $this->tool_use_id;
+        $dto->toolResultContent = is_array($this->content) ? json_encode($this->content) : $this->content;
+        $dto->toolResultIsError = $this->is_error;
+        $dto->thinking = $this->thinking;
+        $dto->signature = $this->signature;
+        $dto->cacheControl = $this->cache_control;
+
+        return $dto;
     }
 
     /**
@@ -224,7 +243,48 @@ class ContentBlock
      */
     public static function fromSharedDTO(object $dto): static
     {
-        $data = $dto->toAnthropic();
+        $data = match ($dto->type) {
+            'text' => [
+                'type' => 'text',
+                'text' => $dto->text ?? '',
+                'citations' => $dto->citations,
+                'cache_control' => $dto->cacheControl,
+            ],
+            'image', 'image_url' => [
+                'type' => 'image',
+                'source' => $dto->source ?? [
+                    'type' => 'url',
+                    'url' => $dto->imageUrl,
+                ],
+                'cache_control' => $dto->cacheControl,
+            ],
+            'tool_use' => [
+                'type' => 'tool_use',
+                'id' => $dto->toolId,
+                'name' => $dto->toolName,
+                'input' => $dto->toolInput ?? [],
+                'caller' => $dto->caller,
+                'cache_control' => $dto->cacheControl,
+            ],
+            'tool_result' => [
+                'type' => 'tool_result',
+                'tool_use_id' => $dto->toolResultId,
+                'content' => $dto->toolResultContent,
+                'is_error' => $dto->toolResultIsError,
+                'cache_control' => $dto->cacheControl,
+            ],
+            'thinking' => [
+                'type' => 'thinking',
+                'thinking' => $dto->thinking ?? '',
+                'signature' => $dto->signature,
+                'cache_control' => $dto->cacheControl,
+            ],
+            default => [
+                'type' => $dto->type,
+                'text' => $dto->text,
+                'cache_control' => $dto->cacheControl,
+            ],
+        };
 
         return self::fromArray($data);
     }

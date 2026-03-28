@@ -400,9 +400,12 @@ class AnthropicMessagesDriver extends AbstractDriver
         $delta = [
             'type' => self::EVENT_MESSAGE_DELTA,
             'delta' => [
-                'stop_reason' => $chunk->finishReason?->toAnthropic(),
+                'stop_reason' => $chunk->finishReason?->value,
             ],
-            'usage' => $chunk->usage ? $chunk->usage->toAnthropic() : ['output_tokens' => 0],
+            'usage' => $chunk->usage ? [
+                'input_tokens' => $chunk->usage->inputTokens,
+                'output_tokens' => $chunk->usage->outputTokens,
+            ] : ['output_tokens' => 0],
         ];
         $output .= $this->buildSSEEvent(self::EVENT_MESSAGE_DELTA, $this->safeJsonEncode($delta));
 

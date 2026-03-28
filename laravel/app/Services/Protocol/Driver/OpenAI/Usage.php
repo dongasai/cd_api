@@ -92,16 +92,16 @@ class Usage
     {
         $cachedTokens = $this->prompt_tokens_details['cached_tokens'] ?? null;
 
-        return new SharedUsage(
-            inputTokens: $this->prompt_tokens,
-            outputTokens: $this->completion_tokens ?? 0,
-            totalTokens: $this->total_tokens,
-            cacheReadInputTokens: $cachedTokens,
-            cacheCreationInputTokens: null,
-            cachedTokens: $cachedTokens,
-            audioTokens: $this->prompt_tokens_details['audio_tokens'] ?? null,
-            reasoningTokens: $this->completion_tokens_details['reasoning_tokens'] ?? null,
-        );
+        $dto = new SharedUsage;
+        $dto->inputTokens = $this->prompt_tokens;
+        $dto->outputTokens = $this->completion_tokens ?? 0;
+        $dto->totalTokens = $this->total_tokens;
+        $dto->cacheReadInputTokens = $cachedTokens;
+        $dto->cachedTokens = $cachedTokens;
+        $dto->audioTokens = $this->prompt_tokens_details['audio_tokens'] ?? null;
+        $dto->reasoningTokens = $this->completion_tokens_details['reasoning_tokens'] ?? null;
+
+        return $dto;
     }
 
     /**

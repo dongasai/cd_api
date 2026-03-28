@@ -3,6 +3,7 @@
 namespace App\Services\Protocol\Driver\Anthropic;
 
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
+use App\Services\Shared\DTO\Tool as SharedTool;
 
 /**
  * Anthropic 工具定义结构体
@@ -60,25 +61,10 @@ class Tool
     }
 
     /**
-     * 从数组创建
-     *
-     * 支持 Anthropic 格式和 OpenAI 格式：
-     * - Anthropic: {name, input_schema, description}
-     * - OpenAI: {type: 'function', function: {name, description, parameters}}
+     * 从数组创建（仅处理 Anthropic 格式）
      */
     public static function fromArray(array $data): static
     {
-        // 检测并转换 OpenAI 格式
-        if (isset($data['function']) && ! isset($data['input_schema'])) {
-            // OpenAI 格式转换为 Anthropic 格式
-            $data = [
-                'name' => $data['function']['name'] ?? '',
-                'input_schema' => $data['function']['parameters'] ?? [],
-                'description' => $data['function']['description'] ?? null,
-                'type' => $data['type'] ?? null,
-            ];
-        }
-
         // 提取已知字段
         $knownKeys = [
             'name', 'input_schema', 'description', 'type',
@@ -147,5 +133,30 @@ class Tool
 
         // 合并额外字段（透传）
         return array_merge($result, $this->additionalData);
+    }
+
+    /**
+     * 从 Shared\DTO 创建
+     */
+    public static function fromSharedDTO(SharedTool $dto): static
+    {
+        return new self(
+            name: $dto->name,
+            input_schema: $dto->parameters,
+            description: $dto->description,
+        );
+    }
+
+    /**
+     * 转换为 Shared\DTO
+     */
+    public function toSharedDTO(): SharedTool
+    {
+        $dto = new SharedTool;
+        $dto->name = $this->name;
+        $dto->parameters = $this->input_schema;
+        $dto->description = $this->description;
+
+        return $dto;
     }
 }

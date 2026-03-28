@@ -2,6 +2,8 @@
 
 namespace App\Services\Shared\DTO;
 
+use App\Services\Shared\DTO\Container as ContainerDTO;
+
 /**
  * 统一响应 DTO
  *
@@ -56,7 +58,7 @@ class Response
     /**
      * 容器信息 (Anthropic)
      */
-    public ?array $container = null;
+    public ?ContainerDTO $container = null;
 
     /**
      * 原始响应

@@ -101,7 +101,15 @@ class ContentPart
      */
     public function toSharedDTO(): SharedContentBlock
     {
-        return SharedContentBlock::fromOpenAI($this->toArray());
+        $dto = new SharedContentBlock;
+        $dto->type = $this->type;
+        $dto->text = $this->text;
+        $dto->imageUrl = $this->image_url['url'] ?? null;
+        $dto->detail = $this->image_url['detail'] ?? null;
+        $dto->audioData = $this->image_data;
+        $dto->audioFormat = null;
+
+        return $dto;
     }
 
     /**
@@ -109,9 +117,28 @@ class ContentPart
      */
     public static function fromSharedDTO(object $dto): static
     {
-        $data = $dto->toOpenAI();
-
-        return self::fromArray($data);
+        // 直接读取 DTO 属性，不调用 toOpenAI()
+        return match ($dto->type) {
+            'text' => new self(
+                type: 'text',
+                text: $dto->text ?? '',
+            ),
+            'image', 'image_url' => new self(
+                type: 'image_url',
+                image_url: array_filter([
+                    'url' => $dto->imageUrl ?? $dto->source['url'] ?? null,
+                    'detail' => $dto->detail,
+                ], fn ($v) => $v !== null),
+            ),
+            'audio' => new self(
+                type: 'input_audio',
+                image_data: $dto->audioData,
+            ),
+            default => new self(
+                type: $dto->type,
+                text: $dto->text,
+            ),
+        };
     }
 
     /**

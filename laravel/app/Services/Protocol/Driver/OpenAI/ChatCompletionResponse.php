@@ -133,15 +133,16 @@ class ChatCompletionResponse implements ProtocolResponse
             }
         }
 
-        return new SharedResponse(
-            id: $this->id,
-            model: $this->model,
-            choices: $sharedChoices,
-            usage: $this->usage?->toSharedDTO(),
-            finishReason: $finishReason,
-            systemFingerprint: $this->system_fingerprint,
-            created: $this->created,
-        );
+        $dto = new SharedResponse;
+        $dto->id = $this->id;
+        $dto->model = $this->model;
+        $dto->choices = $sharedChoices;
+        $dto->usage = $this->usage?->toSharedDTO();
+        $dto->finishReason = $finishReason;
+        $dto->systemFingerprint = $this->system_fingerprint;
+        $dto->created = $this->created;
+
+        return $dto;
     }
 
     /**
@@ -159,7 +160,7 @@ class ChatCompletionResponse implements ProtocolResponse
 
             $finishReason = $choiceData['finish_reason'] ?? null;
             if ($finishReason instanceof FinishReason) {
-                $finishReason = $finishReason->toOpenAI();
+                $finishReason = $finishReason->value;
             }
 
             $choices[] = new Choice(
