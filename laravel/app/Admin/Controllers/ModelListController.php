@@ -47,6 +47,27 @@ class ModelListController extends AdminController
             $grid->column('id', 'ID')->sortable();
             $grid->column('model_name', '模型名称')->copyable();
             $grid->column('display_name', '显示名称');
+            $grid->column('aliases', '别名')->display(function ($value) {
+                if (empty($value) || ! is_array($value)) {
+                    return '-';
+                }
+
+                $count = count($value);
+
+                return "<span class='badge badge-info'>{$count} 个</span>";
+            })->modal('查看别名', function ($model) {
+                $aliases = $model->aliases ?? [];
+
+                if (empty($aliases)) {
+                    return '无别名';
+                }
+
+                $list = collect($aliases)->map(function ($alias) {
+                    return "<span class='badge badge-secondary mr-1'>{$alias}</span>";
+                })->join('');
+
+                return "<div class='p-2'>{$list}</div>";
+            });
             $grid->column('provider', '提供商')->label([
                 'openai' => 'primary',
                 'anthropic' => 'success',
@@ -114,6 +135,13 @@ class ModelListController extends AdminController
             $show->field('id', 'ID');
             $show->field('model_name', '模型名称');
             $show->field('display_name', '显示名称');
+            $show->field('aliases', '模型别名')->as(function ($value) {
+                if (empty($value) || ! is_array($value)) {
+                    return '无别名';
+                }
+
+                return collect($value)->join(', ');
+            });
             $show->field('provider', '提供商');
             $show->field('common_name', '通用名称');
             $show->field('hugging_face_id', 'Hugging Face ID');
@@ -146,6 +174,9 @@ class ModelListController extends AdminController
 
                 $form->text('display_name', '显示名称')
                     ->help('模型的友好显示名称，如 GPT-4, Claude 3 Opus 等');
+
+                $form->tags('aliases', '模型别名')
+                    ->help('设置别名后，查询任一别名都会返回所有关联模型，用于路由降级。例如：glm-5 可设置别名 GLM-5、z-ai/glm-5 等。系统会自动同步双向关系。');
 
                 $form->select('provider', '提供商')
                     ->options([

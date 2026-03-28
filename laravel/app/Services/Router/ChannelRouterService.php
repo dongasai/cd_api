@@ -45,7 +45,11 @@ class ChannelRouterService
      */
     public function selectChannel(string $model, array $context = []): Channel
     {
-        $channels = $this->getAvailableChannels($model);
+        // 获取所有关联的模型名称（模型名 + 别名）
+        $modelNames = $this->getModelNamesWithAliases($model);
+
+        // 使用所有名称搜索渠道
+        $channels = $this->getAvailableChannelsForModels($modelNames);
 
         // 模型不存在：没有配置支持该模型的渠道
         if ($channels->isEmpty()) {
@@ -101,6 +105,7 @@ class ChannelRouterService
 
         Log::info('Channel selected', [
             'model' => $model,
+            'resolved_models' => $modelNames,
             'channel_id' => $channel->id,
             'channel_name' => $channel->name,
             'provider' => $channel->provider,
@@ -136,6 +141,52 @@ class ChannelRouterService
                 ->orderBy('weight', 'desc')
                 ->get();
         });
+    }
+
+    /**
+     * 获取模型名称及其所有别名
+     *
+     * @param  string  $model  原始模型名称
+     * @return array 模型名称数组（包含原始名称和所有别名）
+     */
+    protected function getModelNamesWithAliases(string $model): array
+    {
+        return \App\Services\ModelService::resolveModelWithAliases($model);
+    }
+
+    /**
+     * 为多个模型名称获取可用渠道
+     *
+     * @param  array  $modelNames  模型名称数组
+     * @return \Illuminate\Database\Eloquent\Collection 可用渠道集合
+     */
+    protected function getAvailableChannelsForModels(array $modelNames): \Illuminate\Database\Eloquent\Collection
+    {
+        if (empty($modelNames)) {
+            return collect();
+        }
+
+        // 获取所有模型名称对应的渠道 ID
+        $channelIds = [];
+        foreach ($modelNames as $modelName) {
+            $ids = $this->getChannelIdsForModel($modelName);
+            $channelIds = array_merge($channelIds, $ids);
+        }
+
+        // 去重
+        $channelIds = array_unique($channelIds);
+
+        if (empty($channelIds)) {
+            return collect();
+        }
+
+        // 查询渠道
+        return Channel::whereIn('id', $channelIds)
+            ->where('status', \App\Enums\ChannelStatus::ACTIVE)
+            ->where('status2', 'normal')
+            ->orderBy('priority', 'desc')
+            ->orderBy('weight', 'desc')
+            ->get();
     }
 
     /**

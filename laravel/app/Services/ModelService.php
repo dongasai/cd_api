@@ -116,10 +116,14 @@ class ModelService
                 return in_array($model, $apiKey->allowed_models, true);
             }
 
-            // 3. 检查全局模型列表
-            return ModelList::where('model_name', $model)
-                ->where('is_enabled', true)
-                ->exists();
+            // 3. 检查全局模型列表（支持别名匹配）
+            // 先尝试精确匹配
+            if (ModelList::where('model_name', $model)->where('is_enabled', true)->exists()) {
+                return true;
+            }
+
+            // 如果精确匹配失败，尝试通过别名查找
+            return self::findModelByAnyName($model) !== null;
         });
     }
 
@@ -142,6 +146,63 @@ class ModelService
         }
 
         return $model;
+    }
+
+    /**
+     * 解析模型并返回所有关联名称（用于路由降级）
+     *
+     * 通过别名查找模型，返回该模型的所有名称（包括自身和别名）
+     * 如果模型不存在，返回空数组
+     *
+     * @param  string  $model  模型名称或别名
+     * @return array 关联名称数组，格式: ['glm-5', 'GLM-5', 'z-ai/glm-5', ...]
+     */
+    public static function resolveModelWithAliases(string $model): array
+    {
+        $cacheKey = self::getCacheKey('aliases', null, $model);
+
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($model) {
+            // 查找模型（通过名称或别名）
+            $modelList = self::findModelByAnyName($model);
+
+            if ($modelList === null) {
+                return [];
+            }
+
+            return $modelList->getAllNames();
+        });
+    }
+
+    /**
+     * 通过任一名称查找模型（包括别名）
+     *
+     * 先尝试精确匹配 model_name，再尝试在 aliases JSON 中查找
+     *
+     * @param  string  $name  模型名称或别名
+     * @return ModelList|null 模型对象，未找到则返回 null
+     */
+    public static function findModelByAnyName(string $name): ?ModelList
+    {
+        $cacheKey = self::getCacheKey('find', null, $name);
+
+        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($name) {
+            // 1. 先尝试精确匹配 model_name
+            $model = ModelList::where('model_name', $name)
+                ->where('is_enabled', true)
+                ->first();
+
+            if ($model !== null) {
+                return $model;
+            }
+
+            // 2. 尝试在 aliases JSON 字段中查找
+            // 使用 Laravel JSON 查询方法
+            $model = ModelList::where('is_enabled', true)
+                ->whereJsonContains('aliases', $name)
+                ->first();
+
+            return $model;
+        });
     }
 
     /**
