@@ -162,12 +162,12 @@ class AnthropicMessagesDriver extends AbstractDriver
         }
 
         // 内容增量（来自标准转换）
-        if ($chunk->delta !== '' || $chunk->contentDelta !== null) {
+        if (($chunk->delta !== '' && $chunk->delta !== null) || ($chunk->contentDelta !== null && $chunk->contentDelta !== '')) {
             return $this->buildContentBlockDeltaEvent($chunk);
         }
 
         // 推理内容增量（来自标准转换）
-        if ($chunk->reasoningDelta !== null) {
+        if ($chunk->reasoningDelta !== null && $chunk->reasoningDelta !== '') {
             return $this->buildContentBlockDeltaEvent($chunk);
         }
 
@@ -311,13 +311,12 @@ class AnthropicMessagesDriver extends AbstractDriver
         // 处理兼容字段
         if ($toolCalls !== null && ! empty($toolCalls)) {
             $tc = $toolCalls[0];
-            $toolCall = new \App\Services\Shared\DTO\ToolCall(
-                id: $tc['id'] ?? '',
-                type: \App\Services\Shared\Enums\ToolType::from($tc['type'] ?? 'function'),
-                name: $tc['function']['name'] ?? '',
-                arguments: $tc['function']['arguments'] ?? '',
-                index: $tc['index'] ?? 0,
-            );
+            $toolCall = new \App\Services\Shared\DTO\ToolCall;
+            $toolCall->id = $tc['id'] ?? '';
+            $toolCall->type = $tc['type'] ?? 'function';
+            $toolCall->name = $tc['function']['name'] ?? '';
+            $toolCall->arguments = $tc['function']['arguments'] ?? '';
+            $toolCall->index = $tc['index'] ?? 0;
         }
 
         if ($toolCall === null) {

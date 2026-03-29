@@ -68,6 +68,8 @@ class ProxyServer
 
     protected ?string $currentGroup = null;
 
+    protected ?Channel $lastSuccessfulChannel = null;  // 保存最后一次成功选择的渠道（用于错误记录）
+
     /**
      * 构造函数
      */
@@ -170,6 +172,11 @@ class ProxyServer
                         $this->channelSelector->getFailedChannels(),
                         $protocol  // 传入源协议
                     );
+
+                    // 保存最后一次成功选择的渠道（用于错误记录）
+                    if ($this->selectedChannel !== null) {
+                        $this->lastSuccessfulChannel = $this->selectedChannel;
+                    }
                 }
 
                 if ($this->selectedChannel === null) {
@@ -218,13 +225,22 @@ class ProxyServer
                     }
                 }
 
-                // 更新请求日志渠道信息
+                // 更新请求日志渠道信息（提前更新，确保即使后续异常也能记录渠道）
                 $this->requestLogger->updateForChannel($requestLog, $this->selectedChannel, $actualModel);
 
                 $provider = $this->providerManager->getForChannel($this->selectedChannel, $request->headers->all());
 
-                // 创建渠道请求日志
-                $this->createChannelRequestLog($requestLog, $this->selectedChannel, $protocolRequest, $channelProtocol, $provider, $auditLog);
+                // 创建渠道请求日志（提前创建，确保即使后续异常也有记录）
+                try {
+                    $this->createChannelRequestLog($requestLog, $this->selectedChannel, $protocolRequest, $channelProtocol, $provider, $auditLog);
+                } catch (\Exception $logException) {
+                    // 日志创建失败不应影响主流程，记录错误即可
+                    Log::error('Failed to create channel request log', [
+                        'request_id' => $this->requestId,
+                        'channel_id' => $this->selectedChannel->id,
+                        'error' => $logException->getMessage(),
+                    ]);
+                }
 
                 // 根据是否流式请求分别处理
                 if ($isStream) {
@@ -295,10 +311,10 @@ class ProxyServer
             $statusCode = 500;
         }
 
-        // 更新审计日志
+        // 更新审计日志（使用最后一次成功选择的渠道）
         $this->auditLogger->update($auditLog, [
-            'channel_id' => $this->selectedChannel?->id,
-            'channel_name' => $this->selectedChannel?->name,
+            'channel_id' => $this->lastSuccessfulChannel?->id ?? $this->selectedChannel?->id,
+            'channel_name' => $this->lastSuccessfulChannel?->name ?? $this->selectedChannel?->name,
             'status_code' => $statusCode,
             'latency_ms' => $latencyMs,
             'error_type' => get_class($e),

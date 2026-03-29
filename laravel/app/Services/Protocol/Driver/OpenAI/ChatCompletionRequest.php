@@ -26,6 +26,7 @@ class ChatCompletionRequest implements ProtocolRequest
      * @param  float|null  $top_p  核采样 (0-1)
      * @param  int|null  $n  生成数量
      * @param  bool|null  $stream  是否流式
+     * @param  array|null  $stream_options  流式选项（如 include_usage）
      * @param  array|null  $stop  停止序列
      * @param  int|null  $max_tokens  最大输出 token
      * @param  int|null  $max_completion_tokens  最大完成 token
@@ -49,6 +50,7 @@ class ChatCompletionRequest implements ProtocolRequest
         public ?float $top_p = null,
         public ?int $n = null,
         public ?bool $stream = null,
+        public ?array $stream_options = null,
         public ?array $stop = null,
         public ?int $max_tokens = null,
         public ?int $max_completion_tokens = null,
@@ -80,6 +82,7 @@ class ChatCompletionRequest implements ProtocolRequest
             'top_p' => 'nullable|numeric|between:0,1',
             'n' => 'nullable|integer|min:1|max:10',
             'stream' => 'nullable|boolean',
+            'stream_options' => 'nullable|array',
             'stop' => 'nullable|array',
             'max_tokens' => 'nullable|integer|min:1',
             'max_completion_tokens' => 'nullable|integer|min:1',
@@ -176,6 +179,9 @@ class ChatCompletionRequest implements ProtocolRequest
         }
         if ($this->stream !== null) {
             $result['stream'] = $this->stream;
+        }
+        if ($this->stream_options !== null) {
+            $result['stream_options'] = $this->stream_options;
         }
         if ($this->stop !== null) {
             $result['stop'] = $this->stop;
@@ -282,14 +288,90 @@ class ChatCompletionRequest implements ProtocolRequest
         // 转换消息
         $messages = [];
         foreach ($dto->messages as $msg) {
-            $messages[] = Message::fromSharedDTO($msg);
+            // 检查消息是否包含 tool_result 内容块
+            $hasToolResult = false;
+            if ($msg->contentBlocks !== null) {
+                foreach ($msg->contentBlocks as $block) {
+                    if ($block->type === 'tool_result') {
+                        $hasToolResult = true;
+                        break;
+                    }
+                }
+            }
+
+            // 如果包含 tool_result，需要拆分为多条消息
+            if ($hasToolResult) {
+                // 分离 tool_result 和其他内容块
+                $toolResults = [];
+                $otherBlocks = [];
+
+                foreach ($msg->contentBlocks as $block) {
+                    if ($block->type === 'tool_result') {
+                        $toolResults[] = $block;
+                    } else {
+                        $otherBlocks[] = $block;
+                    }
+                }
+
+                // 如果有其他内容块（如 text），保留为原角色的消息
+                if (! empty($otherBlocks)) {
+                    $userMsg = new \App\Services\Shared\DTO\Message;
+                    $userMsg->role = $msg->role;
+                    $userMsg->contentBlocks = $otherBlocks;
+                    $messages[] = Message::fromSharedDTO($userMsg);
+                }
+
+                // 每个 tool_result 转换为独立的 tool 消息
+                foreach ($toolResults as $toolResult) {
+                    $messages[] = new Message(
+                        role: 'tool',
+                        content: $toolResult->toolResultContent ?? '',
+                        toolCallId: $toolResult->toolResultId ?? '',
+                    );
+                }
+            } else {
+                // 没有 tool_result，保持原有转换逻辑
+                $messages[] = Message::fromSharedDTO($msg);
+            }
         }
 
         // 如果有 system 字段，添加到 messages 开头
         if ($dto->system !== null) {
+            // 处理 system 内容
+            $systemContent = null;
+            if (is_string($dto->system)) {
+                $systemContent = $dto->system;
+            } elseif (is_array($dto->system)) {
+                // 如果是数组，尝试转换为 ContentPart 数组
+                $systemContent = [];
+                foreach ($dto->system as $block) {
+                    if (is_array($block)) {
+                        // 检查是否是 content block 格式
+                        if (isset($block['type'])) {
+                            $contentBlock = \App\Services\Shared\DTO\ContentBlock::fromArray($block);
+                            $systemContent[] = ContentPart::fromSharedDTO($contentBlock);
+                        } else {
+                            // 普通数组，转为 JSON 字符串
+                            $systemContent = json_encode($dto->system);
+                            break;
+                        }
+                    } else {
+                        // 包含非数组元素，转为 JSON 字符串
+                        $systemContent = json_encode($dto->system);
+                        break;
+                    }
+                }
+                // 如果转换后的数组为空，使用 JSON 字符串
+                if (empty($systemContent)) {
+                    $systemContent = json_encode($dto->system);
+                }
+            } else {
+                $systemContent = json_encode($dto->system);
+            }
+
             array_unshift($messages, new Message(
                 role: 'system',
-                content: is_string($dto->system) ? $dto->system : json_encode($dto->system),
+                content: $systemContent,
             ));
         }
 

@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Http;
 /**
  * 重放客户端真实请求,使用真实Http重新请求到本系统
  *
+ * 快速重放(默认审计ID): php artisan cdapi:request:replay 4224
+ * 指定ID类型: php artisan cdapi:request:replay 4224 --type=request
  * 通过请求ID重放: php artisan cdapi:request:replay --request-id=1004
  * 通过审计ID重放: php artisan cdapi:request:replay --audit-id=500
  * 通过request_id重放: php artisan cdapi:request:replay --request-id=req_abc123
@@ -20,32 +22,57 @@ use Illuminate\Support\Facades\Http;
 class ReplayRequest extends Command
 {
     protected $signature = 'cdapi:request:replay
+                            {id? : 审计日志 ID 或请求 ID (默认为审计ID)}
+                            {--type=audit : ID类型 (audit|request)}
                             {--request-id= : 请求 ID 或 request_id}
                             {--audit-id= : 审计 ID}
                             {--latest : 使用最新的审计日志}
                             {--timeout=120 : 请求超时时间 (秒)}
                             {--dry-run : 仅显示请求信息，不实际发送}';
 
-    protected $description = '复现请求 - 根据请求 ID 或审计 ID 重新发送真实请求';
+    protected $description = '复现请求 - 重放真实HTTP请求 (默认参数为审计日志ID)';
 
     public function handle(): int
     {
+        $id = $this->argument('id');
+        $type = $this->option('type');
         $requestId = $this->option('request-id');
         $auditId = $this->option('audit-id');
         $useLatest = $this->option('latest');
+
+        // 优先处理位置参数
+        if ($id) {
+            // 验证type参数
+            if (! in_array($type, ['audit', 'request'])) {
+                $this->error('--type 参数只能是 audit 或 request');
+
+                return self::FAILURE;
+            }
+
+            // 根据type设置对应的ID
+            if ($type === 'audit') {
+                $auditId = $id;
+            } else {
+                $requestId = $id;
+            }
+        }
 
         // 参数验证
         $providedOptions = array_filter([$requestId, $auditId, $useLatest]);
         $count = count($providedOptions);
 
         if ($count === 0) {
-            $this->error('请提供 --request-id、--audit-id 或 --latest 参数之一');
+            $this->error('请提供审计日志ID作为参数，或使用 --request-id、--audit-id、--latest 参数之一');
+            $this->info('示例:');
+            $this->info('  php artisan cdapi:request:replay 4224          # 默认为审计ID');
+            $this->info('  php artisan cdapi:request:replay 123 --type=request  # 指定为请求ID');
+            $this->info('  php artisan cdapi:request:replay --latest     # 使用最新审计日志');
 
             return self::FAILURE;
         }
 
         if ($count > 1) {
-            $this->error('--request-id、--audit-id 和 --latest 参数只能使用其中一个');
+            $this->error('只能提供一个ID参数，不能同时使用多个');
 
             return self::FAILURE;
         }

@@ -70,7 +70,21 @@ class OpenAIProvider extends AbstractProvider
     {
         // 如果是 OpenAI 协议请求，直接转数组
         if ($request instanceof ChatCompletionRequest) {
-            return $request->toArray();
+            $body = $request->toArray();
+
+            // 检查渠道配置：是否强制附加 stream_options
+            $forceStreamOptions = $this->config['force_stream_options'] ?? false;
+
+            // 流式请求时，根据配置决定是否附加 stream_options
+            if ($forceStreamOptions && ($body['stream'] ?? false) === true) {
+                if (! isset($body['stream_options'])) {
+                    $body['stream_options'] = ['include_usage' => true];
+                } elseif (! isset($body['stream_options']['include_usage'])) {
+                    $body['stream_options']['include_usage'] = true;
+                }
+            }
+
+            return $body;
         }
 
         // 其他协议需要转换

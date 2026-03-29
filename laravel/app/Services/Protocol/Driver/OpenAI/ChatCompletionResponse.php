@@ -138,7 +138,7 @@ class ChatCompletionResponse implements ProtocolResponse
         $dto->model = $this->model;
         $dto->choices = $sharedChoices;
         $dto->usage = $this->usage?->toSharedDTO();
-        $dto->finishReason = $finishReason;
+        $dto->finishReason = $finishReason?->value; // 将枚举转换为字符串值
         $dto->systemFingerprint = $this->system_fingerprint;
         $dto->created = $this->created;
 

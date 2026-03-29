@@ -67,7 +67,10 @@ class ChannelController extends AdminController
                 return '<span class="text-muted">-</span>';
             });
             // 状态列 - 支持直接切换（启用/禁用）
-            $grid->column('status')->switch();
+            $grid->column('status')->display(function ($value) {
+                // 将枚举转换为原始整数值供 switch 组件判断
+                return $value instanceof \App\Enums\ChannelStatus ? $value->value : $value;
+            })->switch();
             $grid->column('status2', admin_trans_field('health_status'))->display(function ($value) {
                 $status = $value instanceof ChannelHealthStatus ? $value : ChannelHealthStatus::tryFrom($value);
                 if (! $status) {

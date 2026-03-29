@@ -239,10 +239,10 @@ class MessagesResponse implements ProtocolResponse
 
                 // 文本内容
                 if ($textContent !== null) {
-                    $content[] = new ContentBlock(
-                        type: 'text',
-                        text: $textContent,
-                    );
+                    $content[] = ContentBlock::fromArray([
+                        'type' => 'text',
+                        'text' => $textContent,
+                    ]);
                 }
 
                 // 工具调用
@@ -250,12 +250,12 @@ class MessagesResponse implements ProtocolResponse
                     foreach ($toolCalls as $index => $tc) {
                         // 处理数组格式的 toolCall
                         if (is_array($tc)) {
-                            $content[] = new ContentBlock(
-                                type: 'tool_use',
-                                id: $tc['id'] ?? "toolu_{$index}",
-                                name: $tc['function']['name'] ?? '',
-                                input: json_decode($tc['function']['arguments'] ?? '{}', true),
-                            );
+                            $content[] = ContentBlock::fromArray([
+                                'type' => 'tool_use',
+                                'id' => $tc['id'] ?? "toolu_{$index}",
+                                'name' => $tc['function']['name'] ?? '',
+                                'input' => json_decode($tc['function']['arguments'] ?? '{}', true),
+                            ]);
                         }
                     }
                 }

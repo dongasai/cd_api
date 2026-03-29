@@ -62,7 +62,32 @@ class StreamHandler
         // 获取模型名称
         $modelName = $protocolRequest->getModel();
 
-        $stream = $provider->sendStream($protocolRequest);
+        // 更新审计日志渠道信息（在流开始前确认渠道）
+        if ($auditLog !== null && $selectedChannel !== null) {
+            $this->auditLogger->update($auditLog, [
+                'channel_id' => $selectedChannel->id,
+                'channel_name' => $selectedChannel->name,
+            ]);
+        }
+
+        try {
+            $stream = $provider->sendStream($protocolRequest);
+        } catch (\Exception $e) {
+            // 发送请求失败，立即记录错误
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+            $statusCode = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
+
+            if ($auditLog !== null) {
+                $this->auditLogger->update($auditLog, [
+                    'status_code' => $statusCode,
+                    'latency_ms' => $latencyMs,
+                    'error_type' => get_class($e),
+                    'error_message' => $e->getMessage(),
+                ]);
+            }
+
+            throw $e;
+        }
 
         // 使用传入的审计日志（如果已创建），否则创建新的
         if ($auditLog === null) {
@@ -77,39 +102,64 @@ class StreamHandler
         // 检查是否需要过滤 thinking 内容
         $shouldFilterThinking = $selectedChannel !== null && $selectedChannel->shouldFilterThinking();
 
-        foreach ($stream as $chunk) {
-            if ($chunk instanceof StreamChunk) {
-                // 如果开启了 thinking 过滤，跳过 reasoning_delta
-                if ($shouldFilterThinking && $chunk->reasoningDelta !== null) {
-                    // 跳过推理内容块
-                    continue;
+        try {
+            foreach ($stream as $chunk) {
+                if ($chunk instanceof StreamChunk) {
+                    // 如果开启了 thinking 过滤，跳过 reasoning_delta
+                    if ($shouldFilterThinking && $chunk->reasoningDelta !== null) {
+                        // 跳过推理内容块
+                        continue;
+                    }
+
+                    // 记录首字延迟（包括文本内容、推理内容或工具调用）
+                    if ($firstTokenMs === null &&
+                        ($chunk->delta !== '' ||
+                         $chunk->contentDelta !== null ||
+                         $chunk->reasoningDelta !== null ||
+                         $chunk->toolCalls !== null)) {
+                        $firstTokenMs = (int) ((microtime(true) - $startTime) * 1000);
+                    }
+
+                    // 收集流式块（直接存储对象）
+                    $streamChunks[] = $chunk;
+
+                    // 收集 usage（来自最后一个有 usage 的 chunk）
+                    if ($chunk->usage !== null) {
+                        $collectedUsage = $chunk->usage;
+                    }
+
+                    // 收集 finishReason
+                    if ($chunk->finishReason !== null) {
+                        $collectedFinishReason = $chunk->finishReason;
+                    }
+
+                    // 转换并输出
+                    yield $this->protocolConverter->convertStreamChunk($chunk, $sourceProtocol);
                 }
-
-                // 记录首字延迟（包括文本内容、推理内容或工具调用）
-                if ($firstTokenMs === null &&
-                    ($chunk->delta !== '' ||
-                     $chunk->contentDelta !== null ||
-                     $chunk->reasoningDelta !== null ||
-                     $chunk->toolCalls !== null)) {
-                    $firstTokenMs = (int) ((microtime(true) - $startTime) * 1000);
-                }
-
-                // 收集流式块（直接存储对象）
-                $streamChunks[] = $chunk;
-
-                // 收集 usage（来自最后一个有 usage 的 chunk）
-                if ($chunk->usage !== null) {
-                    $collectedUsage = $chunk->usage;
-                }
-
-                // 收集 finishReason
-                if ($chunk->finishReason !== null) {
-                    $collectedFinishReason = $chunk->finishReason;
-                }
-
-                // 转换并输出
-                yield $this->protocolConverter->convertStreamChunk($chunk, $sourceProtocol);
             }
+        } catch (\Exception $e) {
+            // 流式迭代过程中的异常处理
+            $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+            $statusCode = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
+
+            if ($auditLog !== null) {
+                $this->auditLogger->update($auditLog, [
+                    'status_code' => $statusCode,
+                    'latency_ms' => $latencyMs,
+                    'error_type' => get_class($e),
+                    'error_message' => $e->getMessage(),
+                ]);
+            }
+
+            // 记录错误日志
+            \Illuminate\Support\Facades\Log::error('Stream iteration failed', [
+                'request_id' => $auditLog?->request_id,
+                'channel_id' => $selectedChannel?->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            throw $e;
         }
 
         $latencyMs = (int) ((microtime(true) - $startTime) * 1000);

@@ -118,6 +118,7 @@ class ContentPart
     public static function fromSharedDTO(object $dto): static
     {
         // 直接读取 DTO 属性，不调用 toOpenAI()
+        // 注意：thinking/tool_use/tool_result 是 Anthropic 特有类型，不应出现在 OpenAI content 中
         return match ($dto->type) {
             'text' => new self(
                 type: 'text',
@@ -133,6 +134,17 @@ class ContentPart
             'audio' => new self(
                 type: 'input_audio',
                 image_data: $dto->audioData,
+            ),
+            // Anthropic 特有类型转换为文本，保留标记以便识别
+            'thinking' => new self(
+                type: 'text',
+                text: $dto->thinking ?? '',
+            ),
+            // tool_use 和 tool_result 不应出现在 content 中
+            // 它们应该被转换为 tool_calls 或独立的 tool 消息
+            'tool_use', 'tool_result' => new self(
+                type: 'text',
+                text: '', // 空内容，这些类型应由上层逻辑处理
             ),
             default => new self(
                 type: $dto->type,

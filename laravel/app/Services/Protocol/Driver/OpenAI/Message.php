@@ -256,23 +256,57 @@ class Message
     {
         // 处理 content
         $content = null;
+        $toolCalls = null;
 
         if ($dto->content !== null) {
             $content = $dto->content;
         } elseif ($dto->contentBlocks !== null) {
-            // 从 ContentBlock 转换为 ContentPart 数组
-            $content = array_map(
-                fn ($block) => ContentPart::fromSharedDTO($block),
-                $dto->contentBlocks
-            );
+            // 从 ContentBlock 转换，需要分离 tool_use
+            $contentParts = [];
+            $toolCallsFromBlocks = [];
+
+            foreach ($dto->contentBlocks as $block) {
+                if ($block->type === 'tool_use') {
+                    // tool_use 转换为 ToolCall，不在 content 中
+                    $toolCallsFromBlocks[] = ToolCall::fromArray([
+                        'id' => $block->toolId ?? '',
+                        'type' => 'function',
+                        'function' => [
+                            'name' => $block->toolName ?? '',
+                            'arguments' => json_encode($block->toolInput ?? []),
+                        ],
+                    ]);
+                } elseif ($block->type === 'thinking') {
+                    // thinking 内容暂时忽略，或可转为 reasoning_content
+                    // 注意：OpenAI 某些模型支持 reasoning_content 字段
+                    // 这里暂时跳过，避免污染 content
+                    continue;
+                } else {
+                    // 其他类型正常转换为 ContentPart
+                    $contentParts[] = ContentPart::fromSharedDTO($block);
+                }
+            }
+
+            // 设置 content（如果有非 tool_use/thinking 内容）
+            if (! empty($contentParts)) {
+                $content = $contentParts;
+            }
+
+            // 合并 toolCalls（从 contentBlocks 和 dto->toolCalls）
+            if (! empty($toolCallsFromBlocks)) {
+                $toolCalls = $toolCallsFromBlocks;
+            }
         }
 
-        // 处理 toolCalls
-        $toolCalls = null;
+        // 处理 dto->toolCalls（如果有）
         if ($dto->toolCalls !== null) {
-            $toolCalls = array_map(
-                fn (array $tc) => ToolCall::fromArray($tc),
-                $dto->toolCalls
+            $toolCalls = $toolCalls ?? [];
+            $toolCalls = array_merge(
+                $toolCalls,
+                array_map(
+                    fn (array $tc) => ToolCall::fromArray($tc),
+                    $dto->toolCalls
+                )
             );
         }
 
