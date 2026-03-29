@@ -93,7 +93,40 @@ class AuditLogController extends AdminController
                 $model = $this->model ?? '-';
                 $actual = $this->actual_model ?? '-';
 
-                return admin_trans_label('request').": {$model}<br>".admin_trans_field('actual_model').": {$actual}";
+                // 解析 apply_data（模型流转过程数据）
+                $applyData = $this->apply_data;
+                $matchedModels = [];
+                $channelRequestModel = '-';
+
+                if ($applyData && is_array($applyData)) {
+                    // 别名扩展结果（参与匹配的模型列表）
+                    $matchedModels = $applyData['matched_models'] ?? [];
+                    // 渠道请求模型（发送给渠道的模型名）
+                    $channelRequestModel = $applyData['channel_request_model'] ?? '-';
+                }
+
+                // 构建显示内容（限制列宽度，自动换行）
+                $display = "<div style='max-width: 350px; word-wrap: break-word;'>";
+                $display .= admin_trans_label('request').": <strong>{$model}</strong><br>";
+
+                // 渠道请求模型（如果有）
+                if ($channelRequestModel !== '-') {
+                    $display .= admin_trans_label('channel_request_model').": <span class='text-warning'>{$channelRequestModel}</span><br>";
+                }
+
+                // 渠道响应模型（实际模型）
+                $display .= admin_trans_field('actual_model').": <span class='text-success'>{$actual}</span><br>";
+
+                // 别名扩展（如果有，放在最底部自动换行）
+                if (! empty($matchedModels)) {
+                    $matchedList = implode('<br>', $matchedModels);  // 使用换行分隔
+                    $display .= "<span class='text-muted small'>".admin_trans_label('matched_models').':</span><br>';
+                    $display .= "<span class='text-info small' style='line-height: 1.4;'>{$matchedList}</span>";
+                }
+
+                $display .= '</div>';
+
+                return $display;
             });
             $grid->column('tokens', admin_trans_field('tokens'))->display(function () {
                 $total = number_format($this->total_tokens);
@@ -223,6 +256,14 @@ class AuditLogController extends AdminController
             $show->field('request_type')->using(AuditLog::getRequestTypes());
             $show->field('model');
             $show->field('actual_model');
+            $show->field('apply_data')->as(function ($value) {
+                if (! $value) {
+                    return '-';
+                }
+
+                // JSON 格式化显示
+                return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+            })->unescape();
             $show->field('source_protocol');
             $show->field('target_protocol');
 

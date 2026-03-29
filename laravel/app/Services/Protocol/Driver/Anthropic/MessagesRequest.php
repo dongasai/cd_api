@@ -176,7 +176,7 @@ class MessagesRequest implements ProtocolRequest
         if ($this->stream !== null) {
             $result['stream'] = $this->stream;
         }
-        if ($this->tools !== null) {
+        if (! empty($this->tools)) {
             $result['tools'] = array_map(fn (Tool $tool) => $tool->toArray(), $this->tools);
         }
         if ($this->tool_choice !== null) {

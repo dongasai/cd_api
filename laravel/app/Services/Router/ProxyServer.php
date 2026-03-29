@@ -189,6 +189,15 @@ class ProxyServer
                 // 获取渠道协议
                 $channelProtocol = $this->getChannelProtocol($this->selectedChannel);
 
+                // 获取参与匹配的模型列表（别名扩展结果）
+                $matchedModels = $this->channelRouter->getModelNamesWithAliases($modelName);
+
+                // 构建 apply_data（记录模型流转过程数据）
+                $applyData = [
+                    'matched_models' => $matchedModels,  // 参与匹配的所有模型名
+                    'channel_request_model' => $actualModel,  // 发送给渠道的模型名
+                ];
+
                 // 更新审计日志渠道信息和实际模型
                 $this->auditLogger->update($auditLog, [
                     'channel_id' => $this->selectedChannel?->id,
@@ -198,6 +207,7 @@ class ProxyServer
                     'target_protocol' => $channelProtocol,  // 添加目标协议
                     'channel_affinity' => $this->affinityService->getAffinityInfo($request),  // 记录渠道亲和性信息
                     'metadata' => $rawRequest['metadata'] ?? null,  // 记录请求元数据
+                    'apply_data' => $applyData,  // 新增：记录应用数据
                 ]);
 
                 // 更新实际模型
@@ -380,8 +390,8 @@ class ProxyServer
 
         $headers = $this->getProviderHeaders($provider);
 
-        // 直接使用协议结构体的 toArray 方法
-        $requestBody = $protocolRequest->toArray();
+        // 使用 Provider 的 buildRequestBody 方法获取最终请求体（包含渠道配置）
+        $requestBody = $provider->buildRequestBody($protocolRequest);
 
         $this->channelRequestLog = \App\Models\ChannelRequestLog::create([
             'request_log_id' => $requestLog->id,

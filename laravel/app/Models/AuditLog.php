@@ -68,6 +68,7 @@ class AuditLog extends Model
         'group_name',
         'channel_affinity',
         'metadata',
+        'apply_data',  // 新增：应用数据字段
         'created_at',
     ];
 
@@ -76,6 +77,7 @@ class AuditLog extends Model
         return [
             'channel_affinity' => 'array',
             'metadata' => 'array',
+            'apply_data' => 'array',  // 新增：自动转换为数组
             'cost' => 'decimal:6',
             'quota' => 'decimal:6',
             'is_stream' => 'boolean',

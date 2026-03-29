@@ -368,6 +368,9 @@ class ChannelController extends AdminController
                     $form->switch('body_passthrough')
                         ->help(admin_trans_label('body_passthrough_help'))
                         ->default(false);
+                    $form->switch('force_stream_option_include_usage')
+                        ->help(admin_trans_label('force_stream_option_include_usage_help'))
+                        ->default(false);
                 });
                 $form->list('forward_headers')
                     ->help(admin_trans_label('forward_headers_help'));

@@ -176,7 +176,7 @@ class ModelListController extends AdminController
                     ->help('模型的友好显示名称，如 GPT-4, Claude 3 Opus 等');
 
                 $form->tags('aliases', '模型别名')
-                    ->help('设置别名后，查询任一别名都会返回所有关联模型，用于路由降级。例如：glm-5 可设置别名 GLM-5、z-ai/glm-5 等。系统会自动同步双向关系。');
+                    ->help('模型的多个别名名称，用于匹配更多渠道配置。别名不需要在模型列表中存在对应记录。例如：glm-4 可设置别名 glm-4-plus、glm-4-turbo、glm-4-flash 等，这样当渠道配置这些别名时，都能路由到 glm-4 模型。');
 
                 $form->select('provider', '提供商')
                     ->options([

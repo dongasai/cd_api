@@ -3,47 +3,13 @@
 namespace Tests\Unit\Models;
 
 use App\Models\ModelList;
+use App\Services\ModelService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ModelListAliasTest extends TestCase
 {
     use RefreshDatabase;
-
-    /**
-     * 测试设置别名后，关联模型自动包含反向别名
-     */
-    public function test_alias_sync_to_related_models(): void
-    {
-        // 创建两个测试模型
-        $model1 = ModelList::create([
-            'model_name' => 'test-model-1',
-            'display_name' => 'Test Model 1',
-            'provider' => 'test',
-            'is_enabled' => true,
-        ]);
-
-        $model2 = ModelList::create([
-            'model_name' => 'test-model-2',
-            'display_name' => 'Test Model 2',
-            'provider' => 'test',
-            'is_enabled' => true,
-        ]);
-
-        // 设置 model1 的别名包含 model2 的名称
-        $model1->aliases = ['test-model-2'];
-        $model1->save();
-
-        // 验证 model2 的 aliases 自动包含 model1 的名称
-        $model2->refresh();
-        $this->assertEquals(['test-model-1'], $model2->aliases);
-
-        // 清理测试数据
-        $model1->aliases = [];
-        $model1->save();
-        $model2->aliases = [];
-        $model2->save();
-    }
 
     /**
      * 测试 getAllNames() 方法返回正确的集合
@@ -76,68 +42,124 @@ class ModelListAliasTest extends TestCase
     }
 
     /**
-     * 测试别名移除时的对称性同步
+     * 测试 aliases 作为纯字符串数组存储
      */
-    public function test_alias_removal_sync(): void
+    public function test_aliases_as_pure_string_array(): void
     {
-        // 创建两个测试模型
+        $model = ModelList::create([
+            'model_name' => 'glm-4',
+            'display_name' => 'GLM-4',
+            'provider' => 'test',
+            'aliases' => ['glm-4-plus', 'glm-4-turbo', 'glm-4-flash'], // 这些别名不需要存在
+            'is_enabled' => true,
+        ]);
+
+        // 验证 aliases 正常存储
+        $this->assertEquals(['glm-4-plus', 'glm-4-turbo', 'glm-4-flash'], $model->aliases);
+
+        // 验证 getAllNames() 包含所有别名
+        $allNames = $model->getAllNames();
+        $this->assertContains('glm-4', $allNames);
+        $this->assertContains('glm-4-plus', $allNames);
+        $this->assertContains('glm-4-turbo', $allNames);
+        $this->assertContains('glm-4-flash', $allNames);
+
+        $model->delete();
+    }
+
+    /**
+     * 测试别名不需要在 ModelList 中存在
+     */
+    public function test_aliases_not_require_existence(): void
+    {
+        // 创建模型，别名指向不存在的名称
+        $model = ModelList::create([
+            'model_name' => 'test-model',
+            'display_name' => 'Test Model',
+            'provider' => 'test',
+            'aliases' => ['non-existent-alias-1', 'non-existent-alias-2'],
+            'is_enabled' => true,
+        ]);
+
+        // 验证 aliases 正常存储，不会报错
+        $model->refresh();
+        $this->assertEquals(['non-existent-alias-1', 'non-existent-alias-2'], $model->aliases);
+
+        // 验证不会自动创建别名对应的模型
+        $this->assertNull(ModelList::where('model_name', 'non-existent-alias-1')->first());
+        $this->assertNull(ModelList::where('model_name', 'non-existent-alias-2')->first());
+
+        $model->delete();
+    }
+
+    /**
+     * 测试通过别名查找模型
+     */
+    public function test_find_model_by_alias(): void
+    {
+        $model = ModelList::create([
+            'model_name' => 'original-model',
+            'display_name' => 'Original Model',
+            'provider' => 'test',
+            'aliases' => ['alias-name-1', 'alias-name-2'],
+            'is_enabled' => true,
+        ]);
+
+        // 通过别名查找模型
+        $foundModel = ModelService::findModelByAnyName('alias-name-1');
+        $this->assertNotNull($foundModel);
+        $this->assertEquals('original-model', $foundModel->model_name);
+
+        // 通过另一个别名查找
+        $foundModel2 = ModelService::findModelByAnyName('alias-name-2');
+        $this->assertNotNull($foundModel2);
+        $this->assertEquals('original-model', $foundModel2->model_name);
+
+        // 通过原始名称查找
+        $foundModel3 = ModelService::findModelByAnyName('original-model');
+        $this->assertNotNull($foundModel3);
+        $this->assertEquals('original-model', $foundModel3->model_name);
+
+        $model->delete();
+    }
+
+    /**
+     * 测试别名修改不会触发同步
+     */
+    public function test_alias_modification_no_sync(): void
+    {
+        // 创建两个模型
         $model1 = ModelList::create([
-            'model_name' => 'test-a',
-            'display_name' => 'Test A',
+            'model_name' => 'model-a',
+            'display_name' => 'Model A',
             'provider' => 'test',
             'is_enabled' => true,
         ]);
 
         $model2 = ModelList::create([
-            'model_name' => 'test-b',
-            'display_name' => 'Test B',
+            'model_name' => 'model-b',
+            'display_name' => 'Model B',
             'provider' => 'test',
             'is_enabled' => true,
         ]);
 
-        // 设置别名
-        $model1->aliases = ['test-b'];
+        // 设置 model1 的别名包含 model2 的名称
+        $model1->aliases = ['model-b'];
         $model1->save();
 
-        // 验证双向同步
+        // 验证 model2 的 aliases 不会自动包含 model1 的名称
         $model2->refresh();
-        $this->assertEquals(['test-a'], $model2->aliases);
+        $this->assertTrue(empty($model2->aliases) || $model2->aliases === []); // 应该为空，不会同步
 
-        // 移除别名
+        // 移除 model1 的别名
         $model1->aliases = [];
         $model1->save();
 
-        // 验证 model2 的别名也被移除
+        // 验证 model2 仍然没有变化
         $model2->refresh();
-        $this->assertEquals([], $model2->aliases);
+        $this->assertTrue(empty($model2->aliases) || $model2->aliases === []);
 
-        // 清理
         $model1->delete();
         $model2->delete();
-    }
-
-    /**
-     * 测试自引用被跳过
-     */
-    public function test_self_reference_skipped(): void
-    {
-        $model = ModelList::create([
-            'model_name' => 'test-self',
-            'display_name' => 'Test Self',
-            'provider' => 'test',
-            'is_enabled' => true,
-        ]);
-
-        // 设置别名包含自己的名称
-        $model->aliases = ['test-self', 'other-alias'];
-        $model->save();
-
-        // 验证 aliases 中仍然包含自己（允许保存）
-        // 但不会尝试查找 test-self 模型进行同步（避免循环）
-        $model->refresh();
-        $this->assertContains('test-self', $model->aliases);
-
-        // 清理
-        $model->delete();
     }
 }

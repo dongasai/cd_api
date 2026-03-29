@@ -167,8 +167,17 @@ class StreamHandler
         // 注意：上游已经发送了 message_stop 事件，透传模式下不需要额外发送结束标记
         // yield $this->protocolConverter->driver($sourceProtocol)->buildStreamDone();
 
-        // 更新审计日志（包含 token 使用信息）
-        $this->updateAuditLogWithUsage($auditLog, $latencyMs, $firstTokenMs, $collectedUsage, $collectedFinishReason);
+        // 提取实际模型名（从第一个有效的 chunk）
+        $actualModel = null;
+        foreach ($streamChunks as $chunk) {
+            if (! empty($chunk->model)) {
+                $actualModel = $chunk->model;
+                break;
+            }
+        }
+
+        // 更新审计日志（包含 token 使用信息和实际模型名）
+        $this->updateAuditLogWithUsage($auditLog, $latencyMs, $firstTokenMs, $collectedUsage, $collectedFinishReason, $actualModel);
 
         // 记录渠道亲和性（成功请求后更新缓存）
         $this->recordAffinity($httpRequest, $modelName);
@@ -177,7 +186,7 @@ class StreamHandler
         $generatedText = $this->extractTextFromChunks($streamChunks);
 
         // 组装完整的响应数据（用于记录 body_text）
-        $completeResponse = $this->buildCompleteResponse($streamChunks, $modelName, $collectedUsage, $collectedFinishReason);
+        $completeResponse = $this->buildCompleteResponse($streamChunks, $modelName, $collectedUsage, $collectedFinishReason, $actualModel);
 
         // 记录响应日志
         $this->responseLogger->create(
@@ -202,7 +211,8 @@ class StreamHandler
         int $latencyMs,
         ?int $firstTokenMs,
         $usage,
-        $finishReason
+        $finishReason,
+        ?string $actualModel = null  // 新增：渠道响应的模型名
     ): void {
         $data = [
             'status_code' => 200,
@@ -217,6 +227,11 @@ class StreamHandler
         // 完成原因
         if ($finishReason !== null) {
             $data['finish_reason'] = $finishReason->value;
+        }
+
+        // 实际模型名（渠道响应返回的模型名）
+        if ($actualModel !== null) {
+            $data['actual_model'] = $actualModel;
         }
 
         // 更新 token 使用信息
@@ -265,7 +280,7 @@ class StreamHandler
     /**
      * 从流式块组装完整的响应数据
      */
-    protected function buildCompleteResponse(array $streamChunks, string $model, $usage, $finishReason): array
+    protected function buildCompleteResponse(array $streamChunks, string $model, $usage, $finishReason, ?string $actualModel = null): array
     {
         // 提取 ID（从第一个有效的 chunk）
         $id = '';
@@ -273,6 +288,16 @@ class StreamHandler
             if (! empty($chunk->id)) {
                 $id = $chunk->id;
                 break;
+            }
+        }
+
+        // 如果未传入 actualModel，则从 streamChunks 中提取（向后兼容）
+        if ($actualModel === null) {
+            foreach ($streamChunks as $chunk) {
+                if (! empty($chunk->model)) {
+                    $actualModel = $chunk->model;
+                    break;
+                }
             }
         }
 
@@ -292,7 +317,7 @@ class StreamHandler
             'id' => $id ?: 'chatcmpl-'.uniqid(),
             'object' => 'chat.completion',
             'created' => time(),
-            'model' => $model,
+            'model' => $actualModel ?? $model,  // 优先使用响应中的模型名
             'choices' => [
                 [
                     'index' => 0,

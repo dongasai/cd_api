@@ -74,6 +74,7 @@ class NonStreamHandler
             'status_code' => 200,
             'latency_ms' => $latencyMs,
             'first_token_ms' => $latencyMs,  // 非流式请求，首字延迟=总延迟
+            'actual_model' => $providerResponse->getModel(),  // 新增：渠道响应的模型名
         ];
 
         // 获取使用量

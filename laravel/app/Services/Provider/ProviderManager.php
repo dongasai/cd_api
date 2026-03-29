@@ -107,6 +107,11 @@ class ProviderManager
             'client_headers' => $clientHeaders,
         ];
 
+        // 合并渠道的高级配置
+        if (! empty($channel->config) && is_array($channel->config)) {
+            $config = array_merge($config, $channel->config);
+        }
+
         return match ($providerName) {
             'openai' => new OpenAIProvider($config),
             'anthropic' => new AnthropicProvider($config),

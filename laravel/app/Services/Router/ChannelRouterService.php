@@ -149,7 +149,7 @@ class ChannelRouterService
      * @param  string  $model  原始模型名称
      * @return array 模型名称数组（包含原始名称和所有别名）
      */
-    protected function getModelNamesWithAliases(string $model): array
+    public function getModelNamesWithAliases(string $model): array
     {
         return \App\Services\ModelService::resolveModelWithAliases($model);
     }
@@ -467,15 +467,53 @@ class ChannelRouterService
     public function resolveModel(string $model, ?Channel $channel = null): string
     {
         if ($channel) {
+            // 优先查找：通过别名匹配找到该渠道，则使用匹配别名对应的映射模型
+            $modelNames = \App\Services\ModelService::resolveModelWithAliases($model);
+            foreach ($modelNames as $modelName) {
+                // 检查该别名是否在该渠道的 channel_models 表中
+                $channelModel = \App\Models\ChannelModel::where('channel_id', $channel->id)
+                    ->where('model_name', $modelName)
+                    ->where('is_enabled', true)
+                    ->first();
+
+                if ($channelModel) {
+                    // 找到匹配别名，使用映射后的模型名（如果没有映射则使用别名本身）
+                    $resolvedModel = $channelModel->mapped_model ?? $modelName;
+                    Log::debug('Model resolved via alias match', [
+                        'original_model' => $model,
+                        'matched_alias' => $modelName,
+                        'resolved_model' => $resolvedModel,
+                        'channel_id' => $channel->id,
+                        'has_mapping' => $channelModel->mapped_model !== null,
+                    ]);
+
+                    return $resolvedModel;
+                }
+            }
+
+            // 其次：检查原模型的映射配置（这个逻辑其实已经被上面的循环覆盖了）
             $channelModel = \App\Models\ChannelModel::where('channel_id', $channel->id)
                 ->where('model_name', $model)
                 ->where('is_enabled', true)
                 ->first();
 
             if ($channelModel && $channelModel->mapped_model) {
+                Log::debug('Model resolved via channel mapping', [
+                    'original_model' => $model,
+                    'mapped_model' => $channelModel->mapped_model,
+                    'channel_id' => $channel->id,
+                    'mapping_found' => true,
+                ]);
+
                 return $channelModel->mapped_model;
             }
         }
+
+        // 最后返回原模型名
+        Log::debug('Model not resolved, using original', [
+            'model' => $model,
+            'channel_id' => $channel?->id,
+        ]);
 
         return $model;
     }

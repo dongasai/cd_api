@@ -23,6 +23,9 @@ return [
         'actual_model' => '实际模型',
         'source_protocol' => '请求格式/源协议',
         'target_protocol' => '上游格式/目标协议',
+        'apply_data' => '应用数据',
+        'matched_models' => '别名扩展',
+        'channel_request_model' => '渠道请求模型',
 
         // Token信息
         'prompt_tokens' => '提示Token数',
@@ -85,6 +88,8 @@ return [
         'total_time' => '总计',
         'stream' => '流',
         'non_stream' => '非流',
+        'matched_models' => '别名扩展',
+        'channel_request_model' => '渠道请求模型',
 
         // 提示信息
         'affinity_hit' => '渠道亲和命中',

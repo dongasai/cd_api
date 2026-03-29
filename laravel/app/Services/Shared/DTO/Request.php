@@ -47,6 +47,11 @@ class Request
     public ?bool $stream = false;
 
     /**
+     * 流式选项（如 include_usage）
+     */
+    public ?array $streamOptions = null;
+
+    /**
      * 停止序列
      */
     public ?array $stopSequences = null;
@@ -221,7 +226,7 @@ class Request
         // 收集未识别的字段到 additionalParams
         $knownFields = [
             'model', 'messages', 'max_tokens', 'temperature', 'top_p', 'top_k',
-            'stream', 'stop_sequences', 'stop', 'system', 'tools', 'tool_choice',
+            'stream', 'stream_options', 'streamOptions', 'stop_sequences', 'stop', 'system', 'tools', 'tool_choice',
             'thinking', 'metadata', 'user', 'additional_params', 'rawRequest',
             'rawBodyString', 'queryString', 'content_blocks',
         ];
@@ -240,6 +245,7 @@ class Request
         $request->topP = $data['top_p'] ?? null;
         $request->topK = $data['top_k'] ?? null;
         $request->stream = $data['stream'] ?? false;
+        $request->streamOptions = $data['stream_options'] ?? $data['streamOptions'] ?? null;
         $request->stopSequences = $data['stop_sequences'] ?? $data['stop'] ?? null;
         $request->system = $systemField;
         $request->tools = $data['tools'] ?? null;

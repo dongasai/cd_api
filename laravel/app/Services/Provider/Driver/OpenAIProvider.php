@@ -72,11 +72,11 @@ class OpenAIProvider extends AbstractProvider
         if ($request instanceof ChatCompletionRequest) {
             $body = $request->toArray();
 
-            // 检查渠道配置：是否强制附加 stream_options
-            $forceStreamOptions = $this->config['force_stream_options'] ?? false;
+            // 检查渠道配置：是否强制附加 stream_options.include_usage
+            $forceStreamOptionIncludeUsage = $this->config['force_stream_option_include_usage'] ?? false;
 
             // 流式请求时，根据配置决定是否附加 stream_options
-            if ($forceStreamOptions && ($body['stream'] ?? false) === true) {
+            if ($forceStreamOptionIncludeUsage && ($body['stream'] ?? false) === true) {
                 if (! isset($body['stream_options'])) {
                     $body['stream_options'] = ['include_usage' => true];
                 } elseif (! isset($body['stream_options']['include_usage'])) {

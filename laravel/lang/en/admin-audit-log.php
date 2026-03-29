@@ -23,6 +23,9 @@ return [
         'actual_model' => 'Actual Model',
         'source_protocol' => 'Source Protocol',
         'target_protocol' => 'Target Protocol',
+        'apply_data' => 'Apply Data',
+        'matched_models' => 'Matched Models',
+        'channel_request_model' => 'Channel Request Model',
 
         // Token info
         'prompt_tokens' => 'Prompt Tokens',
@@ -85,6 +88,8 @@ return [
         'total_time' => 'Total',
         'stream' => 'Stream',
         'non_stream' => 'Non-Stream',
+        'matched_models' => 'Matched Models',
+        'channel_request_model' => 'Channel Request',
 
         // Tooltips
         'affinity_hit' => 'Channel Affinity Hit',

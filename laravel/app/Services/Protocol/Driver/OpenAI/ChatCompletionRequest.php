@@ -124,7 +124,7 @@ class ChatCompletionRequest implements ProtocolRequest
 
         // 收集已知参数
         $knownKeys = [
-            'model', 'messages', 'temperature', 'top_p', 'n', 'stream', 'stop',
+            'model', 'messages', 'temperature', 'top_p', 'n', 'stream', 'stream_options', 'stop',
             'max_tokens', 'max_completion_tokens', 'presence_penalty', 'frequency_penalty',
             'logit_bias', 'logprobs', 'top_logprobs', 'user', 'tools', 'tool_choice',
             'parallel_tool_calls', 'response_format', 'seed',
@@ -139,6 +139,7 @@ class ChatCompletionRequest implements ProtocolRequest
             top_p: $data['top_p'] ?? null,
             n: $data['n'] ?? null,
             stream: $data['stream'] ?? null,
+            stream_options: $data['stream_options'] ?? null,
             stop: $data['stop'] ?? null,
             max_tokens: $data['max_tokens'] ?? null,
             max_completion_tokens: $data['max_completion_tokens'] ?? null,
@@ -210,7 +211,7 @@ class ChatCompletionRequest implements ProtocolRequest
         if ($this->user !== null) {
             $result['user'] = $this->user;
         }
-        if ($this->tools !== null) {
+        if (! empty($this->tools)) {
             $result['tools'] = array_map(fn (Tool $tool) => $tool->toArray(), $this->tools);
         }
         if ($this->tool_choice !== null) {
@@ -270,6 +271,7 @@ class ChatCompletionRequest implements ProtocolRequest
         $dto->temperature = $this->temperature;
         $dto->topP = $this->top_p;
         $dto->stream = $this->stream ?? false;
+        $dto->streamOptions = $this->stream_options;
         $dto->stopSequences = $this->stop;
         $dto->system = $system;
         $dto->tools = $sharedTools;
@@ -391,6 +393,7 @@ class ChatCompletionRequest implements ProtocolRequest
             temperature: $dto->temperature,
             top_p: $dto->topP,
             stream: $dto->stream,
+            stream_options: $dto->streamOptions,
             stop: $dto->stopSequences,
             tools: $tools,
             tool_choice: $dto->toolChoice,
