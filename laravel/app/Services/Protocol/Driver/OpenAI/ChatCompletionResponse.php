@@ -138,7 +138,7 @@ class ChatCompletionResponse implements ProtocolResponse
         $dto->model = $this->model;
         $dto->choices = $sharedChoices;
         $dto->usage = $this->usage?->toSharedDTO();
-        $dto->finishReason = $finishReason?->value; // 将枚举转换为字符串值
+        $dto->finishReason = $finishReason; // 保持为枚举类型
         $dto->systemFingerprint = $this->system_fingerprint;
         $dto->created = $this->created;
 
@@ -159,8 +159,17 @@ class ChatCompletionResponse implements ProtocolResponse
             }
 
             $finishReason = $choiceData['finish_reason'] ?? null;
-            if ($finishReason instanceof FinishReason) {
-                $finishReason = $finishReason->value;
+            // 保持为 FinishReason 枚举实例，不需要转换
+            if (is_string($finishReason)) {
+                // 如果从外部传入的是字符串，需要转换为枚举
+                $finishReason = match ($finishReason) {
+                    'stop' => FinishReason::Stop,
+                    'length' => FinishReason::MaxTokens,
+                    'tool_calls', 'tool_use' => FinishReason::ToolUse,
+                    'end_turn' => FinishReason::EndTurn,
+                    'max_tokens' => FinishReason::MaxTokens,
+                    default => null,
+                };
             }
 
             $choices[] = new Choice(

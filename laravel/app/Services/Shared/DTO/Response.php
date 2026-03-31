@@ -3,6 +3,7 @@
 namespace App\Services\Shared\DTO;
 
 use App\Services\Shared\DTO\Container as ContainerDTO;
+use App\Services\Shared\Enums\FinishReason;
 
 /**
  * 统一响应 DTO
@@ -36,7 +37,7 @@ class Response
     /**
      * 结束原因
      */
-    public ?string $finishReason = null;
+    public ?FinishReason $finishReason = null;
 
     /**
      * 系统指纹

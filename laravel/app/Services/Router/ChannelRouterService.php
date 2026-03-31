@@ -135,8 +135,8 @@ class ChannelRouterService
             }
 
             return Channel::whereIn('id', $channelIds)
-                ->where('status', 'active')
-                ->where('status2', 'normal') // 只选择健康状态正常的渠道
+                ->where('status', \App\Enums\ChannelStatus::ACTIVE)
+                ->where('status2', \App\Enums\ChannelHealthStatus::NORMAL) // 只选择健康状态正常的渠道
                 ->orderBy('priority', 'desc')
                 ->orderBy('weight', 'desc')
                 ->get();
@@ -183,7 +183,7 @@ class ChannelRouterService
         // 查询渠道
         return Channel::whereIn('id', $channelIds)
             ->where('status', \App\Enums\ChannelStatus::ACTIVE)
-            ->where('status2', 'normal')
+            ->where('status2', \App\Enums\ChannelHealthStatus::NORMAL)
             ->orderBy('priority', 'desc')
             ->orderBy('weight', 'desc')
             ->get();
@@ -433,8 +433,8 @@ class ChannelRouterService
         }
 
         return $group->channels()
-            ->where('status', 'active')
-            ->where('status2', 'normal') // 只选择健康状态正常的渠道
+            ->where('status', \App\Enums\ChannelStatus::ACTIVE)
+            ->where('status2', \App\Enums\ChannelHealthStatus::NORMAL) // 只选择健康状态正常的渠道
             ->orderByPivot('priority', 'desc')
             ->get();
     }
@@ -450,8 +450,8 @@ class ChannelRouterService
         return Channel::whereHas('tags', function ($query) use ($tagName) {
             $query->where('name', $tagName);
         })
-            ->where('status', 'active')
-            ->where('status2', 'normal') // 只选择健康状态正常的渠道
+            ->where('status', \App\Enums\ChannelStatus::ACTIVE)
+            ->where('status2', \App\Enums\ChannelHealthStatus::NORMAL) // 只选择健康状态正常的渠道
             ->get();
     }
 

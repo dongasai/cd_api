@@ -181,6 +181,49 @@ class AnthropicMessagesDriver extends AbstractDriver
             return $this->buildMessageStopEvent($chunk);
         }
 
+        // Usage 数据块（OpenAI 格式的最后一个 chunk，只有 usage 没有 delta）
+        if ($chunk->usage !== null && $chunk->contentDelta === null && $chunk->delta === '' && $chunk->toolCalls === null && $chunk->finishReason === null) {
+            // 发送 message_delta 事件包含完整的 usage 信息
+            $usage = $chunk->usage;
+            $data = [
+                'type' => self::EVENT_MESSAGE_DELTA,
+                'delta' => [
+                    'stop_reason' => null,
+                ],
+                'usage' => [
+                    'output_tokens' => $usage->outputTokens ?? 0,
+                ],
+            ];
+
+            $output = $this->buildSSEEvent(self::EVENT_MESSAGE_DELTA, $this->safeJsonEncode($data));
+
+            // 如果有 input_tokens，发送更新的 message_start 事件（包含完整 usage）
+            // 注意：这不是标准 Anthropic 流程，但对于客户端获取完整 usage 很有用
+            if ($usage->inputTokens > 0) {
+                $messageStart = [
+                    'type' => self::EVENT_MESSAGE_START,
+                    'message' => [
+                        'id' => $chunk->id,
+                        'type' => 'message',
+                        'role' => 'assistant',
+                        'model' => $chunk->model,
+                        'content' => [],
+                        'stop_reason' => null,
+                        'stop_sequence' => null,
+                        'usage' => [
+                            'input_tokens' => $usage->inputTokens ?? 0,
+                            'output_tokens' => $usage->outputTokens ?? 0,
+                            'cache_read_input_tokens' => $usage->cacheReadInputTokens,
+                            'cache_creation_input_tokens' => $usage->cacheCreationInputTokens,
+                        ],
+                    ],
+                ];
+                $output = $this->buildSSEEvent(self::EVENT_MESSAGE_START, $this->safeJsonEncode($messageStart)).$output;
+            }
+
+            return $output;
+        }
+
         return '';
     }
 

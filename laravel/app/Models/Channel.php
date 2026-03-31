@@ -136,7 +136,7 @@ class Channel extends Model
      */
     public function isHealthNormal(): bool
     {
-        return $this->status2 === 'normal';
+        return $this->status2 === ChannelHealthStatus::NORMAL;
     }
 
     /**
