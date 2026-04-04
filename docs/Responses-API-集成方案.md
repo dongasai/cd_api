@@ -1394,14 +1394,13 @@ public function it_returns_null_for_expired_session()
 // tests/Feature/ResponsesApiTest.php
 
 /** @test */
-public function it_accepts_responses_format_at_chat_endpoint()
+public function it_accepts_responses_format_at_responses_endpoint()
 {
-    $response = $this->postJson('/api/openai/v1/chat/completions', [
+    $response = $this->postJson('/api/v1/responses', [
         'model' => 'gpt-4',
         'input' => '你好',
     ], [
         'Authorization' => 'Bearer test-api-key',
-        'X-Response-Format' => 'responses',
     ]);
 
     $response->assertStatus(200)
@@ -1420,24 +1419,22 @@ public function it_accepts_responses_format_at_chat_endpoint()
 public function it_maintains_conversation_state_with_previous_response_id()
 {
     // 第一次请求
-    $response1 = $this->postJson('/api/openai/v1/chat/completions', [
+    $response1 = $this->postJson('/api/v1/responses', [
         'model' => 'gpt-4',
         'input' => '我的名字是张三',
     ], [
         'Authorization' => 'Bearer test-api-key',
-        'X-Response-Format' => 'responses',
     ]);
 
     $responseId = $response1->json('id');
 
     // 第二次请求，使用 previous_response_id
-    $response2 = $this->postJson('/api/openai/v1/chat/completions', [
+    $response2 = $this->postJson('/api/v1/responses', [
         'model' => 'gpt-4',
         'input' => '我叫什么名字？',
         'previous_response_id' => $responseId,
     ], [
         'Authorization' => 'Bearer test-api-key',
-        'X-Response-Format' => 'responses',
     ]);
 
     $response2->assertStatus(200);
@@ -1454,10 +1451,9 @@ public function it_maintains_conversation_state_with_previous_response_id()
 ### 6.1 基础请求
 
 ```bash
-curl -X POST http://localhost:32126/api/openai/v1/chat/completions \
+curl -X POST http://localhost:32126/api/v1/responses \
   -H "Authorization: Bearer your-api-key" \
   -H "Content-Type: application/json" \
-  -H "X-Response-Format: responses" \
   -d '{
     "model": "gpt-4",
     "input": "你好"
@@ -1484,17 +1480,17 @@ curl -X POST http://localhost:32126/api/openai/v1/chat/completions \
 
 ```bash
 # 第一次请求
-curl -X POST http://localhost:32126/api/openai/v1/chat/completions \
+curl -X POST http://localhost:32126/api/v1/responses \
   -H "Authorization: Bearer your-api-key" \
-  -H "X-Response-Format: responses" \
+  -H "Content-Type: application/json" \
   -d '{"model": "gpt-4", "input": "我叫李四"}'
 
 # 响应：{"id": "resp_xyz789", "output": "你好李四！", ...}
 
 # 第二次请求（关联历史）
-curl -X POST http://localhost:32126/api/openai/v1/chat/completions \
+curl -X POST http://localhost:32126/api/v1/responses \
   -H "Authorization: Bearer your-api-key" \
-  -H "X-Response-Format: responses" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4",
     "input": "我叫什么名字？",
@@ -1507,9 +1503,9 @@ curl -X POST http://localhost:32126/api/openai/v1/chat/completions \
 ### 6.3 流式请求
 
 ```bash
-curl -X POST http://localhost:32126/api/openai/v1/chat/completions \
+curl -X POST http://localhost:32126/api/v1/responses \
   -H "Authorization: Bearer your-api-key" \
-  -H "X-Response-Format: responses" \
+  -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4",
     "input": "讲个长笑话",
@@ -1598,11 +1594,13 @@ try {
 | 1 | 创建数据库表 | 15分钟 |
 | 2 | 创建 Model | 10分钟 |
 | 3 | 创建 Service | 20分钟 |
-| 4 | 创建 Response DTO | 30分钟 |
+| 4 | 创建 ResponseRequest DTO | 30分钟 |
 | 5 | 创建 ResponseResponse DTO | 30分钟 |
-| 6 | 扩展 Driver | 40分钟 |
-| 7 | 单元测试 | 30分钟 |
-| 8 | 集成测试 | 30分钟 |
+| 6 | 创建 ResponsesDriver | 40分钟 |
+| 7 | 注册 Driver | 10分钟 |
+| 8 | 配置路由 | 10分钟 |
+| 9 | 单元测试 | 30分钟 |
+| 10 | 集成测试 | 30分钟 |
 | **总计** | | **约 3.5 小时** |
 
 ---
@@ -1611,9 +1609,11 @@ try {
 
 - [ ] 数据库表创建成功
 - [ ] Model 和 Service 实现完整
-- [ ] Response DTO 转换逻辑正确
+- [ ] ResponseRequest DTO 转换逻辑正确
 - [ ] ResponseResponse DTO 转换逻辑正确
-- [ ] OpenAiChatCompletionsDriver 支持双格式
+- [ ] ResponsesDriver 实现完整
+- [ ] Driver 成功注册到 DriverManager
+- [ ] 路由配置正确，`/v1/responses` 端点可访问
 - [ ] 状态管理功能正常（存储、检索、过期）
 - [ ] 单元测试覆盖率 > 80%
 - [ ] 集成测试通过
@@ -1622,3 +1622,9 @@ try {
 ---
 
 **下一步**: 开始实施步骤 1，创建数据库表
+
+**重要提醒**:
+- 本方案新增独立的 `/v1/responses` 端点
+- 不修改现有的 `/v1/chat/completions` 端点
+- 底层通过 ResponsesDriver 转换为 Chat Completions 格式
+- 状态管理通过 ResponseStateManager 实现
