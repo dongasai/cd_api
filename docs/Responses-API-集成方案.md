@@ -92,7 +92,8 @@ return new class extends Migration
     {
         Schema::create('response_sessions', function (Blueprint $table) {
             $table->id();
-            $table->string('response_id', 255)->unique()->comment('Responses API 返回的 ID');
+            $table->string('response_id', 255)->unique()->comment('当前响应 ID');
+            $table->string('previous_response_id', 255)->nullable()->comment('上一次响应 ID（用于追溯对话链）');
             $table->unsignedBigInteger('api_key_id')->nullable()->comment('API Key ID');
 
             // 核心数据
@@ -108,9 +109,10 @@ return new class extends Migration
             $table->timestamps();
 
             // 索引
-            $table->index('response_id');
-            $table->index(['api_key_id', 'expires_at']);
-            $table->index('expires_at');
+            // 注意：response_id 已有 unique 索引，不需要额外 index
+            $table->index('previous_response_id'); // 用于追溯对话链
+            $table->index(['api_key_id', 'expires_at']); // 用于清理和查询
+            $table->index('expires_at'); // 用于过期清理
 
             // 外键（如果 api_keys 表存在）
             // $table->foreign('api_key_id')->references('id')->on('api_keys')->onDelete('cascade');
@@ -130,6 +132,7 @@ return new class extends Migration
 {
   "id": 1,
   "response_id": "resp_abc123",
+  "previous_response_id": "resp_xyz789",
   "api_key_id": 42,
   "messages": [
     {"role": "user", "content": "你好"},
@@ -145,6 +148,12 @@ return new class extends Migration
 }
 ```
 
+**字段说明**：
+- `response_id`: 当前响应的唯一标识
+- `previous_response_id`: 上一次响应的ID，形成对话链
+- `messages`: 完整的消息历史（包含本次请求和响应）
+- 通过 `previous_response_id` 可以追溯完整的对话路径
+
 ### 2.3 过期策略
 
 **默认过期时间**：24 小时
@@ -156,6 +165,52 @@ php artisan schedule:run
 
 // 或手动清理
 php artisan cdapi:cleanup-response-sessions
+```
+
+### 2.4 对话链设计
+
+**关联关系**：
+```
+resp_001 (previous_response_id: null)
+    ↓
+resp_002 (previous_response_id: resp_001)
+    ↓
+resp_003 (previous_response_id: resp_002)
+    ↓
+resp_004 (previous_response_id: resp_003)
+```
+
+**优势**：
+1. ✅ 可追溯完整的对话历史链路
+2. ✅ 支持对话树/图谱分析
+3. ✅ 方便调试和审计
+4. ✅ 可检测循环引用问题
+5. ✅ 支持对话分支（一个响应可能有多个后续）
+
+**Model 方法**：
+```php
+// 获取对话链长度
+$session->getChainLength(); // 返回对话链中的节点数
+
+// 获取完整对话链（从最早到当前）
+$chain = $session->getConversationChain();
+// 返回数组：[resp_001, resp_002, resp_003, resp_004]
+
+// 获取上一次响应
+$previous = $session->previous(); // 返回 ResponseSession 或 null
+```
+
+**使用示例**：
+```php
+// 追溯完整对话历史
+$session = ResponseSession::where('response_id', 'resp_004')->first();
+$chain = $session->getConversationChain();
+
+foreach ($chain as $node) {
+    echo "Response ID: {$node->response_id}\n";
+    echo "Messages: {$node->message_count}\n";
+    echo "Tokens: {$node->total_tokens}\n";
+}
 ```
 
 ---
@@ -199,20 +254,20 @@ php artisan cdapi:cleanup-response-sessions
 
 ### 3.2 核心组件
 
-#### 1. ResponseRequest DTO
+#### 1. ResponsesRequest DTO
 
 ```php
-// laravel/app/Services/Protocol/Driver/OpenAI/ResponseRequest.php
+// laravel/app/Services/Protocol/Driver/Responses/ResponsesRequest.php
 ```
 
 **职责**：
 - 解析 Responses 请求格式
 - 转换为 Chat Completions 格式
 
-#### 2. ResponseResponse DTO
+#### 2. ResponsesResponse DTO
 
 ```php
-// laravel/app/Services/Protocol/Driver/OpenAI/ResponseResponse.php
+// laravel/app/Services/Protocol/Driver/Responses/ResponsesResponse.php
 ```
 
 **职责**：
@@ -229,10 +284,10 @@ php artisan cdapi:cleanup-response-sessions
 - 会话状态存储和检索
 - 过期清理
 
-#### 4. ResponsesDriver (新协议驱动)
+#### 4. OpenaiResponsesDriver (新协议驱动)
 
 ```php
-// laravel/app/Services/Protocol/Driver/ResponsesDriver.php
+// laravel/app/Services/Protocol/Driver/OpenaiResponsesDriver.php
 ```
 
 **职责**：
@@ -243,7 +298,51 @@ php artisan cdapi:cleanup-response-sessions
 
 ---
 
-## 四、详细实施步骤
+## 四、文件结构
+
+**新增文件清单**：
+
+```
+laravel/
+├── app/
+│   ├── Models/
+│   │   └── ResponseSession.php                    # 会话状态 Model
+│   ├── Services/
+│   │   ├── Response/
+│   │   │   └── ResponseStateManager.php           # 状态管理 Service
+│   │   └── Protocol/
+│   │       └── Driver/
+│   │           ├── ResponsesDriver.php            # 协议驱动
+│   │           └── Responses/                     # DTO 目录
+│   │               ├── ResponsesRequest.php       # 请求 DTO
+│   │               └── ResponsesResponse.php      # 响应 DTO
+│   └── database/
+│       └── migrations/
+│           └── ...create_response_sessions_table.php  # 数据库迁移
+└── tests/
+    ├── Unit/
+    │   ├── Services/Response/
+    │   │   └── ResponseStateManagerTest.php
+    │   └── Protocol/Driver/Responses/
+    │       ├── ResponsesRequestTest.php
+    │       └── ResponsesResponseTest.php
+    └── Feature/
+        └── ResponsesApiTest.php
+```
+
+**修改文件清单**：
+
+```
+laravel/
+├── app/Services/Protocol/
+│   └── DriverManager.php                          # 注册新 Driver
+└── routes/
+    └── api.php                                    # 新增路由
+```
+
+---
+
+## 五、详细实施步骤
 
 ### 步骤 1: 创建数据库表（15分钟）
 
@@ -261,999 +360,478 @@ php artisan migrate
 
 ### 步骤 2: 创建 Model（10分钟）
 
+**文件**: `laravel/app/Models/ResponseSession.php`
+
+**关键属性**:
 ```php
-// laravel/app/Models/ResponseSession.php
-<?php
+protected $fillable = [
+    'response_id',           // 当前响应ID
+    'previous_response_id',  // 上一次响应ID（对话链）
+    'api_key_id',            // API Key ID
+    'messages',              // 完整消息历史（JSON）
+    'model',                 // 模型名称
+    'total_tokens',          // Token消耗
+    'message_count',         // 消息数量
+    'expires_at',            // 过期时间
+];
 
-namespace App\Models;
+protected $casts = [
+    'messages' => 'array',
+    'expires_at' => 'datetime',
+];
+```
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+**核心方法**:
+```php
+// 查找有效会话
+public static function findValid(string $responseId, ?int $apiKeyId = null): ?self
 
-/**
- * Responses 会话状态
- */
-class ResponseSession extends Model
-{
-    protected $fillable = [
-        'response_id',
-        'api_key_id',
-        'messages',
-        'model',
-        'total_tokens',
-        'message_count',
-        'expires_at',
-    ];
+// 关联关系
+public function apiKey(): BelongsTo
+public function previous(): ?self  // 获取上一次响应
 
-    protected $casts = [
-        'messages' => 'array',
-        'expires_at' => 'datetime',
-    ];
+// 对话链操作
+public function getChainLength(): int  // 对话链长度
+public function getConversationChain(): array  // 完整对话链（从最早到当前）
 
-    /**
-     * 关联 API Key
-     */
-    public function apiKey(): BelongsTo
-    {
-        return $this->belongsTo(ApiKey::class);
-    }
+// 辅助方法
+public function isExpired(): bool
+public function getMessageCount(): int
+```
 
-    /**
-     * 是否过期
-     */
-    public function isExpired(): bool
-    {
-        return $this->expires_at->isPast();
-    }
-
-    /**
-     * 查找有效会话
-     */
-    public static function findValid(string $responseId, ?int $apiKeyId = null): ?self
-    {
-        $query = static::where('response_id', $responseId)
-            ->where('expires_at', '>', now());
-
-        if ($apiKeyId !== null) {
-            $query->where('api_key_id', $apiKeyId);
-        }
-
-        return $query->first();
-    }
-
-    /**
-     * 获取消息数量
-     */
-    public function getMessageCount(): int
-    {
-        return count($this->messages ?? []);
-    }
-}
+**对话链遍历逻辑**:
+```
+1. 从当前节点开始
+2. 通过 previous_response_id 向前追溯
+3. 收集所有节点，形成完整对话链
+4. 返回从最早到当前的有序数组
 ```
 
 ### 步骤 3: 创建 Service（20分钟）
 
+**文件**: `laravel/app/Services/Response/ResponseStateManager.php`
+
+**职责**: 会话状态存储和检索
+
+**核心方法**:
 ```php
-// laravel/app/Services/Response/ResponseStateManager.php
-<?php
-
-namespace App\Services\Response;
-
-use App\Models\ResponseSession;
-use Illuminate\Support\Facades\Log;
-
-/**
- * Responses 会话状态管理器
- */
 class ResponseStateManager
 {
-    /**
-     * 默认过期时间（小时）
-     */
-    const DEFAULT_EXPIRY_HOURS = 24;
+    const DEFAULT_EXPIRY_HOURS = 24;  // 默认24小时过期
 
-    /**
-     * 存储会话状态
-     */
+    // 存储会话状态
     public function store(
         string $responseId,
         array $messages,
         ?int $apiKeyId = null,
         string $model = '',
-        int $totalTokens = 0
-    ): ResponseSession {
-        // 如果已存在，更新
-        $session = ResponseSession::where('response_id', $responseId)->first();
+        int $totalTokens = 0,
+        ?string $previousResponseId = null  // ⭐ 对话链关联
+    ): ResponseSession
 
-        if ($session) {
-            $session->update([
-                'messages' => $messages,
-                'total_tokens' => $totalTokens,
-                'message_count' => count($messages),
-                'expires_at' => now()->addHours(self::DEFAULT_EXPIRY_HOURS),
-            ]);
-
-            return $session;
-        }
-
-        // 创建新会话
-        return ResponseSession::create([
-            'response_id' => $responseId,
-            'api_key_id' => $apiKeyId,
-            'messages' => $messages,
-            'model' => $model,
-            'total_tokens' => $totalTokens,
-            'message_count' => count($messages),
-            'expires_at' => now()->addHours(self::DEFAULT_EXPIRY_HOURS),
-        ]);
-    }
-
-    /**
-     * 检索会话历史
-     */
+    // 检索会话历史
     public function retrieve(string $responseId, ?int $apiKeyId = null): ?array
-    {
-        $session = ResponseSession::findValid($responseId, $apiKeyId);
 
-        if (!$session) {
-            Log::info('Response session not found or expired', [
-                'response_id' => $responseId,
-                'api_key_id' => $apiKeyId,
-            ]);
-            return null;
-        }
+    // 追加消息到现有会话
+    public function append(string $responseId, array $newMessages, int $additionalTokens = 0): bool
 
-        // 更新最后活跃时间
-        $session->touch();
-
-        return $session->messages;
-    }
-
-    /**
-     * 追加消息到现有会话
-     */
-    public function append(
-        string $responseId,
-        array $newMessages,
-        int $additionalTokens = 0
-    ): bool {
-        $session = ResponseSession::where('response_id', $responseId)->first();
-
-        if (!$session || $session->isExpired()) {
-            return false;
-        }
-
-        $messages = array_merge($session->messages, $newMessages);
-
-        $session->update([
-            'messages' => $messages,
-            'message_count' => count($messages),
-            'total_tokens' => $session->total_tokens + $additionalTokens,
-        ]);
-
-        return true;
-    }
-
-    /**
-     * 删除会话
-     */
+    // 删除会话
     public function forget(string $responseId): bool
-    {
-        return ResponseSession::where('response_id', $responseId)->delete() > 0;
-    }
 
-    /**
-     * 清理过期会话
-     */
+    // 清理过期会话
     public function cleanupExpired(): int
-    {
-        $count = ResponseSession::where('expires_at', '<', now())->delete();
 
-        Log::info('Cleaned up expired response sessions', ['count' => $count]);
-
-        return $count;
-    }
-
-    /**
-     * 获取会话统计
-     */
+    // 获取统计信息
     public function getStats(?int $apiKeyId = null): array
-    {
-        $query = ResponseSession::where('expires_at', '>', now());
-
-        if ($apiKeyId !== null) {
-            $query->where('api_key_id', $apiKeyId);
-        }
-
-        return [
-            'active_sessions' => $query->count(),
-            'total_messages' => $query->sum('message_count'),
-            'total_tokens' => $query->sum('total_tokens'),
-        ];
-    }
 }
 ```
 
-### 步骤 4: 创建 ResponseRequest DTO（30分钟）
+**核心逻辑**:
+```
+存储流程:
+  1. 检查 response_id 是否已存在
+  2. 如果存在 → 更新消息历史和Token统计
+  3. 如果不存在 → 创建新记录，设置过期时间
+  4. 记录 previous_response_id 形成对话链
 
+检索流程:
+  1. 根据 response_id 和 api_key_id 查询
+  2. 检查是否过期
+  3. 如果有效 → 返回消息历史，更新活跃时间
+  4. 如果无效 → 返回 null
+
+清理流程:
+  1. 定时任务每小时执行
+  2. 删除 expires_at < now() 的记录
+  3. 记录清理统计日志
+```
+
+### 步骤 4: 创建 ResponsesRequest DTO（30分钟）
+
+**文件**: `laravel/app/Services/Protocol/Driver/Responses/ResponsesRequest.php`
+
+**核心属性**:
 ```php
-// laravel/app/Services/Protocol/Driver/OpenAI/ResponseRequest.php
-<?php
-
-namespace App\Services\Protocol\Driver\OpenAI;
-
-use App\Services\Protocol\Contracts\ProtocolRequest;
-use App\Services\Shared\DTO\Request as SharedRequest;
-
-/**
- * OpenAI Responses 请求 DTO
- */
-class ResponseRequest implements ProtocolRequest
+class ResponsesRequest implements ProtocolRequest
 {
-    /**
-     * 模型名称
-     */
-    public string $model = '';
+    public string $model = '';                  // 模型名称（必需）
+    public string|array $input = '';            // 输入内容（必需）
 
-    /**
-     * 输入内容（字符串或消息数组）
-     */
-    public string|array $input = '';
+    // 状态管理
+    public ?string $previousResponseId = null;  // 上一次响应ID
 
-    /**
-     * 上一次响应ID（状态管理）
-     */
-    public ?string $previousResponseId = null;
-
-    /**
-     * 最大 Token
-     */
-    public ?int $maxTokens = null;
-
-    /**
-     * 温度参数
-     */
-    public ?float $temperature = null;
-
-    /**
-     * Top P
-     */
-    public ?float $topP = null;
-
-    /**
-     * 是否流式
-     */
-    public ?bool $stream = false;
-
-    /**
-     * 工具定义
-     */
-    public ?array $tools = null;
-
-    /**
-     * 工具选择
-     */
-    public $toolChoice = null;
-
-    /**
-     * 从数组创建
-     */
-    public static function fromArray(array $data): self
-    {
-        $request = new self;
-        $request->model = $data['model'] ?? '';
-        $request->input = $data['input'] ?? '';
-        $request->previousResponseId = $data['previous_response_id'] ?? null;
-        $request->maxTokens = $data['max_tokens'] ?? null;
-        $request->temperature = $data['temperature'] ?? null;
-        $request->topP = $data['top_p'] ?? null;
-        $request->stream = $data['stream'] ?? false;
-        $request->tools = $data['tools'] ?? null;
-        $request->toolChoice = $data['tool_choice'] ?? null;
-
-        return $request;
-    }
-
-    /**
-     * 从数组创建（带验证）
-     */
-    public static function fromArrayValidated(array $data): self
-    {
-        $request = self::fromArray($data);
-
-        // 验证必填字段
-        if (empty($request->model)) {
-            throw new \InvalidArgumentException('model is required');
-        }
-
-        if (empty($request->input)) {
-            throw new \InvalidArgumentException('input is required');
-        }
-
-        return $request;
-    }
-
-    /**
-     * 转换为数组
-     */
-    public function toArray(): array
-    {
-        $result = [
-            'model' => $this->model,
-            'input' => $this->input,
-        ];
-
-        // 可选字段
-        if ($this->previousResponseId !== null) {
-            $result['previous_response_id'] = $this->previousResponseId;
-        }
-
-        if ($this->maxTokens !== null) {
-            $result['max_tokens'] = $this->maxTokens;
-        }
-
-        if ($this->temperature !== null) {
-            $result['temperature'] = $this->temperature;
-        }
-
-        if ($this->topP !== null) {
-            $result['top_p'] = $this->topP;
-        }
-
-        if ($this->stream !== false) {
-            $result['stream'] = $this->stream;
-        }
-
-        if ($this->tools !== null) {
-            $result['tools'] = $this->tools;
-        }
-
-        if ($this->toolChoice !== null) {
-            $result['tool_choice'] = $this->toolChoice;
-        }
-
-        return $result;
-    }
-
-    /**
-     * 转换为 Shared DTO
-     */
-    public function toSharedDTO(): SharedRequest
-    {
-        $shared = new SharedRequest;
-        $shared->model = $this->model;
-        $shared->maxTokens = $this->maxTokens;
-        $shared->temperature = $this->temperature;
-        $shared->topP = $this->topP;
-        $shared->stream = $this->stream;
-        $shared->tools = $this->tools;
-        $shared->toolChoice = $this->toolChoice;
-
-        // 新增字段
-        $shared->input = $this->input;
-        $shared->previousResponseId = $this->previousResponseId;
-
-        // input → messages
-        if (is_string($this->input)) {
-            $shared->messages = [
-                \App\Services\Shared\DTO\Message::fromArray([
-                    'role' => 'user',
-                    'content' => $this->input,
-                ])
-            ];
-        } else {
-            // input 已经是消息数组
-            $shared->messages = array_map(
-                fn($msg) => \App\Services\Shared\DTO\Message::fromArray($msg),
-                $this->input
-            );
-        }
-
-        return $shared;
-    }
-
-    /**
-     * 从 Shared DTO 创建
-     */
-    public static function fromSharedDTO(SharedRequest $shared): self
-    {
-        $request = new self;
-        $request->model = $shared->model;
-        $request->input = $shared->input ?? $shared->messages;
-        $request->previousResponseId = $shared->previousResponseId;
-        $request->maxTokens = $shared->maxTokens;
-        $request->temperature = $shared->temperature;
-        $request->topP = $shared->topP;
-        $request->stream = $shared->stream;
-        $request->tools = $shared->tools;
-        $request->toolChoice = $shared->toolChoice;
-
-        return $request;
-    }
-
-    /**
-     * ⭐ 转换为 Chat Completions 格式
-     *
-     * @param array|null $historyMessages 历史消息（从 previous_response_id 检索）
-     */
-    public function toChatCompletions(?array $historyMessages = null): ChatCompletionRequest
-    {
-        $chatRequest = new ChatCompletionRequest();
-        $chatRequest->model = $this->model;
-        $chatRequest->maxTokens = $this->maxTokens;
-        $chatRequest->temperature = $this->temperature;
-        $chatRequest->topP = $this->topP;
-        $chatRequest->stream = $this->stream;
-        $chatRequest->tools = $this->tools;
-        $chatRequest->toolChoice = $this->toolChoice;
-
-        // ⭐ 核心：处理 input 和历史消息
-        if ($historyMessages !== null) {
-            // 有历史，合并
-            $newMessage = $this->inputToMessage();
-            $chatRequest->messages = array_merge($historyMessages, [$newMessage]);
-        } else {
-            // 无历史，直接转换 input
-            $chatRequest->messages = $this->inputToMessages();
-        }
-
-        return $chatRequest;
-    }
-
-    /**
-     * input 转换为单条消息
-     */
-    private function inputToMessage(): array
-    {
-        if (is_string($this->input)) {
-            return ['role' => 'user', 'content' => $this->input];
-        }
-
-        // input 已经是消息格式，返回最后一条
-        return is_array($this->input) && isset($this->input[0])
-            ? $this->input[count($this->input) - 1]
-            : $this->input;
-    }
-
-    /**
-     * input 转换为消息数组
-     */
-    private function inputToMessages(): array
-    {
-        if (is_string($this->input)) {
-            return [['role' => 'user', 'content' => $this->input]];
-        }
-
-        // input 已经是消息数组
-        return $this->input;
-    }
+    // 可选参数
+    public ?string $instructions = null;        // 系统指令
+    public ?int $maxTokens = null;              // 最大Token
+    public ?float $temperature = null;          // 温度参数
+    public ?float $topP = null;                 // Top P
+    public ?bool $stream = false;               // 是否流式
+    public ?array $tools = null;                // 工具定义
+    public $toolChoice = null;                  // 工具选择
+    public ?array $metadata = null;             // 元数据
 }
 ```
 
-### 步骤 5: 创建 ResponseResponse DTO（30分钟）
-
+**核心方法**:
 ```php
-// laravel/app/Services/Protocol/Driver/OpenAI/ResponseResponse.php
-<?php
+// 从数组创建（带验证）
+public static function fromArrayValidated(array $data): self
 
-namespace App\Services\Protocol\Driver\OpenAI;
+// 转换为 Chat Completions 格式 ⭐
+public function toChatCompletions(?array $historyMessages = null): ChatCompletionRequest
+```
 
-use App\Services\Protocol\Contracts\ProtocolResponse;
-use App\Services\Shared\DTO\Response as SharedResponse;
+**核心转换逻辑**:
+```
+toChatCompletions 流程:
+  1. 创建 ChatCompletionRequest 对象
+  2. 复制公共参数（model, maxTokens, temperature等）
 
-/**
- * OpenAI Responses 响应 DTO
- */
-class ResponseResponse implements ProtocolResponse
+  3. 构建消息数组:
+     a. 如果有 instructions → 添加 system message
+     b. 如果有 historyMessages → 合并历史消息
+     c. 转换 input 为消息格式:
+        - 字符串 → 单条 user message
+        - 消息数组 → 直接使用
+        - 内容块数组 → 转换为 user message（多模态）
+
+  4. 设置 messages 到 ChatCompletionRequest
+  5. 返回转换后的对象
+```
+
+**input 类型处理**:
+```
+支持三种 input 格式:
+
+1. 字符串类型:
+   input: "你好"
+   → [{role: "user", content: "你好"}]
+
+2. 消息数组:
+   input: [{role: "user", content: "你好"}, ...]
+   → 直接使用
+
+3. 内容块数组（多模态）:
+   input: [{type: "text", text: "看图"}, {type: "image", url: "..."}]
+   → [{role: "user", content: [{type: "text", ...}, {type: "image_url", ...}]}]
+```
+
+**关键验证规则**:
+- `model`: 必需
+- `input`: 必需，支持多种类型
+- 其他参数：可选，遵循 OpenAI Responses API 规范
+
+### 步骤 5: 创建 ResponsesResponse DTO（30分钟）
+
+**文件**: `laravel/app/Services/Protocol/Driver/Responses/ResponsesResponse.php`
+
+**核心属性**:
+```php
+class ResponsesResponse implements ProtocolResponse
 {
-    /**
-     * 响应 ID
-     */
-    public string $id = '';
+    public string $id = '';                    // 响应ID
+    public string $object = 'response';       // 对象类型
+    public int $created = 0;                   // 创建时间
+    public string $model = '';                 // 模型名称
 
-    /**
-     * 对象类型
-     */
-    public string $object = 'response';
+    // 响应内容
+    public string|array $output = '';          // 输出内容（字符串或内容块）
+    public ?array $toolCalls = null;           // 工具调用
+    public ?string $stopReason = null;         // 停止原因
 
-    /**
-     * 创建时间
-     */
-    public int $created = 0;
-
-    /**
-     * 模型名称
-     */
-    public string $model = '';
-
-    /**
-     * 输出内容（字符串或内容块数组）
-     */
-    public string|array $output = '';
-
-    /**
-     * 工具调用
-     */
-    public ?array $toolCalls = null;
-
-    /**
-     * 停止原因
-     */
-    public ?string $stopReason = null;
-
-    /**
-     * Token 使用量
-     */
-    public ?array $usage = null;
-
-    /**
-     * 从数组创建
-     */
-    public static function fromArray(array $data): self
-    {
-        $response = new self;
-        $response->id = $data['id'] ?? '';
-        $response->object = $data['object'] ?? 'response';
-        $response->created = $data['created'] ?? time();
-        $response->model = $data['model'] ?? '';
-        $response->output = $data['output'] ?? '';
-        $response->toolCalls = $data['tool_calls'] ?? null;
-        $response->stopReason = $data['stop_reason'] ?? null;
-        $response->usage = $data['usage'] ?? null;
-
-        return $response;
-    }
-
-    /**
-     * 转换为数组
-     */
-    public function toArray(): array
-    {
-        $result = [
-            'id' => $this->id,
-            'object' => $this->object,
-            'created' => $this->created,
-            'model' => $this->model,
-            'output' => $this->output,
-        ];
-
-        if ($this->toolCalls !== null) {
-            $result['tool_calls'] = $this->toolCalls;
-        }
-
-        if ($this->stopReason !== null) {
-            $result['stop_reason'] = $this->stopReason;
-        }
-
-        if ($this->usage !== null) {
-            $result['usage'] = $this->usage;
-        }
-
-        return $result;
-    }
-
-    /**
-     * 转换为 Shared DTO
-     */
-    public function toSharedDTO(): SharedResponse
-    {
-        $shared = new SharedResponse;
-        $shared->id = $this->id;
-        $shared->model = $this->model;
-        $shared->created = $this->created;
-
-        // output → content
-        if (is_string($this->output)) {
-            $shared->content = $this->output;
-        } elseif (is_array($this->output)) {
-            // 内容块数组
-            $shared->contentBlocks = $this->output;
-        }
-
-        // usage
-        if ($this->usage !== null) {
-            $shared->usage = new \App\Services\Shared\DTO\Usage;
-            $shared->usage->inputTokens = $this->usage['input_tokens'] ?? 0;
-            $shared->usage->outputTokens = $this->usage['output_tokens'] ?? 0;
-        }
-
-        return $shared;
-    }
-
-    /**
-     * 从 Shared DTO 创建
-     */
-    public static function fromSharedDTO(SharedResponse $shared): self
-    {
-        $response = new self;
-        $response->id = $shared->id;
-        $response->model = $shared->model;
-        $response->created = $shared->created;
-        $response->output = $shared->content ?? $shared->contentBlocks ?? '';
-
-        if ($shared->usage !== null) {
-            $response->usage = [
-                'input_tokens' => $shared->usage->inputTokens,
-                'output_tokens' => $shared->usage->outputTokens,
-            ];
-        }
-
-        return $response;
-    }
-
-    /**
-     * ⭐ 从 Chat Completions 响应转换
-     */
-    public static function fromChatCompletions(ChatCompletionResponse $chat): self
-    {
-        $response = new self;
-        $response->id = $chat->id;
-        $response->model = $chat->model;
-        $response->created = $chat->created;
-        $response->object = 'response';
-
-        // choices[0].message → output
-        if (!empty($chat->choices)) {
-            $choice = $chat->choices[0];
-            $message = $choice['message'] ?? [];
-
-            // 提取内容
-            $response->output = $message['content'] ?? '';
-
-            // 工具调用
-            if (isset($message['tool_calls'])) {
-                $response->toolCalls = $message['tool_calls'];
-            }
-
-            // 停止原因
-            $finishReason = $choice['finish_reason'] ?? null;
-            if ($finishReason !== null) {
-                $response->stopReason = self::mapFinishReason($finishReason);
-            }
-        }
-
-        // usage 转换
-        if ($chat->usage !== null) {
-            $response->usage = [
-                'input_tokens' => $chat->usage['prompt_tokens'] ?? 0,
-                'output_tokens' => $chat->usage['completion_tokens'] ?? 0,
-            ];
-        }
-
-        return $response;
-    }
-
-    /**
-     * 映射 finish_reason → stop_reason
-     */
-    private static function mapFinishReason(string $finishReason): string
-    {
-        return match ($finishReason) {
-            'stop' => 'end_turn',
-            'length' => 'max_tokens',
-            'tool_calls' => 'tool_use',
-            'content_filter' => 'stop_sequence',
-            default => $finishReason,
-        };
-    }
-
-    /**
-     * 获取消息内容（用于存储到会话）
-     */
-    public function toMessageArray(): array
-    {
-        $message = [
-            'role' => 'assistant',
-            'content' => is_string($this->output) ? $this->output : '',
-        ];
-
-        if ($this->toolCalls !== null) {
-            $message['tool_calls'] = $this->toolCalls;
-        }
-
-        return $message;
-    }
+    // 元数据
+    public ?array $usage = null;               // Token使用量（input_tokens, output_tokens）
+    public ?string $systemFingerprint = null; // 系统指纹
 }
 ```
 
-**继续查看下一部分...**
+**核心方法**:
+```php
+// 从 Chat Completions 响应转换 ⭐
+public static function fromChatCompletions(ChatCompletionResponse $chat): self
+
+// 转换为消息数组（用于存储）
+public function toMessageArray(): array
+
+// 获取总Token数
+public function getTotalTokens(): int
+```
+
+**核心转换逻辑**:
+```
+fromChatCompletions 流程:
+  1. 复制基础字段（id, model, created, systemFingerprint）
+  2. 设置 object = 'response'
+
+  3. 提取 choices[0]:
+     a. message.content → output
+     b. message.tool_calls → toolCalls
+     c. finish_reason → stopReason（映射转换）
+
+  4. 转换 usage:
+     prompt_tokens → input_tokens
+     completion_tokens → output_tokens
+
+  5. 返回 Responses 格式对象
+```
+
+**finish_reason 映射规则**:
+```
+Chat Completions → Responses API:
+  'stop' → 'end_turn'
+  'length' → 'max_tokens'
+  'tool_calls' → 'tool_use'
+  'content_filter' → 'content_filter'
+```
+
+**toMessageArray 输出**:
+```
+返回标准消息格式，用于存储到会话历史:
+{
+  role: 'assistant',
+  content: '响应文本',
+  tool_calls: [...] // 如果有工具调用
+}
+```
 
 ---
 
 ### 步骤 6: 创建 ResponsesDriver（40分钟）
 
-**创建独立的协议驱动**：
+**文件**: `laravel/app/Services/Protocol/Driver/ResponsesDriver.php`
 
+**职责**: Responses API 协议驱动，处理请求解析、响应转换、状态管理
+
+**核心属性**:
 ```php
-// laravel/app/Services/Protocol/Driver/ResponsesDriver.php
-<?php
-
-namespace App\Services\Protocol\Driver;
-
-use App\Services\Protocol\Contracts\ProtocolRequest;
-use App\Services\Protocol\Contracts\ProtocolResponse;
-use App\Services\Protocol\Driver\OpenAI\ResponseRequest;
-use App\Services\Protocol\Driver\OpenAI\ResponseResponse;
-use App\Services\Protocol\Driver\OpenAI\ChatCompletionRequest;
-use App\Services\Protocol\Driver\OpenAI\ChatCompletionResponse;
-use App\Services\Shared\DTO\StreamChunk;
-
-/**
- * OpenAI Responses API 协议驱动
- */
 class ResponsesDriver extends AbstractDriver
 {
-    /**
-     * 协议名称
-     */
     public const PROTOCOL_NAME = 'openai_responses';
 
-    /**
-     * 当前处理的 Response ID
-     */
-    protected ?string $currentResponseId = null;
-
-    /**
-     * 完整消息历史（用于存储）
-     */
-    protected ?array $fullMessages = null;
-
-    /**
-     * 获取协议名称
-     */
-    public function getProtocolName(): string
-    {
-        return self::PROTOCOL_NAME;
-    }
-
-    /**
-     * 解析原始请求为协议请求结构体
-     */
-    public function parseRequest(array $rawRequest): ProtocolRequest
-    {
-        $responsesRequest = ResponseRequest::fromArrayValidated($rawRequest);
-
-        // 处理 previous_response_id
-        $historyMessages = null;
-        if ($responsesRequest->previousResponseId) {
-            $historyMessages = $this->retrieveHistory($responsesRequest->previousResponseId);
-
-            if ($historyMessages === null) {
-                \Log::warning('Previous response not found, starting new conversation', [
-                    'previous_response_id' => $responsesRequest->previousResponseId,
-                ]);
-            }
-        }
-
-        // 转换为 Chat Completions 格式
-        $chatRequest = $responsesRequest->toChatCompletions($historyMessages);
-
-        // 保存完整消息（用于后续存储）
-        $this->fullMessages = $chatRequest->messages;
-
-        return $chatRequest;
-    }
-
-    /**
-     * 从协议响应结构体构建 Responses 响应数组
-     */
-    public function buildResponse(ProtocolResponse $response): array
-    {
-        // 从 Chat Completions 转换
-        if ($response instanceof ChatCompletionResponse) {
-            $responsesResponse = ResponseResponse::fromChatCompletions($response);
-        } else {
-            // 从 Shared DTO 转换
-            $sharedDTO = $response->toSharedDTO();
-            $responsesResponse = ResponseResponse::fromSharedDTO($sharedDTO);
-        }
-
-        // ⭐ 存储会话状态
-        $this->storeSession($responsesResponse);
-
-        return $responsesResponse->toArray();
-    }
-
-    /**
-     * 检索历史消息
-     */
-    private function retrieveHistory(string $responseId): ?array
-    {
-        $manager = app(\App\Services\Response\ResponseStateManager::class);
-
-        // 获取 API Key ID
-        $apiKeyId = $this->getCurrentApiKeyId();
-
-        if (!$apiKeyId) {
-            \Log::warning('Cannot retrieve history: no API key context');
-            return null;
-        }
-
-        return $manager->retrieve($responseId, $apiKeyId);
-    }
-
-    /**
-     * 存储会话
-     */
-    private function storeSession(ResponseResponse $response): void
-    {
-        if (empty($response->id)) {
-            return;
-        }
-
-        if ($this->fullMessages === null) {
-            return;
-        }
-
-        $manager = app(\App\Services\Response\ResponseStateManager::class);
-        $apiKeyId = $this->getCurrentApiKeyId();
-
-        // 添加助手回复到消息历史
-        $fullMessages = $this->fullMessages;
-        $fullMessages[] = $response->toMessageArray();
-
-        // 存储会话
-        $manager->store(
-            $response->id,
-            $fullMessages,
-            $apiKeyId,
-            $response->model,
-            $response->usage['total_tokens'] ?? 0
-        );
-
-        \Log::info('Response session stored', [
-            'response_id' => $response->id,
-            'message_count' => count($fullMessages),
-        ]);
-    }
-
-    /**
-     * 获取当前 API Key ID
-     */
-    private function getCurrentApiKeyId(): ?int
-    {
-        // 从认证上下文获取
-        $user = auth()->user();
-        return $user?->api_key_id ?? null;
-    }
-
-    /**
-     * 从标准格式构建 Responses 流式块
-     */
-    public function buildStreamChunk(StreamChunk $chunk): string
-    {
-        $result = [
-            'id' => $chunk->id ?: 'resp-'.uniqid(),
-            'object' => 'response.chunk',
-            'created' => time(),
-            'model' => $chunk->model,
-        ];
-
-        // 输出增量
-        if ($chunk->contentDelta !== null || $chunk->delta !== '') {
-            $result['output'] = $chunk->contentDelta ?? $chunk->delta;
-        }
-
-        // 完成原因
-        if ($chunk->finishReason !== null) {
-            $result['stop_reason'] = $this->mapFinishReason($chunk->finishReason->value);
-        }
-
-        // Token 使用量
-        if ($chunk->usage !== null) {
-            $result['usage'] = [
-                'input_tokens' => $chunk->usage->inputTokens,
-                'output_tokens' => $chunk->usage->outputTokens,
-            ];
-        }
-
-        return 'data: '.$this->safeJsonEncode($result)."\n\n";
-    }
-
-    /**
-     * 构建流式结束标记
-     */
-    public function buildStreamDone(): string
-    {
-        return "data: [DONE]\n\n";
-    }
-
-    /**
-     * 获取请求中的模型名称
-     */
-    public function extractModel(array $rawRequest): string
-    {
-        return $rawRequest['model'] ?? '';
-    }
-
-    /**
-     * 构建错误响应
-     */
-    public function buildErrorResponse(string $message, string $type = 'error', int $code = 500): array
-    {
-        return [
-            'error' => [
-                'message' => $message,
-                'type' => $type,
-                'code' => $code,
-            ],
-        ];
-    }
-
-    /**
-     * 映射 finish_reason → stop_reason
-     */
-    private function mapFinishReason(string $finishReason): string
-    {
-        return match ($finishReason) {
-            'stop' => 'end_turn',
-            'length' => 'max_tokens',
-            'tool_calls' => 'tool_use',
-            'content_filter' => 'stop_sequence',
-            default => $finishReason,
-        };
-    }
+    protected ?Request $currentRequest = null;      // 当前HTTP请求（API Key上下文）
+    protected ?string $previousResponseId = null;   // 上一次响应ID
+    protected ?array $fullMessages = null;          // 完整消息历史（用于存储）
+    protected string $accumulatedOutput = '';       // 流式响应累计输出
 }
+```
+
+**核心方法签名**:
+```php
+// 协议管理
+public function getProtocolName(): string
+public function setRequest(Request $request): void
+
+// 请求处理
+public function parseRequest(array $rawRequest): ProtocolRequest
+public function extractModel(array $rawRequest): string
+
+// 响应处理
+public function buildResponse(ProtocolResponse $response): array
+public function buildErrorResponse(string $message, string $type = 'error', int $code = 500): array
+
+// 流式处理
+public function buildStreamChunk(StreamChunk $chunk): string
+public function buildStreamDone(): string
+public function storeStreamSession(string $responseId, string $model, ?array $usage = null): void
+```
+
+**核心流程逻辑**:
+
+#### parseRequest 流程:
+```
+1. 解析 ResponsesRequest
+   - 验证必需字段（model, input）
+   - 提取 previous_response_id
+
+2. 检索历史消息
+   - 如果有 previous_response_id:
+     a. 从 ResponseStateManager 检索
+     b. 使用 API Key ID 进行隔离验证
+     c. 如果检索失败 → 记录警告，开始新对话
+
+3. 转换为 Chat Completions
+   - 调用 ResponsesRequest.toChatCompletions(historyMessages)
+   - 保存完整消息历史（用于后续存储）
+
+4. 返回 ChatCompletionRequest
+```
+
+#### buildResponse 流程:
+```
+1. 转换响应格式
+   - 如果是 ChatCompletionResponse → ResponsesResponse.fromChatCompletions()
+   - 否则 → 从 SharedDTO 转换
+
+2. 存储会话状态 ⭐
+   - 添加助手回复到消息历史
+   - 调用 ResponseStateManager.store()
+   - 传递参数:
+     * response_id
+     * fullMessages（完整历史+新回复）
+     * api_key_id
+     * model
+     * totalTokens
+     * previous_response_id（对话链）
+
+3. 返回 Responses 格式数组
+```
+
+#### buildStreamChunk 流程:
+```
+1. 累计输出内容
+   - 将 delta/contentDelta 添加到 accumulatedOutput
+
+2. 构建 stream chunk
+   - 设置基础字段（id, object='response.chunk', model）
+   - 设置输出增量（output）
+   - 映射 finish_reason → stop_reason
+   - 转换 usage 字段名
+
+3. 返回 SSE 格式字符串
+   "data: {json}\n\n"
+```
+
+#### storeStreamSession 流程:
+```
+流式响应完成后调用:
+
+1. 构建完整消息历史
+   - fullMessages + [role: 'assistant', content: accumulatedOutput]
+
+2. 存储会话
+   - 调用 ResponseStateManager.store()
+   - 传递 previous_response_id
+
+3. 清理状态
+   - 重置 fullMessages, accumulatedOutput
+```
+
+**API Key 获取逻辑**:
+```php
+private function getCurrentApiKeyId(): ?int
+{
+    // ⭐ 从 Request attributes 获取（中间件已注入）
+    $apiKey = $this->currentRequest->attributes->get('api_key');
+    return $apiKey?->id;
+}
+```
+
+**finish_reason 映射**:
+```
+Chat Completions → Responses:
+  'stop' → 'end_turn'
+  'length' → 'max_tokens'
+  'tool_calls' → 'tool_use'
+  'content_filter' → 'content_filter'
 ```
 
 ---
 
 ### 步骤 7: 注册 Driver（10分钟）
 
-**在 DriverManager 中注册新驱动**：
+**通过 AppServiceProvider 注册新驱动**：
 
 ```php
-// laravel/app/Services/Protocol/DriverManager.php
+// laravel/app/Providers/AppServiceProvider.php
 
-public function __construct()
+use App\Services\Protocol\DriverManager;
+use App\Services\Protocol\Driver\OpenAiChatCompletionsDriver;
+use App\Services\Protocol\Driver\AnthropicMessagesDriver;
+use App\Services\Protocol\Driver\ResponsesDriver; // ⭐ 新增
+
+public function boot(): void
 {
-    // 注册现有驱动
-    $this->drivers['openai_chat_completions'] = new OpenAiChatCompletionsDriver();
-    $this->drivers['anthropic_messages'] = new AnthropicMessagesDriver();
+    // 注册协议驱动
+    $this->app->singleton(DriverManager::class, function ($app) {
+        $manager = new DriverManager();
 
-    // ⭐ 注册 Responses 驱动
-    $this->drivers['openai_responses'] = new ResponsesDriver();
+        // 注册现有驱动
+        $manager->register('openai', new OpenAiChatCompletionsDriver());
+        $manager->register('anthropic', new AnthropicMessagesDriver());
+
+        // ⭐ 注册 Responses 驱动
+        $manager->register('openai_responses', new ResponsesDriver());
+
+        return $manager;
+    });
 }
 ```
 
 ---
 
-### 步骤 8: 配置路由（10分钟）
+### 步骤 8: 配置路由和控制器（15分钟）
 
-**新增 Responses API 端点路由**：
+**步骤 8.1: 在 ProxyController 中添加新方法**：
+
+```php
+// laravel/app/Http/Controllers/Api/ProxyController.php
+
+/**
+ * Responses API 端点
+ */
+public function responses(Request $request): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
+{
+    // 标记请求为 Responses 协议
+    $request->attributes->set('protocol', 'openai_responses');
+
+    return $this->handleRequest($request, 'openai_responses');
+}
+```
+
+**步骤 8.2: 更新路由配置**：
 
 ```php
 // laravel/routes/api.php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\ProxyController;
+Route::middleware([AuthenticateApiKey::class])->group(function () {
+    Route::prefix('openai/v1')->group(function () {
+        Route::post('/chat/completions', [ProxyController::class, 'chatCompletions']);
+        Route::post('/completions', [ProxyController::class, 'completions']);
+        Route::post('/embeddings', [ProxyController::class, 'embeddings']);
+        Route::get('/models', [ProxyController::class, 'models']);
 
-Route::prefix('v1')->middleware(['auth:api-key'])->group(function () {
-    // 现有 Chat Completions 端点
-    Route::post('/chat/completions', [ProxyController::class, 'handle'])
-        ->name('api.v1.chat.completions');
-
-    // ⭐ 新增 Responses API 端点
-    Route::post('/responses', [ProxyController::class, 'handle'])
-        ->name('api.v1.responses');
+        // ⭐ 新增 Responses API 端点
+        Route::post('/responses', [ProxyController::class, 'responses']);
+    });
 });
 ```
 
 **路由说明**：
-- 端点：`POST /api/v1/responses`
-- 认证：通过 `auth:api-key` 中间件验证 API Key
-- 处理器：使用现有的 `ProxyController::handle` 方法（协议驱动会根据路由自动选择）
+- 端点：`POST /api/openai/v1/responses`
+- 认证：通过 `AuthenticateApiKey` 中间件验证 API Key
+- 控制器：`ProxyController::responses` 方法
+- 协议标识：`openai_responses`
 
 ---
 
-## 五、测试计划
+## 六、测试计划
 
-### 5.1 单元测试
+### 6.1 单元测试
 
-#### 测试 ResponseRequest DTO
+#### 测试 ResponsesRequest DTO
 
 ```php
-// tests/Unit/Protocol/Driver/OpenAI/ResponseRequestTest.php
+// tests/Unit/Protocol/Driver/Responses/ResponsesRequestTest.php
 
 /** @test */
 public function it_parses_responses_format_request()
@@ -1265,7 +843,7 @@ public function it_parses_responses_format_request()
         'max_tokens' => 100,
     ];
 
-    $request = ResponseRequest::fromArray($data);
+    $request = ResponsesRequest::fromArray($data);
 
     $this->assertEquals('gpt-4', $request->model);
     $this->assertEquals('你好', $request->input);
@@ -1276,7 +854,7 @@ public function it_parses_responses_format_request()
 /** @test */
 public function it_converts_to_chat_completions_without_history()
 {
-    $request = new ResponseRequest;
+    $request = new ResponsesRequest;
     $request->model = 'gpt-4';
     $request->input = 'Hello';
 
@@ -1290,7 +868,7 @@ public function it_converts_to_chat_completions_without_history()
 /** @test */
 public function it_converts_to_chat_completions_with_history()
 {
-    $request = new ResponseRequest;
+    $request = new ResponsesRequest;
     $request->model = 'gpt-4';
     $request->input = '继续';
 
@@ -1306,10 +884,10 @@ public function it_converts_to_chat_completions_with_history()
 }
 ```
 
-#### 测试 ResponseResponse DTO
+#### 测试 ResponsesResponse DTO
 
 ```php
-// tests/Unit/Protocol/Driver/OpenAI/ResponseResponseTest.php
+// tests/Unit/Protocol/Driver/Responses/ResponsesResponseTest.php
 
 /** @test */
 public function it_converts_from_chat_completions()
@@ -1331,7 +909,7 @@ public function it_converts_from_chat_completions()
         'completion_tokens' => 5,
     ];
 
-    $responsesResponse = ResponseResponse::fromChatCompletions($chatResponse);
+    $responsesResponse = ResponsesResponse::fromChatCompletions($chatResponse);
 
     $this->assertEquals('chatcmpl_123', $responsesResponse->id);
     $this->assertEquals('你好！', $responsesResponse->output);
@@ -1388,7 +966,7 @@ public function it_returns_null_for_expired_session()
 }
 ```
 
-### 5.2 集成测试
+### 6.2 集成测试
 
 ```php
 // tests/Feature/ResponsesApiTest.php
@@ -1446,9 +1024,9 @@ public function it_maintains_conversation_state_with_previous_response_id()
 
 ---
 
-## 六、使用示例
+## 七、使用示例
 
-### 6.1 基础请求
+### 7.1 基础请求
 
 ```bash
 curl -X POST http://localhost:32126/api/v1/responses \
@@ -1476,7 +1054,7 @@ curl -X POST http://localhost:32126/api/v1/responses \
 }
 ```
 
-### 6.2 状态管理
+### 7.2 状态管理
 
 ```bash
 # 第一次请求
@@ -1500,7 +1078,7 @@ curl -X POST http://localhost:32126/api/v1/responses \
 # 响应：{"output": "你叫李四", ...}
 ```
 
-### 6.3 流式请求
+### 7.3 流式请求
 
 ```bash
 curl -X POST http://localhost:32126/api/v1/responses \
@@ -1528,9 +1106,9 @@ data: [DONE]
 
 ---
 
-## 七、注意事项
+## 八、注意事项
 
-### 7.1 性能考虑
+### 8.1 性能考虑
 
 **存储影响**：
 - 每次响应存储 ~1-5KB JSON
@@ -1542,7 +1120,7 @@ data: [DONE]
 - 异步清理过期会话
 - 监控存储空间
 
-### 7.2 安全考虑
+### 8.2 安全考虑
 
 **API Key 隔离**：
 ```php
@@ -1556,7 +1134,7 @@ $messages = $manager->retrieve($responseId, $apiKeyId);
 php artisan cdapi:cleanup-response-sessions
 ```
 
-### 7.3 错误处理
+### 8.3 错误处理
 
 **场景 1：previous_response_id 无效**
 
@@ -1587,7 +1165,7 @@ try {
 
 ---
 
-## 八、时间估算
+## 九、时间估算
 
 | 步骤 | 任务 | 时间 |
 |------|------|------|
@@ -1605,13 +1183,14 @@ try {
 
 ---
 
-## 九、验收标准
+## 十、验收标准
 
 - [ ] 数据库表创建成功
 - [ ] Model 和 Service 实现完整
-- [ ] ResponseRequest DTO 转换逻辑正确
-- [ ] ResponseResponse DTO 转换逻辑正确
+- [ ] ResponsesRequest DTO 转换逻辑正确
+- [ ] ResponsesResponse DTO 转换逻辑正确
 - [ ] ResponsesDriver 实现完整
+- [ ] 流式响应状态存储实现完整
 - [ ] Driver 成功注册到 DriverManager
 - [ ] 路由配置正确，`/v1/responses` 端点可访问
 - [ ] 状态管理功能正常（存储、检索、过期）
@@ -1624,7 +1203,10 @@ try {
 **下一步**: 开始实施步骤 1，创建数据库表
 
 **重要提醒**:
-- 本方案新增独立的 `/v1/responses` 端点
-- 不修改现有的 `/v1/chat/completions` 端点
+- 本方案新增独立的 `/api/openai/v1/responses` 端点
+- 不修改现有的 `/api/openai/v1/chat/completions` 端点
 - 底层通过 ResponsesDriver 转换为 Chat Completions 格式
 - 状态管理通过 ResponseStateManager 实现
+- Responses 是独立协议，DTO 放在 `Responses/` 目录下
+- 已实现：instructions 支持、完整 input 类型支持、流式状态存储
+- 已修正：API Key 获取方式、usage 字段命名、数据库索引优化
