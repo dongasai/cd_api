@@ -72,6 +72,17 @@ class ProxyController extends Controller
         return $this->handleRequest($request, 'anthropic');
     }
 
+    /**
+     * Responses API 端点
+     */
+    public function openai_responses(Request $request): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        // 标记请求为 Responses 协议
+        $request->attributes->set('protocol', 'openai_responses');
+
+        return $this->handleRequest($request, 'openai_responses');
+    }
+
     protected function handleRequest(Request $request, string $protocol): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
     {
         try {

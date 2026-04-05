@@ -10,6 +10,9 @@ Route::middleware([AuthenticateApiKey::class])->group(function () {
         Route::post('/completions', [ProxyController::class, 'completions']);
         Route::post('/embeddings', [ProxyController::class, 'embeddings']);
         Route::get('/models', [ProxyController::class, 'models']);
+
+        // Responses API 端点
+        Route::post('/responses', [ProxyController::class, 'openai_responses']);
     });
 
     Route::post('/anthropic/messages', [ProxyController::class, 'anthropicMessages']);

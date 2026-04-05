@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Services\Protocol\Driver\AnthropicMessagesDriver;
 use App\Services\Protocol\Driver\OpenAiChatCompletionsDriver;
+use App\Services\Protocol\Driver\OpenAIResponsesDriver;
 use App\Services\Protocol\DriverManager;
 use App\Services\Protocol\ProtocolConverter;
 use Illuminate\Support\ServiceProvider;
@@ -37,6 +38,11 @@ class ProtocolServiceProvider extends ServiceProvider
 
             $manager->register('anthropic', function () {
                 return new AnthropicMessagesDriver;
+            });
+
+            // 注册 Responses API 驱动
+            $manager->register('openai_responses', function () {
+                return new OpenAIResponsesDriver;
             });
 
             return $manager;
