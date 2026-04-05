@@ -104,16 +104,14 @@ COPY laravel /var/www/html
 RUN mkdir -p /var/www/html/storage/logs /var/www/html/storage/framework/cache /var/www/html/storage/framework/sessions /var/www/html/storage/framework/testing /var/www/html/storage/framework/views /var/www/html/bootstrap/cache && \
     chown -R php:php /var/www/html/storage /var/www/html/bootstrap/cache
 
-USER php
-
-# 安装 PHP 依赖
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# 安装 PHP 依赖（在 root 用户下执行，确保权限正确）
+RUN composer install --no-dev --optimize-autoloader --no-interaction && \
+    chown -R php:php /var/www/html/vendor
 
 # 复制 supervisor 配置
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # 创建 supervisor 日志目录
-USER root
 RUN mkdir -p /var/log/supervisor
 
 # 启动 supervisor
