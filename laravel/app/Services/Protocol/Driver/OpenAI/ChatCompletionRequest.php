@@ -212,7 +212,9 @@ class ChatCompletionRequest implements ProtocolRequest
             $result['user'] = $this->user;
         }
         if (! empty($this->tools)) {
-            $result['tools'] = array_map(fn (Tool $tool) => $tool->toArray(), $this->tools);
+            $result['tools'] = array_map(function ($tool) {
+                return $tool instanceof Tool ? $tool->toArray() : $tool;
+            }, $this->tools);
         }
         if ($this->tool_choice !== null) {
             $result['tool_choice'] = $this->tool_choice;
@@ -261,7 +263,9 @@ class ChatCompletionRequest implements ProtocolRequest
         // 转换 tools 为 SharedDTO\Tool 对象数组
         $sharedTools = null;
         if ($this->tools !== null) {
-            $sharedTools = array_map(fn (Tool $t) => $t->toSharedDTO(), $this->tools);
+            $sharedTools = array_map(function ($t) {
+                return $t instanceof Tool ? $t->toSharedDTO() : $t;
+            }, $this->tools);
         }
 
         $dto = new SharedRequest;
@@ -377,12 +381,61 @@ class ChatCompletionRequest implements ProtocolRequest
             ));
         }
 
-        // 转换 tools（SharedDTO\Tool 对象数组）为 OpenAI Tool 对象
+        // 转换 tools（可能是 SharedDTO\Tool 对象数组或原始数组）
+        // 支持 Responses API 扁平格式和 Chat Completions 嵌套格式
         $tools = null;
+        $toolChoice = $dto->toolChoice;  // 初始化 tool_choice
         if ($dto->tools !== null) {
+            // DEBUG: 记录原始 tools
+            \Illuminate\Support\Facades\Log::debug('ChatCompletionRequest.fromSharedDTO: Input tools', [
+                'tools_count' => count($dto->tools),
+                'first_tool' => $dto->tools[0] ?? null,
+            ]);
+
             $tools = [];
             foreach ($dto->tools as $tool) {
-                $tools[] = Tool::fromSharedDTO($tool);
+                if ($tool instanceof \App\Services\Shared\DTO\Tool) {
+                    $tools[] = Tool::fromSharedDTO($tool);
+                } elseif (is_array($tool)) {
+                    // 检查是否有有效的 function 定义（Chat Completions 格式）
+                    if (isset($tool['function']) && is_array($tool['function']) && ! empty($tool['function'])) {
+                        $tools[] = Tool::fromArray($tool);
+                    }
+                    // 检查是否是 Responses API 扁平格式（有 name 但没有 function 字段）
+                    elseif (isset($tool['name']) && $tool['type'] === 'function') {
+                        // 包装为 Chat Completions 格式
+                        $wrappedTool = [
+                            'type' => 'function',
+                            'function' => [
+                                'name' => $tool['name'],
+                                'description' => $tool['description'] ?? '',
+                                'parameters' => $tool['parameters'] ?? [],
+                            ],
+                        ];
+                        if (isset($tool['strict'])) {
+                            $wrappedTool['function']['strict'] = $tool['strict'];
+                        }
+                        $tools[] = Tool::fromArray($wrappedTool);
+
+                        \Illuminate\Support\Facades\Log::debug('ChatCompletionRequest.fromSharedDTO: Wrapped Responses tool', [
+                            'original' => $tool,
+                            'wrapped' => $wrappedTool,
+                        ]);
+                    }
+                    // 跳过无效的工具（如 web_search 等）
+                }
+            }
+            // 如果过滤后为空，设为 null 并清空 tool_choice
+            if (empty($tools)) {
+                $tools = null;
+                $toolChoice = null;  // tools 为空时 tool_choice 必须为空
+
+                \Illuminate\Support\Facades\Log::debug('ChatCompletionRequest.fromSharedDTO: Tools filtered to empty');
+            } else {
+                \Illuminate\Support\Facades\Log::debug('ChatCompletionRequest.fromSharedDTO: Output tools', [
+                    'tools_count' => count($tools),
+                    'tool_choice' => $toolChoice,
+                ]);
             }
         }
 
@@ -396,7 +449,7 @@ class ChatCompletionRequest implements ProtocolRequest
             stream_options: $dto->streamOptions,
             stop: $dto->stopSequences,
             tools: $tools,
-            tool_choice: $dto->toolChoice,
+            tool_choice: $toolChoice,
             user: $dto->user,
         );
     }

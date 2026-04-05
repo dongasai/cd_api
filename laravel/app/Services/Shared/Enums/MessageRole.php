@@ -11,6 +11,7 @@ enum MessageRole: string
     case User = 'user';
     case Assistant = 'assistant';
     case Tool = 'tool';
+    case Developer = 'developer';  // OpenAI Responses API 特有角色
 
     /**
      * 判断是否为系统角色

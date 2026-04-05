@@ -6,3 +6,4 @@ docker/000-default.local.conf
 .idea/
 .ai/
 .playwright-mcp/
+.codex

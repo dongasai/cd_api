@@ -55,7 +55,8 @@ class StreamHandler
         RequestLog $requestLog,
         float $startTime,  // 保持浮点数精度，用于计算首字延迟
         $auditLog = null,  // 接收已创建的审计日志
-        $selectedChannel = null  // 接收选中的渠道
+        $selectedChannel = null,  // 接收选中的渠道
+        $protocolContext = null  // 协议上下文（状态管理）
     ): Generator {
         $this->selectedChannel = $selectedChannel;  // 保存渠道引用，用于记录亲和性
 
@@ -98,6 +99,7 @@ class StreamHandler
         $streamChunks = [];
         $collectedUsage = null;
         $collectedFinishReason = null;
+        // protocolContext 已通过参数传递，无需从请求提取
 
         // 检查是否需要过滤 thinking 内容
         $shouldFilterThinking = $selectedChannel !== null && $selectedChannel->shouldFilterThinking();
@@ -166,6 +168,12 @@ class StreamHandler
 
         // 注意：上游已经发送了 message_stop 事件，透传模式下不需要额外发送结束标记
         // yield $this->protocolConverter->driver($sourceProtocol)->buildStreamDone();
+
+        // 流式结束后：调用协议后处理（如状态存储）
+        if ($protocolContext !== null) {
+            $response = $this->buildResponseFromChunks($streamChunks, $sourceProtocol);
+            $response->postStreamProcess($streamChunks, $protocolContext);
+        }
 
         // 提取实际模型名（从第一个有效的 chunk）
         $actualModel = null;
@@ -344,6 +352,34 @@ class StreamHandler
                 'cache_read_tokens' => $usage->cacheReadInputTokens ?? 0,
                 'cache_write_tokens' => $usage->cacheWriteInputTokens ?? 0,
             ];
+        }
+
+        return $response;
+    }
+
+    /**
+     * 从流式块构建响应对象
+     *
+     * 用于调用 postStreamProcess()
+     */
+    protected function buildResponseFromChunks(array $chunks, string $protocol): \App\Services\Protocol\Contracts\ProtocolResponse
+    {
+        // 获取响应类
+        $responseClass = $this->protocolConverter->getResponseClass($protocol);
+
+        // 创建响应实例
+        $response = new $responseClass;
+
+        // 设置基本属性（从 chunks 提取）
+        foreach ($chunks as $chunk) {
+            if ($chunk instanceof StreamChunk) {
+                if (! empty($chunk->id)) {
+                    $response->id = $chunk->id;
+                }
+                if (! empty($chunk->model)) {
+                    $response->model = $chunk->model;
+                }
+            }
         }
 
         return $response;

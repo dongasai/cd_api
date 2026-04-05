@@ -134,8 +134,14 @@ class Message
      */
     public function toArray(): array
     {
+        // 转换角色：developer -> user（上游 API 不支持 developer 角色）
+        $role = $this->role;
+        if ($role === 'developer') {
+            $role = 'user';
+        }
+
         $result = [
-            'role' => $this->role,
+            'role' => $role,
         ];
 
         if ($this->content !== null) {
@@ -310,8 +316,14 @@ class Message
             );
         }
 
+        // 转换角色：developer -> user（上游 API 不支持 developer 角色）
+        $role = $dto->role->value;
+        if ($role === 'developer') {
+            $role = 'user';
+        }
+
         return new self(
-            role: $dto->role->value,
+            role: $role,
             content: $content,
             toolCalls: $toolCalls,
             toolCallId: $dto->toolCallId,

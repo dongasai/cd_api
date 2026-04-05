@@ -50,4 +50,16 @@ interface ProtocolResponse
      * 过滤响应中的 thinking 内容块
      */
     public function filterThinking(bool $filter = true): static;
+
+    /**
+     * 流式后处理
+     *
+     * 流式响应结束后，协议特定的处理逻辑
+     * - 默认实现：无操作（通过 ProtocolResponseTrait）
+     * - Responses API：提取完整内容，存储状态
+     *
+     * @param  array  $chunks  累积的流式块 (StreamChunk[])
+     * @param  object|null  $context  协议上下文（从请求传递）
+     */
+    public function postStreamProcess(array $chunks, ?object $context = null): void;
 }

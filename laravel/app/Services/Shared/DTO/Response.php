@@ -67,6 +67,11 @@ class Response
     public ?array $rawResponse = null;
 
     /**
+     * 协议特有上下文（从请求传递到响应）
+     */
+    public ?object $protocolContext = null;
+
+    /**
      * 获取第一个选择的内容
      */
     public function getContent(): ?string

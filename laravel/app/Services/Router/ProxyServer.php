@@ -128,6 +128,21 @@ class ProxyServer
         $this->selectedChannel = null;
 
         $rawRequest = $request->all();
+        $apiKey = $request->attributes->get('api_key');
+
+        // 对于 Responses 协议，注入 apiKeyId 用于状态管理
+        if ($protocol === 'openai_responses' && $apiKey !== null) {
+            $rawRequest['_api_key_id'] = $apiKey->id;
+        }
+
+        // DEBUG: 记录原始请求中的 tools
+        if (isset($rawRequest['tools'])) {
+            Log::debug('ProxyServer: Raw request tools', [
+                'tools_count' => count($rawRequest['tools']),
+                'tools_preview' => array_slice($rawRequest['tools'], 0, 2),
+            ]);
+        }
+
         $isStream = $rawRequest['stream'] ?? false;
         $rawBodyString = $request->getContent();
 
@@ -137,9 +152,16 @@ class ProxyServer
         // 创建请求日志
         $requestLog = $this->requestLogger->create($request, $rawRequest, $protocol, $auditLog->id);
 
+        // 保存协议上下文（在协议转换前提取，避免转换过程中丢失）
+        $protocolContext = null;
+        if ($protocol === 'openai_responses') {
+            $tempRequest = $this->protocolConverter->normalizeRequest($rawRequest, $protocol);
+            $sharedDto = $tempRequest->toSharedDTO();
+            $protocolContext = $sharedDto->protocolContext ?? null;
+        }
+
         $lastException = null;
         $attempt = 0;
-        $apiKey = $request->attributes->get('api_key');
 
         while ($attempt <= $this->retryHandler->getMaxRetries()) {
             try {
@@ -225,6 +247,18 @@ class ProxyServer
                     // 判断是否需要协议转换
                     if ($channelProtocol !== $protocol) {
                         $protocolRequest = $this->protocolConverter->convertRequest($protocolRequest, $channelProtocol);
+
+                        // DEBUG: 记录协议转换后的 tools
+                        if (method_exists($protocolRequest, 'toArray')) {
+                            $convertedArray = $protocolRequest->toArray();
+                            Log::debug('ProxyServer: After protocol conversion', [
+                                'source_protocol' => $protocol,
+                                'target_protocol' => $channelProtocol,
+                                'has_tools' => isset($convertedArray['tools']),
+                                'tools_count' => isset($convertedArray['tools']) ? count($convertedArray['tools']) : 0,
+                                'tool_choice' => $convertedArray['tool_choice'] ?? null,
+                            ]);
+                        }
                     }
 
                     // 应用渠道配置：过滤请求中的 thinking 内容块
@@ -263,7 +297,8 @@ class ProxyServer
                         $requestLog,
                         $this->startTime,  // 保持浮点数精度
                         $auditLog,  // 传递已创建的审计日志
-                        $this->selectedChannel  // 传递选中的渠道
+                        $this->selectedChannel,  // 传递选中的渠道
+                        $protocolContext  // 传递协议上下文（状态管理）
                     );
                 }
 
@@ -276,7 +311,8 @@ class ProxyServer
                     $requestLog,
                     $this->startTime,  // 保持浮点数精度
                     $auditLog,  // 传递已创建的审计日志
-                    $this->selectedChannel  // 传递选中的渠道
+                    $this->selectedChannel,  // 传递选中的渠道
+                    $protocolContext  // 传递协议上下文（状态管理）
                 );
             } catch (Exception $e) {
                 $lastException = $e;

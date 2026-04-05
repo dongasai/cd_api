@@ -5,6 +5,7 @@ namespace App\Services\Protocol\Driver\OpenAI;
 use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Protocol\Driver\Concerns\Convertible;
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
+use App\Services\Protocol\Driver\Concerns\ProtocolResponseTrait;
 use App\Services\Protocol\Driver\Concerns\Validatable;
 use App\Services\Shared\DTO\Response as SharedResponse;
 use App\Services\Shared\Enums\FinishReason;
@@ -18,6 +19,7 @@ class ChatCompletionResponse implements ProtocolResponse
 {
     use Convertible;
     use JsonSerializiable;
+    use ProtocolResponseTrait;
     use Validatable;
 
     /**

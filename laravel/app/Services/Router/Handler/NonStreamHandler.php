@@ -54,7 +54,8 @@ class NonStreamHandler
         RequestLog $requestLog,
         float $startTime,  // 保持浮点数精度
         $auditLog = null,  // 接收已创建的审计日志
-        $selectedChannel = null  // 接收选中的渠道
+        $selectedChannel = null,  // 接收选中的渠道
+        $protocolContext = null  // 协议上下文（状态管理）
     ): array {
         $this->selectedChannel = $selectedChannel;  // 保存渠道引用
         $providerResponse = $provider->send($protocolRequest);
@@ -96,7 +97,21 @@ class NonStreamHandler
 
         // 如果需要协议转换，转换响应
         if ($sourceProtocol !== $targetProtocol) {
-            $providerResponse = $this->protocolConverter->convertResponse($providerResponse, $sourceProtocol);
+            // 将 protocolContext 注入到 SharedDTO 中（在转换前）
+            $sharedDTO = $providerResponse->toSharedDTO();
+            if ($protocolContext !== null) {
+                $sharedDTO->protocolContext = $protocolContext;
+            }
+            // 从 SharedDTO 创建目标协议响应（此时 protocolContext 会被保留）
+            $targetResponseClass = $this->protocolConverter->getResponseClass($sourceProtocol);
+            $providerResponse = $targetResponseClass::fromSharedDTO($sharedDTO);
+        } elseif ($protocolContext !== null && $providerResponse instanceof ProtocolResponse) {
+            // 同协议但有 protocolContext，需要处理状态存储
+            // 对于 OpenAIResponsesResponse，直接调用 postStreamProcess
+            $sharedDTO = $providerResponse->toSharedDTO();
+            $sharedDTO->protocolContext = $protocolContext;
+            $targetResponseClass = $this->protocolConverter->getResponseClass($sourceProtocol);
+            $providerResponse = $targetResponseClass::fromSharedDTO($sharedDTO);
         }
 
         // 构建响应

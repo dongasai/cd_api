@@ -120,18 +120,18 @@ class ContentPart
         // 直接读取 DTO 属性，不调用 toOpenAI()
         // 注意：thinking/tool_use/tool_result 是 Anthropic 特有类型，不应出现在 OpenAI content 中
         return match ($dto->type) {
-            'text' => new self(
+            'text', 'input_text', 'output_text' => new self(  // Responses API 格式转换为 text
                 type: 'text',
                 text: $dto->text ?? '',
             ),
-            'image', 'image_url' => new self(
+            'image', 'image_url', 'input_image' => new self(  // input_image 也转换为 image_url
                 type: 'image_url',
                 image_url: array_filter([
-                    'url' => $dto->imageUrl ?? $dto->source['url'] ?? null,
+                    'url' => $dto->imageUrl ?? $dto->source['url'] ?? $dto->source ?? null,
                     'detail' => $dto->detail,
                 ], fn ($v) => $v !== null),
             ),
-            'audio' => new self(
+            'audio', 'input_audio' => new self(
                 type: 'input_audio',
                 image_data: $dto->audioData,
             ),
@@ -147,7 +147,7 @@ class ContentPart
                 text: '', // 空内容，这些类型应由上层逻辑处理
             ),
             default => new self(
-                type: $dto->type,
+                type: in_array($dto->type, ['input_text', 'output_text']) ? 'text' : $dto->type,
                 text: $dto->text,
             ),
         };

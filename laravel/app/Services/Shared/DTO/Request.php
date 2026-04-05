@@ -111,6 +111,12 @@ class Request
     public ?string $queryString = null;
 
     /**
+     * 协议特有上下文（用于传递状态信息）
+     * 不影响标准转换流程
+     */
+    public ?object $protocolContext = null;
+
+    /**
      * 获取消息数量
      */
     public function getMessageCount(): int

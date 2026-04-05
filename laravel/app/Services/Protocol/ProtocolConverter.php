@@ -211,6 +211,7 @@ class ProtocolConverter
         return match ($protocol) {
             'openai_chat_completions' => \App\Services\Protocol\Driver\OpenAI\ChatCompletionRequest::class,
             'anthropic_messages' => \App\Services\Protocol\Driver\Anthropic\MessagesRequest::class,
+            'openai_responses' => \App\Services\Protocol\Driver\OpenAIResponses\OpenAIResponsesRequest::class,
             default => throw new UnsupportedProtocolException($protocol),
         };
     }
@@ -218,13 +219,14 @@ class ProtocolConverter
     /**
      * 获取协议响应类名
      */
-    protected function getResponseClass(string $protocol): string
+    public function getResponseClass(string $protocol): string
     {
         $protocol = $this->normalizeProtocolName($protocol);
 
         return match ($protocol) {
             'openai_chat_completions' => \App\Services\Protocol\Driver\OpenAI\ChatCompletionResponse::class,
             'anthropic_messages' => \App\Services\Protocol\Driver\Anthropic\MessagesResponse::class,
+            'openai_responses' => \App\Services\Protocol\Driver\OpenAIResponses\OpenAIResponsesResponse::class,
             default => throw new UnsupportedProtocolException($protocol),
         };
     }
