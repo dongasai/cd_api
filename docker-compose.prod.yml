@@ -4,12 +4,12 @@ name: cdapi-prod
 
 services:
   app:
-    container_name: cd_api
+    container_name: cd_api_prod
     image: ghbbb.xiaobei.fun/dongasai/cd_api:latest
     restart: unless-stopped
     # command: composer run devd
     volumes:
-      - ./laravel/.env:/www/var/html/.env
-      - ./laravel/storage:/www/var/html/storage/
+      - ./laravel/.env:/var/www/html/.env
+      - ./laravel/storage:/var/www/html/storage/
     ports:
       - "32127:80"
