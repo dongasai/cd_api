@@ -1,4 +1,4 @@
-# php容器 - 基于 Apache + PHP 8.3
+# php容器 - 基于 Apache + PHP 8.3（生产）
 FROM php:8.3-apache
 
 # 设置工作目录
@@ -21,6 +21,16 @@ RUN apt-get update && apt-get install -y \
     icu-devtools \
     supervisor && \
     rm -rf /var/lib/apt/lists/*
+
+# Panther 无头浏览器依赖 (单独步骤，便于缓存和调试)
+RUN echo "🔧 安装 Panther 无头浏览器依赖..." && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    chromium \
+    chromium-driver && \
+    rm -rf /var/lib/apt/lists/* && \
+    echo "✅ Chromium 安装完成" && \
+    chromium --version
 # 增加 node
 RUN echo "🔧 安装 Node.js..." && \
     curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
