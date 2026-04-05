@@ -2,7 +2,6 @@
 
 namespace App\Services\WebParser;
 
-use App\Models\Channel;
 use App\Services\SettingService;
 use OpenAI;
 use Symfony\Component\Panther\Client;
@@ -91,10 +90,9 @@ class WebParserService
 
         try {
             // 容器内 Chrome 需要特殊参数（--no-sandbox 等）
-            // 参数顺序：chromeDriverBinary, arguments, options, baseUri
             $client = Client::createChromeClient(
-                null, // 使用默认 chromedriver
-                [     // Chrome 启动参数
+                null,
+                [
                     '--no-sandbox',
                     '--disable-dev-shm-usage',
                     '--disable-gpu',
@@ -102,7 +100,7 @@ class WebParserService
                     '--disable-software-rasterizer',
                     '--disable-extensions',
                 ],
-                [     // 连接选项
+                [
                     'connection_timeout_in_sec' => 10,
                     'request_timeout_in_sec' => self::PAGE_TIMEOUT,
                 ]
@@ -135,24 +133,27 @@ class WebParserService
      * @param  string  $prompt  处理提示词
      * @param  string|null  $title  页面标题
      * @return string Markdown 格式文本
+     *
+     * @throws \RuntimeException 当配置缺失或请求失败时
      */
     protected function processWithAI(string $content, string $prompt, ?string $title): string
     {
-        // 获取配置的渠道
-        $channelId = $this->settingService->get('mcp.webparser_channel_id');
+        // 从配置读取 AI 参数
+        $baseUrl = $this->settingService->get('mcp.webparser_base_url', 'http://127.0.0.1/api/openai/v1');
+        $apiKey = $this->settingService->get('mcp.webparser_api_key');
         $model = $this->settingService->get('mcp.webparser_model', 'gpt-4o');
+        $temperature = (float) $this->settingService->get('mcp.webparser_temperature', '0.3');
 
-        if (! $channelId) {
-            throw new \RuntimeException('未配置 WebParser 渠道 ID，请在系统设置中配置 mcp.webparser_channel_id');
-        }
-
-        $channel = Channel::find($channelId);
-        if (! $channel) {
-            throw new \RuntimeException('配置的渠道不存在: '.$channelId);
+        // 验证必填配置
+        if (empty($apiKey)) {
+            throw new \RuntimeException('未配置 WebParser API Key，请在系统设置中配置 mcp.webparser_api_key');
         }
 
         // 创建 OpenAI 客户端
-        $client = $this->createOpenAIClient($channel);
+        $client = OpenAI::factory()
+            ->withApiKey($apiKey)
+            ->withBaseUri($baseUrl)
+            ->make();
 
         // 构建请求消息
         $systemPrompt = "你是一个网页内容提取助手。你的任务是根据用户的要求处理网页内容，返回清晰的 Markdown 格式文本。\n\n网页标题: {$title}";
@@ -166,26 +167,10 @@ class WebParserService
                 ['role' => 'system', 'content' => $systemPrompt],
                 ['role' => 'user', 'content' => $userMessage],
             ],
-            'temperature' => 0.3,
+            'temperature' => $temperature,
+            'max_tokens' => 2000,  // 限制输出长度，减少处理时间
         ]);
 
         return $response->choices[0]->message->content;
-    }
-
-    /**
-     * 创建 OpenAI 客户端
-     *
-     * @param  Channel  $channel  渠道配置
-     * @return \OpenAI\Client
-     */
-    protected function createOpenAIClient(Channel $channel): OpenAI\Client
-    {
-        $baseUrl = $channel->base_url ?? 'https://api.openai.com/v1';
-        $apiKey = $channel->api_key;
-
-        return OpenAI::factory()
-            ->withApiKey($apiKey)
-            ->withBaseUri($baseUrl)
-            ->make();
     }
 }

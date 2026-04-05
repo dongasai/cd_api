@@ -144,8 +144,15 @@ class NonStreamHandler
         $sharedDTO = $response->toSharedDTO();
         $content = '';
         foreach ($sharedDTO->choices ?? [] as $choice) {
-            if (isset($choice['message']['content'])) {
-                $content .= $choice['message']['content'];
+            $message = $choice['message'] ?? null;
+            if ($message === null) {
+                continue;
+            }
+            // 处理 Message DTO 对象和数组两种情况
+            if ($message instanceof \App\Services\Shared\DTO\Message) {
+                $content .= $message->getTextContent();
+            } elseif (is_array($message) && isset($message['content'])) {
+                $content .= $message['content'];
             }
         }
 

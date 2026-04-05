@@ -9,7 +9,7 @@ services:
     restart: unless-stopped
     # command: composer run devd
     volumes:
-      - ./laravel/.env:/var/www/html/.env
+      - ./laravel/.env.production:/var/www/html/.env
       - ./laravel/storage:/var/www/html/storage/
     ports:
       - "32127:80"

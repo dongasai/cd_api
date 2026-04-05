@@ -21,6 +21,7 @@
         "symfony/yaml": "^7.4"
     },
     "require-dev": {
+        "dbrekelmans/bdi": "^1.4",
         "fakerphp/faker": "^1.23",
         "laravel/boost": "^2.2",
         "laravel/breeze": "^2.3",

@@ -177,7 +177,7 @@ class ChatCompletionResponse implements ProtocolResponse
             $choices[] = new Choice(
                 index: $choiceData['index'] ?? 0,
                 message: $message,
-                finishReason: $finishReason,
+                finishReason: $finishReason instanceof FinishReason ? $finishReason->value : $finishReason,
             );
         }
 

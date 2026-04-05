@@ -81,7 +81,17 @@ class Response
             return null;
         }
 
-        return $choice['message']['content'] ?? null;
+        $message = $choice['message'] ?? null;
+        if ($message === null) {
+            return null;
+        }
+
+        // 处理 Message DTO 对象和数组两种情况
+        if ($message instanceof Message) {
+            return $message->getTextContent();
+        }
+
+        return $message['content'] ?? null;
     }
 
     /**
@@ -94,6 +104,16 @@ class Response
             return null;
         }
 
-        return $choice['message']['tool_calls'] ?? null;
+        $message = $choice['message'] ?? null;
+        if ($message === null) {
+            return null;
+        }
+
+        // 处理 Message DTO 对象和数组两种情况
+        if ($message instanceof Message) {
+            return $message->toolCalls;
+        }
+
+        return $message['tool_calls'] ?? null;
     }
 }
