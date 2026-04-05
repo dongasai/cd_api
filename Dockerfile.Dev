@@ -28,6 +28,15 @@ RUN apt-get install -y \
     libicu-dev \
     icu-devtools
 
+# Panther 无头浏览器依赖 (单独步骤，便于缓存和调试)
+RUN echo "🔧 安装 Panther 无头浏览器依赖..." && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    chromium \
+    chromium-driver && \
+    echo "✅ Chromium 安装完成" && \
+    chromium --version
+
 # 安装 PHP 扩展 (仅必需的)
 RUN docker-php-ext-install \
     pdo \

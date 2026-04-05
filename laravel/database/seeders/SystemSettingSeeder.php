@@ -158,6 +158,28 @@ class SystemSettingSeeder extends Seeder
                 'is_public' => false,
                 'sort_order' => 1,
             ],
+
+            // MCP 服务配置
+            [
+                'group' => SettingGroup::MCP->value,
+                'key' => 'webparser_channel_id',
+                'value' => '',
+                'type' => SystemSetting::TYPE_INTEGER,
+                'label' => 'WebParser渠道ID',
+                'description' => '用于AI处理网页内容的OpenAI渠道ID',
+                'is_public' => false,
+                'sort_order' => 1,
+            ],
+            [
+                'group' => SettingGroup::MCP->value,
+                'key' => 'webparser_model',
+                'value' => 'gpt-4o',
+                'type' => SystemSetting::TYPE_STRING,
+                'label' => 'WebParser模型',
+                'description' => '用于AI处理网页内容的模型名称',
+                'is_public' => false,
+                'sort_order' => 2,
+            ],
         ];
 
         foreach ($settings as $setting) {
