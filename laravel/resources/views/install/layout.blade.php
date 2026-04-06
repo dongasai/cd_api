@@ -9,7 +9,9 @@
         async function fetchAPI(url, method = 'GET', data = null) {
             const options = {
                 method,
-                headers: { 'Content-Type': 'application/json' }
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             };
             if (data && method !== 'GET') {
                 options.body = JSON.stringify(data);
@@ -322,7 +324,7 @@
 <body>
     <div class="header">
         <h1>CdApi 安装向导</h1>
-        <p>欢迎使用 CdApi AI 代理工具</p>
+        <p>欢迎使用 CdApi AI 网关工具</p>
     </div>
 
     @if(isset($step))
@@ -330,13 +332,13 @@
         <div class="progress-step">
             @php
             $steps = [
-                1 => '开始',
-                2 => '环境检测',
-                3 => '配置',
-                4 => '数据库检查',
-                5 => '迁移',
-                6 => '数据填充',
-                7 => '完成',
+            1 => '开始',
+            2 => '环境检测',
+            3 => '配置',
+            4 => '数据库检查',
+            5 => '迁移',
+            6 => '数据填充',
+            7 => '完成',
             ];
             @endphp
             @foreach($steps as $num => $label)

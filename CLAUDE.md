@@ -1,6 +1,6 @@
 # 项目概述
 
-一个Ai大模型Api代理工具,名字'CdApi'
+一个Ai大模型Api网关工具,名字'CdApi'
 
 - laravel 12框架,位于laravel
 - docs目录,存放设计文档/规划文档

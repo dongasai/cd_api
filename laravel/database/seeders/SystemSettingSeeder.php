@@ -25,7 +25,7 @@ class SystemSettingSeeder extends Seeder
             [
                 'group' => SettingGroup::SYSTEM->value,
                 'key' => 'site_description',
-                'value' => 'AI大模型API代理工具',
+                'value' => 'AI大模型API网关工具',
                 'type' => SystemSetting::TYPE_STRING,
                 'label' => '系统描述',
                 'description' => '系统描述信息',

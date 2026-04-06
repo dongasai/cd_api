@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Http;
  *
  * 提供两种测试模式:
  * 1. 渠道直接测试: 直接使用 ProviderManager 与上游通信
- * 2. 系统API测试: 通过系统代理流程,使用默认测试 API Key
+ * 2. 系统API测试: 通过系统网关流程,使用默认测试 API Key
  */
 class ModelTestService
 {
@@ -194,7 +194,7 @@ class ModelTestService
         try {
             // 构建请求
             $baseUrl = config('app.url');
-            $endpoint = rtrim($baseUrl, '/').'/api/openai/v1/chat/completions';
+            $endpoint = rtrim($baseUrl, '/') . '/api/openai/v1/chat/completions';
 
             $messages = [];
             if ($systemPrompt) {
@@ -209,7 +209,7 @@ class ModelTestService
             ];
 
             $requestHeaders = array_merge([
-                'Authorization' => 'Bearer '.$defaultApiKey,
+                'Authorization' => 'Bearer ' . $defaultApiKey,
                 'Content-Type' => 'application/json',
             ], $presetHeaders);
 
@@ -222,7 +222,7 @@ class ModelTestService
                     ->post($endpoint, $requestData);
 
                 if (! $response->successful()) {
-                    throw new \Exception('请求失败: '.$response->status().' - '.$response->body());
+                    throw new \Exception('请求失败: ' . $response->status() . ' - ' . $response->body());
                 }
 
                 // 处理流式响应
@@ -261,7 +261,7 @@ class ModelTestService
                     ->post($endpoint, $requestData);
 
                 if (! $response->successful()) {
-                    throw new \Exception('请求失败: '.$response->status().' - '.$response->body());
+                    throw new \Exception('请求失败: ' . $response->status() . ' - ' . $response->body());
                 }
 
                 $data = $response->json();
@@ -279,7 +279,7 @@ class ModelTestService
             $log->status = ModelTestLog::STATUS_SUCCESS;
         } catch (ConnectionException $e) {
             $log->status = ModelTestLog::STATUS_TIMEOUT;
-            $log->error_message = '请求超时: '.$e->getMessage();
+            $log->error_message = '请求超时: ' . $e->getMessage();
             $log->response_time_ms = (int) ((microtime(true) - $startTime) * 1000);
         } catch (\Exception $e) {
             $log->status = ModelTestLog::STATUS_FAILED;
@@ -425,7 +425,7 @@ class ModelTestService
         try {
             // 构建请求
             $baseUrl = config('app.url');
-            $endpoint = rtrim($baseUrl, '/').'/api/openai/v1/chat/completions';
+            $endpoint = rtrim($baseUrl, '/') . '/api/openai/v1/chat/completions';
 
             $messages = [];
             if ($systemPrompt) {
@@ -440,7 +440,7 @@ class ModelTestService
             ];
 
             $requestHeaders = array_merge([
-                'Authorization' => 'Bearer '.$defaultApiKey,
+                'Authorization' => 'Bearer ' . $defaultApiKey,
                 'Content-Type' => 'application/json',
             ], $presetHeaders);
 
@@ -450,7 +450,7 @@ class ModelTestService
                 ->post($endpoint, $requestData);
 
             if (! $response->successful()) {
-                throw new \Exception('请求失败: '.$response->status().' - '.$response->body());
+                throw new \Exception('请求失败: ' . $response->status() . ' - ' . $response->body());
             }
 
             // 处理流式响应

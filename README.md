@@ -1,6 +1,6 @@
-# Ai代理
+# Ai网关
 
-一个Ai大模型代理工具
+一个Ai大模型统一接入网关工具
 
 ## 上游支持
 - Openai-compatible

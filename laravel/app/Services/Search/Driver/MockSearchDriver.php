@@ -17,9 +17,9 @@ class MockSearchDriver extends AbstractSearchDriver
      */
     protected array $mockData = [
         [
-            'title' => 'API 代理服务配置指南',
+            'title' => 'API 网关服务配置指南',
             'url' => 'https://docs.cdapi.local/docs/api-proxy-guide',
-            'snippet' => 'CdApi 是一个 AI 大模型 API 代理工具，支持 OpenAI、Anthropic 等多种协议转换。可以配置多个上游渠道，实现负载均衡和故障转移。',
+            'snippet' => 'CdApi 是一个 AI 大模型 API 网关工具，支持 OpenAI、Anthropic 等多种协议转换。可以配置多个上游渠道，实现负载均衡和故障转移。',
             'date' => '2026-03-01',
         ],
         [
