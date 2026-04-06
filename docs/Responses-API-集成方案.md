@@ -1,6 +1,6 @@
 # OpenAI Responses API 集成方案
 
-**项目**: CdApi AI代理系统
+**项目**: CdApi AI接入网关系统
 **目标**: 在 Chat Completions 端点支持 Responses API 格式
 **日期**: 2026-04-05
 **优先级**: P0 - 最高优先级

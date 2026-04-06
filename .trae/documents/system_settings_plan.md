@@ -31,7 +31,7 @@
 | key | label | type | default |
 |-----|-------|------|---------|
 | site_name | 系统名称 | string | CdApi |
-| site_description | 系统描述 | string | AI大模型API代理工具 |
+| site_description | 系统描述 | string | AI大模型API接入网关工具 |
 | default_model | 默认模型 | string | gpt-4 |
 | request_timeout | 请求超时(秒) | integer | 60 |
 | max_retries | 最大重试次数 | integer | 3 |

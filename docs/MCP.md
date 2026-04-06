@@ -87,7 +87,7 @@ https://your-domain.com/mcp/cdapi
     {
       "title": "API 代理服务配置指南",
       "url": "https://docs.cdapi.local/docs/api-proxy-guide",
-      "snippet": "CdApi 是一个 AI 大模型 API 代理工具...",
+      "snippet": "CdApi 是一个 AI 大模型 API 接入网关工具...",
       "domain": "docs.cdapi.local",
       "published_at": "2026-03-01",
       "position": 1
