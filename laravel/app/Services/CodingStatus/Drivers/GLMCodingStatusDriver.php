@@ -483,4 +483,83 @@ class GLMCodingStatusDriver extends AbstractCodingStatusDriver
             ],
         ];
     }
+
+    /**
+     * 格式化配额数值显示
+     *
+     * GLM驱动显示：Prompt次数 + Token消耗
+     */
+    public function formatQuotaDisplay(): string
+    {
+        $quotaInfo = $this->getQuotaInfo();
+        $metrics = $quotaInfo['metrics'] ?? [];
+
+        if (empty($metrics)) {
+            return '<span class="text-muted">暂无数据</span>';
+        }
+
+        $displayParts = [];
+
+        // 优先显示Prompt配额
+        if (isset($metrics['prompts'])) {
+            $data = $metrics['prompts'];
+            $used = (int) $data['used'];
+            $limit = (int) $data['limit'];
+            $percent = $limit > 0 ? round($used / $limit * 100, 1) : 0;
+
+            $color = $this->getColorByPercent($percent);
+            $displayParts[] = "<span class='text-{$color}'>Prompt: {$used}/{$limit}</span>";
+        }
+
+        // 显示Token消耗
+        if (isset($metrics['tokens'])) {
+            $data = $metrics['tokens'];
+            $used = (int) $data['used'];
+            $limit = (int) $data['limit'];
+            $percent = $limit > 0 ? round($used / $limit * 100, 1) : 0;
+
+            $color = $this->getColorByPercent($percent);
+            $formattedUsed = $this->formatTokenNumber($used);
+            $formattedLimit = $this->formatTokenNumber($limit);
+            $displayParts[] = "<span class='text-{$color}'>Token: {$formattedUsed}/{$formattedLimit}</span>";
+        }
+
+        return implode('<br>', $displayParts);
+    }
+
+    /**
+     * 根据百分比获取颜色
+     */
+    protected function getColorByPercent(float $percent): string
+    {
+        if ($percent >= 95) {
+            return 'danger';
+        }
+
+        if ($percent >= 90) {
+            return 'warning';
+        }
+
+        if ($percent >= 80) {
+            return 'info';
+        }
+
+        return 'success';
+    }
+
+    /**
+     * 格式化Token数值显示
+     */
+    protected function formatTokenNumber(int $number): string
+    {
+        if ($number >= 1000000) {
+            return round($number / 1000000, 1).'M';
+        }
+
+        if ($number >= 1000) {
+            return round($number / 1000, 1).'K';
+        }
+
+        return (string) $number;
+    }
 }

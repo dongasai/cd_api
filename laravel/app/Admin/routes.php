@@ -39,6 +39,9 @@ Route::group([
     // Coding账户管理
     $router->resource('coding-accounts', 'CodingAccountController');
 
+    // Coding错误处理规则
+    $router->resource('coding-error-rules', 'ChannelErrorRuleController');
+
     // 系统设置管理
     $router->resource('system-settings', 'SystemSettingController');
 
@@ -85,6 +88,12 @@ Route::group([
 
     // 渠道统计
     $router->get('channel-stats', 'ChannelStatsController@index')->name('channel-stats');
+
+    // MCP 客户端管理
+    $router->resource('mcp-clients', 'McpClientController');
+    $router->post('mcp-clients/{id}/test', 'McpClientController@testConnectionApi')->name('mcp-clients.test');
+    $router->get('mcp-clients/{id}/tools', 'McpClientController@listToolsApi')->name('mcp-clients.tools');
+    $router->post('mcp-clients/{id}/call', 'McpClientController@callToolApi')->name('mcp-clients.call');
 
     // 测试图表
     $router->get('test-chart', 'TestChartController@index')->name('test-chart');

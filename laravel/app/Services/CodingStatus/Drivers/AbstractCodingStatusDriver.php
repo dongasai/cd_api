@@ -412,4 +412,207 @@ abstract class AbstractCodingStatusDriver implements CodingStatusDriver
             'message' => '凭证格式正确',
         ];
     }
+
+    /**
+     * 格式化配额数值显示
+     *
+     * 默认实现：显示各维度的已用/总量百分比
+     */
+    public function formatQuotaDisplay(): string
+    {
+        $quotaInfo = $this->getQuotaInfo();
+        $metrics = $quotaInfo['metrics'] ?? [];
+
+        if (empty($metrics)) {
+            return '<span class="text-muted">暂无数据</span>';
+        }
+
+        $displayParts = [];
+
+        foreach ($metrics as $key => $data) {
+            $used = (int) $data['used'];
+            $limit = (int) $data['limit'];
+            $percent = $limit > 0 ? round($used / $limit * 100, 1) : 0;
+
+            // 根据使用率选择颜色
+            $color = 'success';
+            if ($percent >= 95) {
+                $color = 'danger';
+            } elseif ($percent >= 90) {
+                $color = 'warning';
+            } elseif ($percent >= 80) {
+                $color = 'info';
+            }
+
+            // 格式化数值显示
+            $formattedUsed = $this->formatNumber($used);
+            $formattedLimit = $this->formatNumber($limit);
+
+            $displayParts[] = "<span class='text-{$color}'>{$formattedUsed}/{$formattedLimit}</span>";
+        }
+
+        return implode(' | ', $displayParts);
+    }
+
+    /**
+     * 格式化数字显示
+     *
+     * 将大数字转换为更易读的格式 (K, M)
+     */
+    protected function formatNumber(int $number): string
+    {
+        if ($number >= 1000000) {
+            return round($number / 1000000, 1).'M';
+        }
+
+        if ($number >= 1000) {
+            return round($number / 1000, 1).'K';
+        }
+
+        return (string) $number;
+    }
+
+    /**
+     * 处理渠道错误
+     *
+     * 根据错误上下文匹配规则并执行处理动作
+     *
+     * @param  array<string, mixed>  $errorContext  错误上下文
+     * @return array<string, mixed> 处理结果
+     */
+    public function handleError(array $errorContext): array
+    {
+        $statusCode = (int) ($errorContext['status_code'] ?? 0);
+        $errorType = (string) ($errorContext['error_type'] ?? '');
+        $errorMessage = (string) ($errorContext['error_message'] ?? '');
+        $channelId = $errorContext['channel_id'] ?? null;
+
+        // 获取匹配的规则
+        $matchedRule = $this->findMatchingRule($statusCode, $errorType, $errorMessage);
+
+        if (! $matchedRule) {
+            return [
+                'handled' => false,
+                'action' => null,
+                'message' => '未找到匹配的错误处理规则',
+            ];
+        }
+
+        // 执行处理动作
+        if ($matchedRule->action === \App\Models\ChannelErrorRule::ACTION_PAUSE_ACCOUNT) {
+            $this->pauseAccount($matchedRule, $errorMessage);
+        }
+
+        // 记录处理日志
+        $this->recordErrorHandlingLog([
+            'channel_id' => $channelId,
+            'account_id' => $this->account->id,
+            'rule_id' => $matchedRule->id,
+            'error_status_code' => $statusCode,
+            'error_type' => $errorType,
+            'error_message' => $errorMessage,
+            'action_taken' => $matchedRule->action,
+            'pause_duration_minutes' => $matchedRule->pause_duration_minutes,
+        ]);
+
+        return [
+            'handled' => true,
+            'action' => $matchedRule->action,
+            'pause_duration' => $matchedRule->pause_duration_minutes,
+            'rule_matched' => [
+                'id' => $matchedRule->id,
+                'name' => $matchedRule->name,
+            ],
+        ];
+    }
+
+    /**
+     * 查找匹配的错误处理规则
+     */
+    protected function findMatchingRule(int $statusCode, string $errorType, string $errorMessage): ?\App\Models\ChannelErrorRule
+    {
+        $rules = \App\Models\ChannelErrorRule::getActiveRules(
+            $this->account,
+            $this->account->driver_class
+        );
+
+        foreach ($rules as $rule) {
+            if ($rule->matchesError($statusCode, $errorType, $errorMessage)) {
+                return $rule;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 暂停账户
+     */
+    protected function pauseAccount(\App\Models\ChannelErrorRule $rule, string $reason): void
+    {
+        $this->account->update([
+            'status' => CodingAccount::STATUS_SUSPENDED,
+            'disabled_at' => now(),
+            'pause_duration_minutes' => $rule->pause_duration_minutes,
+            'pause_reason' => $rule->name.': '.$reason,
+            'pause_rule_id' => $rule->id,
+        ]);
+
+        \Illuminate\Support\Facades\Log::warning('账户因错误规则被暂停', [
+            'account_id' => $this->account->id,
+            'account_name' => $this->account->name,
+            'rule_id' => $rule->id,
+            'rule_name' => $rule->name,
+            'pause_duration_minutes' => $rule->pause_duration_minutes,
+            'reason' => $reason,
+        ]);
+    }
+
+    /**
+     * 记录错误处理日志
+     */
+    protected function recordErrorHandlingLog(array $data): void
+    {
+        \App\Models\ChannelErrorHandlingLog::logAutoHandling($data);
+    }
+
+    /**
+     * 获取驱动默认错误处理规则
+     *
+     * 子类可重写此方法定义驱动特定的规则
+     *
+     * @return array<int, array<string, mixed>> 规则配置数组
+     */
+    public function getDefaultErrorRules(): array
+    {
+        return [
+            [
+                'name' => 'HTTP 429 限流',
+                'pattern_type' => 'status_code',
+                'pattern_value' => '429',
+                'pattern_operator' => 'exact',
+                'action' => 'pause_account',
+                'pause_duration_minutes' => 10,
+                'priority' => 100,
+            ],
+            [
+                'name' => 'HTTP 401 认证失败',
+                'pattern_type' => 'status_code',
+                'pattern_value' => '401',
+                'pattern_operator' => 'exact',
+                'action' => 'pause_account',
+                'pause_duration_minutes' => 60,
+                'priority' => 100,
+            ],
+            [
+                'name' => 'HTTP 403 权限不足',
+                'pattern_type' => 'status_code',
+                'pattern_value' => '403',
+                'pattern_operator' => 'exact',
+                'action' => 'pause_account',
+                'pause_duration_minutes' => 30,
+                'priority' => 100,
+            ],
+        ];
+    }
 }

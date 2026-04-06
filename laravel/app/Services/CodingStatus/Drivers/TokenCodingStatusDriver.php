@@ -329,4 +329,64 @@ class TokenCodingStatusDriver extends AbstractCodingStatusDriver
             ],
         ];
     }
+
+    /**
+     * 格式化配额数值显示
+     *
+     * Token驱动显示：输入/输出Token（用K/M单位）
+     */
+    public function formatQuotaDisplay(): string
+    {
+        $quotaInfo = $this->getQuotaInfo();
+        $metrics = $quotaInfo['metrics'] ?? [];
+
+        if (empty($metrics)) {
+            return '<span class="text-muted">暂无数据</span>';
+        }
+
+        $displayParts = [];
+
+        foreach ($metrics as $key => $data) {
+            $used = (int) $data['used'];
+            $limit = (int) $data['limit'];
+            $percent = $limit > 0 ? round($used / $limit * 100, 1) : 0;
+
+            // 根据使用率选择颜色
+            $color = 'success';
+            if ($percent >= 95) {
+                $color = 'danger';
+            } elseif ($percent >= 90) {
+                $color = 'warning';
+            } elseif ($percent >= 80) {
+                $color = 'info';
+            }
+
+            // 格式化数值
+            $formattedUsed = $this->formatTokenNumber($used);
+            $formattedLimit = $this->formatTokenNumber($limit);
+
+            $label = $data['label'] ?? 'Token';
+            $displayParts[] = "<span class='text-{$color}'>{$label}: {$formattedUsed}/{$formattedLimit}</span>";
+        }
+
+        return implode('<br>', $displayParts);
+    }
+
+    /**
+     * 格式化Token数值显示
+     *
+     * 将大数字转换为更易读的格式 (K, M)
+     */
+    protected function formatTokenNumber(int $number): string
+    {
+        if ($number >= 1000000) {
+            return round($number / 1000000, 1).'M';
+        }
+
+        if ($number >= 1000) {
+            return round($number / 1000, 1).'K';
+        }
+
+        return (string) $number;
+    }
 }

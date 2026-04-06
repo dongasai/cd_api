@@ -43,15 +43,42 @@ class AutoReopenCodingAccounts extends Command
             ->get();
 
         foreach ($accounts as $account) {
-            if ($account->shouldAutoReopen()) {
+            // 检查是否应该自动恢复（优先使用 pause_duration_minutes）
+            $shouldReopen = false;
+            $reopenReason = '';
+
+            if ($account->pause_duration_minutes && $account->disabled_at) {
+                // 错误暂停模式：使用 pause_duration_minutes 计算恢复时间
+                $recoverAt = $account->disabled_at->addMinutes($account->pause_duration_minutes);
+                if (now()->gte($recoverAt)) {
+                    $shouldReopen = true;
+                    $reopenReason = '错误暂停时长已到期';
+                }
+            } elseif ($account->shouldAutoReopen()) {
+                // 配额耗尽模式：使用 auto_reopen_hours 计算恢复时间
+                $shouldReopen = true;
+                $reopenReason = '定时任务自动重新开启';
+            }
+
+            if ($shouldReopen) {
                 $beforeData = [
                     'status' => $account->status,
                     'disabled_at' => $account->disabled_at?->toDateTimeString(),
+                    'pause_duration_minutes' => $account->pause_duration_minutes,
+                    'pause_reason' => $account->pause_reason,
                 ];
 
-                $account->reopen();
+                // 恢复账户
+                $account->update([
+                    'status' => CodingAccount::STATUS_ACTIVE,
+                    'disabled_at' => null,
+                    'pause_duration_minutes' => null,
+                    'pause_reason' => null,
+                    'pause_rule_id' => null,
+                ]);
+
                 $reopenedCount++;
-                $this->info("[账户 {$account->id}] {$account->name} 已自动重新开启");
+                $this->info("[账户 {$account->id}] {$account->name} 已自动重新开启 (原因: {$reopenReason})");
 
                 $afterData = [
                     'status' => CodingAccount::STATUS_ACTIVE,
@@ -63,7 +90,7 @@ class AutoReopenCodingAccounts extends Command
                     type: OperationType::CODING_ACCOUNT_REOPEN,
                     accountId: $account->id,
                     accountName: $account->name,
-                    reason: '定时任务自动重新开启',
+                    reason: $reopenReason,
                     beforeData: $beforeData,
                     afterData: $afterData,
                     source: OperationSource::SCHEDULE
@@ -101,6 +128,7 @@ class AutoReopenCodingAccounts extends Command
                     'account_id' => $account->id,
                     'account_name' => $account->name,
                     'channels_reopened' => $channels->count(),
+                    'reason' => $reopenReason,
                 ]);
             }
         }

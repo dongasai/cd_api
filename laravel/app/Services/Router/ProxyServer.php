@@ -6,6 +6,7 @@ use App\Models\Channel;
 use App\Models\RequestLog;
 use App\Services\ChannelAffinity\ChannelAffinityService;
 use App\Services\CodingStatus\ChannelCodingStatusService;
+use App\Services\CodingStatus\ChannelErrorHandlingService;
 use App\Services\Protocol\Contracts\ProtocolRequest;
 use App\Services\Protocol\ProtocolConverter;
 use App\Services\Provider\Exceptions\ProviderException;
@@ -40,6 +41,8 @@ class ProxyServer
     protected ChannelRouterService $channelRouter;
 
     protected ChannelCodingStatusService $codingStatusService;
+
+    protected ChannelErrorHandlingService $errorHandlingService;
 
     protected ChannelAffinityService $affinityService;
 
@@ -78,12 +81,14 @@ class ProxyServer
         ProviderManager $providerManager,
         ChannelRouterService $channelRouter,
         ChannelCodingStatusService $codingStatusService,
+        ChannelErrorHandlingService $errorHandlingService,
         ChannelAffinityService $affinityService
     ) {
         $this->protocolConverter = $protocolConverter;
         $this->providerManager = $providerManager;
         $this->channelRouter = $channelRouter;
         $this->codingStatusService = $codingStatusService;
+        $this->errorHandlingService = $errorHandlingService;
         $this->affinityService = $affinityService;
 
         // 初始化辅助服务
@@ -386,6 +391,21 @@ class ProxyServer
             }
 
             $this->channelRequestLog->update($updateData);
+
+            // 触发错误处理（仅当渠道绑定了 CodingAccount 时）
+            $channel = $this->lastSuccessfulChannel ?? $this->selectedChannel;
+            if ($channel && $channel->hasCodingAccount()) {
+                try {
+                    $this->errorHandlingService->handleRequestError($channel, $this->channelRequestLog);
+                } catch (\Exception $handlingError) {
+                    // 错误处理失败不应影响主流程
+                    Log::error('Error handling failed', [
+                        'request_id' => $this->requestId,
+                        'channel_id' => $channel->id,
+                        'error' => $handlingError->getMessage(),
+                    ]);
+                }
+            }
         }
 
         Log::error('Proxy request failed', [

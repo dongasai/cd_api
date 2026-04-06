@@ -180,10 +180,18 @@ class ChannelRouterService
             return collect();
         }
 
-        // 查询渠道
+        // 查询渠道，排除暂停账户的渠道
         return Channel::whereIn('id', $channelIds)
             ->where('status', \App\Enums\ChannelStatus::ACTIVE)
             ->where('status2', \App\Enums\ChannelHealthStatus::NORMAL)
+            ->where(function ($query) {
+                // 排除暂停账户的渠道
+                $query->whereNull('coding_account_id')
+                    ->orWhereDoesntHave('codingAccount', function ($q) {
+                        $q->where('status', \App\Models\CodingAccount::STATUS_SUSPENDED)
+                            ->whereNotNull('pause_duration_minutes');
+                    });
+            })
             ->orderBy('priority', 'desc')
             ->orderBy('weight', 'desc')
             ->get();

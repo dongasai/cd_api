@@ -330,4 +330,155 @@ class SlidingRequestCodingStatusDriver implements CodingStatusDriver
 
         return $config['check_interval'] ?? 300;
     }
+
+    /**
+     * 格式化配额数值显示
+     *
+     * 滑动窗口Request驱动显示：请求次数 + 窗口类型
+     */
+    public function formatQuotaDisplay(): string
+    {
+        $quotaInfo = $this->getQuotaInfo();
+        $metrics = $quotaInfo['metrics'] ?? [];
+        $windowType = $this->getWindowType();
+
+        if (empty($metrics)) {
+            return '<span class="text-muted">暂无数据</span>';
+        }
+
+        $displayParts = [];
+
+        // 显示窗口类型标签
+        $windowLabel = match ($windowType) {
+            '5h' => '5h',
+            '1d' => '1天',
+            '7d' => '7天',
+            '30d' => '30天',
+            default => $windowType,
+        };
+
+        foreach ($metrics as $key => $data) {
+            $used = (int) $data['used'];
+            $limit = (int) $data['limit'];
+            $percent = $limit > 0 ? round($used / $limit * 100, 1) : 0;
+
+            // 根据使用率选择颜色
+            $color = 'success';
+            if ($percent >= 95) {
+                $color = 'danger';
+            } elseif ($percent >= 90) {
+                $color = 'warning';
+            } elseif ($percent >= 80) {
+                $color = 'info';
+            }
+
+            $displayParts[] = "<span class='text-{$color}'>{$used}/{$limit} ({$windowLabel})</span>";
+        }
+
+        return implode('<br>', $displayParts);
+    }
+
+    /**
+     * 处理渠道错误
+     *
+     * @param  array<string, mixed>  $errorContext  错误上下文
+     * @return array<string, mixed> 处理结果
+     */
+    public function handleError(array $errorContext): array
+    {
+        $statusCode = (int) ($errorContext['status_code'] ?? 0);
+        $errorType = (string) ($errorContext['error_type'] ?? '');
+        $errorMessage = (string) ($errorContext['error_message'] ?? '');
+        $channelId = $errorContext['channel_id'] ?? null;
+
+        // 获取匹配的规则
+        $rules = \App\Models\ChannelErrorRule::getActiveRules(
+            $this->account,
+            $this->account->driver_class
+        );
+
+        $matchedRule = null;
+        foreach ($rules as $rule) {
+            if ($rule->matchesError($statusCode, $errorType, $errorMessage)) {
+                $matchedRule = $rule;
+                break;
+            }
+        }
+
+        if (! $matchedRule) {
+            return [
+                'handled' => false,
+                'action' => null,
+                'message' => '未找到匹配的错误处理规则',
+            ];
+        }
+
+        // 执行处理动作
+        if ($matchedRule->action === \App\Models\ChannelErrorRule::ACTION_PAUSE_ACCOUNT) {
+            $this->account->update([
+                'status' => CodingAccount::STATUS_SUSPENDED,
+                'disabled_at' => now(),
+                'pause_duration_minutes' => $matchedRule->pause_duration_minutes,
+                'pause_reason' => $matchedRule->name.': '.$errorMessage,
+                'pause_rule_id' => $matchedRule->id,
+            ]);
+
+            \Illuminate\Support\Facades\Log::warning('账户因错误规则被暂停', [
+                'account_id' => $this->account->id,
+                'rule_id' => $matchedRule->id,
+                'pause_duration_minutes' => $matchedRule->pause_duration_minutes,
+            ]);
+        }
+
+        // 记录处理日志
+        \App\Models\ChannelErrorHandlingLog::logAutoHandling([
+            'channel_id' => $channelId,
+            'account_id' => $this->account->id,
+            'rule_id' => $matchedRule->id,
+            'error_status_code' => $statusCode,
+            'error_type' => $errorType,
+            'error_message' => $errorMessage,
+            'action_taken' => $matchedRule->action,
+            'pause_duration_minutes' => $matchedRule->pause_duration_minutes,
+        ]);
+
+        return [
+            'handled' => true,
+            'action' => $matchedRule->action,
+            'pause_duration' => $matchedRule->pause_duration_minutes,
+            'rule_matched' => [
+                'id' => $matchedRule->id,
+                'name' => $matchedRule->name,
+            ],
+        ];
+    }
+
+    /**
+     * 获取驱动默认错误处理规则
+     *
+     * @return array<int, array<string, mixed>> 规则配置数组
+     */
+    public function getDefaultErrorRules(): array
+    {
+        return [
+            [
+                'name' => 'HTTP 429 限流',
+                'pattern_type' => 'status_code',
+                'pattern_value' => '429',
+                'pattern_operator' => 'exact',
+                'action' => 'pause_account',
+                'pause_duration_minutes' => 10,
+                'priority' => 100,
+            ],
+            [
+                'name' => 'HTTP 401 认证失败',
+                'pattern_type' => 'status_code',
+                'pattern_value' => '401',
+                'pattern_operator' => 'exact',
+                'action' => 'pause_account',
+                'pause_duration_minutes' => 60,
+                'priority' => 100,
+            ],
+        ];
+    }
 }

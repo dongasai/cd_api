@@ -66,6 +66,9 @@ class CodingAccount extends Model
         'sync_error_count',
         'expires_at',
         'disabled_at',
+        'pause_duration_minutes',
+        'pause_reason',
+        'pause_rule_id',
         'last_check_at',
     ];
 
@@ -367,5 +370,49 @@ class CodingAccount extends Model
     public function updateLastCheckAt(): void
     {
         $this->update(['last_check_at' => now()]);
+    }
+
+    /**
+     * 检查账户是否暂停中
+     */
+    public function isPaused(): bool
+    {
+        return $this->status === self::STATUS_SUSPENDED
+            && $this->pause_duration_minutes !== null
+            && $this->disabled_at !== null;
+    }
+
+    /**
+     * 检查账户是否应该自动恢复（基于 pause_duration_minutes）
+     */
+    public function shouldAutoRecoverFromPause(): bool
+    {
+        if (! $this->isPaused()) {
+            return false;
+        }
+
+        $recoverAt = $this->disabled_at->addMinutes($this->pause_duration_minutes);
+
+        return now()->gte($recoverAt);
+    }
+
+    /**
+     * 获取暂停恢复时间
+     */
+    public function getPauseRecoverAt(): ?\Carbon\Carbon
+    {
+        if (! $this->isPaused()) {
+            return null;
+        }
+
+        return $this->disabled_at->addMinutes($this->pause_duration_minutes);
+    }
+
+    /**
+     * 检查是否因错误规则暂停
+     */
+    public function isPausedByErrorRule(): bool
+    {
+        return $this->isPaused() && $this->pause_rule_id !== null;
     }
 }

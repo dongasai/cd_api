@@ -117,4 +117,33 @@ interface CodingStatusDriver
      * @return int 检查间隔秒数
      */
     public function getCheckInterval(): int;
+
+    /**
+     * 格式化配额数值显示
+     *
+     * 用于在列表页面显示简短的数值信息
+     * 不同驱动有不同的显示格式
+     *
+     * @return string 格式化后的数值显示文本
+     */
+    public function formatQuotaDisplay(): string;
+
+    /**
+     * 处理渠道错误
+     *
+     * 根据错误上下文匹配规则并执行处理动作
+     *
+     * @param  array<string, mixed>  $errorContext  错误上下文 (channel_id, status_code, error_type, error_message, response_body)
+     * @return array<string, mixed> 处理结果 (handled, action, pause_duration, rule_matched)
+     */
+    public function handleError(array $errorContext): array;
+
+    /**
+     * 获取驱动默认错误处理规则
+     *
+     * 驱动可定义特定的错误处理规则，如 Token 驱动可定义 "token 不足" 的处理
+     *
+     * @return array<int, array<string, mixed>> 规则配置数组
+     */
+    public function getDefaultErrorRules(): array;
 }

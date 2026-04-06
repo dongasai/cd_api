@@ -384,4 +384,211 @@ class SlidingTokenCodingStatusDriver implements CodingStatusDriver
 
         return $config['check_interval'] ?? 300;
     }
+
+    /**
+     * 格式化配额数值显示
+     *
+     * 滑动窗口Token驱动显示：输入/输出Token + 窗口类型
+     */
+    public function formatQuotaDisplay(): string
+    {
+        $quotaInfo = $this->getQuotaInfo();
+        $metrics = $quotaInfo['metrics'] ?? [];
+        $windowType = $this->getWindowType();
+
+        if (empty($metrics)) {
+            return '<span class="text-muted">暂无数据</span>';
+        }
+
+        // 显示窗口类型标签
+        $windowLabel = match ($windowType) {
+            '5h' => '5h',
+            '1d' => '1天',
+            '7d' => '7天',
+            '30d' => '30天',
+            default => $windowType,
+        };
+
+        $displayParts = [];
+
+        // 优先显示总Token
+        if (isset($metrics['tokens_total'])) {
+            $data = $metrics['tokens_total'];
+            $used = (int) $data['used'];
+            $limit = (int) $data['limit'];
+            $percent = $limit > 0 ? round($used / $limit * 100, 1) : 0;
+
+            $color = $this->getColorByPercent($percent);
+            $formattedUsed = $this->formatTokenNumber($used);
+            $formattedLimit = $this->formatTokenNumber($limit);
+            $displayParts[] = "<span class='text-{$color}'>总计: {$formattedUsed}/{$formattedLimit} ({$windowLabel})</span>";
+        }
+
+        // 分别显示输入/输出
+        if (isset($metrics['tokens_input'])) {
+            $data = $metrics['tokens_input'];
+            $used = (int) $data['used'];
+            $limit = (int) $data['limit'];
+            $percent = $limit > 0 ? round($used / $limit * 100, 1) : 0;
+
+            $color = $this->getColorByPercent($percent);
+            $formattedUsed = $this->formatTokenNumber($used);
+            $formattedLimit = $this->formatTokenNumber($limit);
+            $displayParts[] = "<small class='text-{$color}'>输入: {$formattedUsed}/{$formattedLimit}</small>";
+        }
+
+        if (isset($metrics['tokens_output'])) {
+            $data = $metrics['tokens_output'];
+            $used = (int) $data['used'];
+            $limit = (int) $data['limit'];
+            $percent = $limit > 0 ? round($used / $limit * 100, 1) : 0;
+
+            $color = $this->getColorByPercent($percent);
+            $formattedUsed = $this->formatTokenNumber($used);
+            $formattedLimit = $this->formatTokenNumber($limit);
+            $displayParts[] = "<small class='text-{$color}'>输出: {$formattedUsed}/{$formattedLimit}</small>";
+        }
+
+        return implode('<br>', $displayParts);
+    }
+
+    /**
+     * 根据百分比获取颜色
+     */
+    protected function getColorByPercent(float $percent): string
+    {
+        if ($percent >= 95) {
+            return 'danger';
+        }
+
+        if ($percent >= 90) {
+            return 'warning';
+        }
+
+        if ($percent >= 80) {
+            return 'info';
+        }
+
+        return 'success';
+    }
+
+    /**
+     * 格式化Token数值显示
+     */
+    protected function formatTokenNumber(int $number): string
+    {
+        if ($number >= 1000000) {
+            return round($number / 1000000, 1).'M';
+        }
+
+        if ($number >= 1000) {
+            return round($number / 1000, 1).'K';
+        }
+
+        return (string) $number;
+    }
+
+    /**
+     * 处理渠道错误
+     *
+     * @param  array<string, mixed>  $errorContext  错误上下文
+     * @return array<string, mixed> 处理结果
+     */
+    public function handleError(array $errorContext): array
+    {
+        $statusCode = (int) ($errorContext['status_code'] ?? 0);
+        $errorType = (string) ($errorContext['error_type'] ?? '');
+        $errorMessage = (string) ($errorContext['error_message'] ?? '');
+        $channelId = $errorContext['channel_id'] ?? null;
+
+        // 获取匹配的规则
+        $rules = \App\Models\ChannelErrorRule::getActiveRules(
+            $this->account,
+            $this->account->driver_class
+        );
+
+        $matchedRule = null;
+        foreach ($rules as $rule) {
+            if ($rule->matchesError($statusCode, $errorType, $errorMessage)) {
+                $matchedRule = $rule;
+                break;
+            }
+        }
+
+        if (! $matchedRule) {
+            return [
+                'handled' => false,
+                'action' => null,
+                'message' => '未找到匹配的错误处理规则',
+            ];
+        }
+
+        // 执行处理动作
+        if ($matchedRule->action === \App\Models\ChannelErrorRule::ACTION_PAUSE_ACCOUNT) {
+            $this->account->update([
+                'status' => CodingAccount::STATUS_SUSPENDED,
+                'disabled_at' => now(),
+                'pause_duration_minutes' => $matchedRule->pause_duration_minutes,
+                'pause_reason' => $matchedRule->name.': '.$errorMessage,
+                'pause_rule_id' => $matchedRule->id,
+            ]);
+
+            \Illuminate\Support\Facades\Log::warning('账户因错误规则被暂停', [
+                'account_id' => $this->account->id,
+                'rule_id' => $matchedRule->id,
+                'pause_duration_minutes' => $matchedRule->pause_duration_minutes,
+            ]);
+        }
+
+        // 记录处理日志
+        \App\Models\ChannelErrorHandlingLog::logAutoHandling([
+            'channel_id' => $channelId,
+            'account_id' => $this->account->id,
+            'rule_id' => $matchedRule->id,
+            'error_status_code' => $statusCode,
+            'error_type' => $errorType,
+            'error_message' => $errorMessage,
+            'action_taken' => $matchedRule->action,
+            'pause_duration_minutes' => $matchedRule->pause_duration_minutes,
+        ]);
+
+        return [
+            'handled' => true,
+            'action' => $matchedRule->action,
+            'pause_duration' => $matchedRule->pause_duration_minutes,
+            'rule_matched' => [
+                'id' => $matchedRule->id,
+                'name' => $matchedRule->name,
+            ],
+        ];
+    }
+
+    /**
+     * 获取驱动默认错误处理规则
+     *
+     * @return array<int, array<string, mixed>> 规则配置数组
+     */
+    public function getDefaultErrorRules(): array
+    {
+        return [
+            [
+                'name' => 'HTTP 429 限流',
+                'pattern_type' => 'status_code',
+                'pattern_value' => '429',
+                'pattern_operator' => 'exact',
+                'action' => 'pause_account',
+                'pause_duration_minutes' => 10,
+                'priority' => 100,
+            ],
+            [
+                'name' => 'Token 不足',
+                'pattern_type' => 'error_message',
+                'pattern_value' => 'insufficient.*quota',
+                'pattern_operator' => 'regex',
+                'action' => 'pause_account',
+                'pause_duration_minutes' => 30,
+                'priority' => 90,
+            ],
+        ];
+    }
 }

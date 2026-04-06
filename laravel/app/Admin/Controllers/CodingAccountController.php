@@ -57,6 +57,18 @@ class CodingAccountController extends AdminController
                     'default' // 默认颜色
                 );
 
+            // 数值列 - 显示驱动处理后的配额数值
+            $grid->column('quota_display', '数值')->unescape()->display(function () {
+                try {
+                    $driver = app(CodingStatusDriverManager::class)->driver($this->driver_class);
+                    $driver->setAccount($this);
+
+                    return $driver->formatQuotaDisplay();
+                } catch (\Exception $e) {
+                    return '<span class="text-muted">-</span>';
+                }
+            });
+
             $grid->column('last_sync_at', '最后同步时间')->sortable();
             $grid->column('expires_at', '过期时间')->sortable();
             $grid->column('created_at', '创建时间')->sortable();

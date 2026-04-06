@@ -471,4 +471,76 @@ class Request5ZMCodingStatusDriver extends AbstractCodingStatusDriver
             ],
         ];
     }
+
+    /**
+     * 格式化配额数值显示
+     *
+     * Request5ZM驱动显示：5h/周/月 三维度请求次数
+     */
+    public function formatQuotaDisplay(): string
+    {
+        $quotaInfo = $this->getQuotaInfo();
+        $metrics = $quotaInfo['metrics'] ?? [];
+
+        if (empty($metrics)) {
+            return '<span class="text-muted">暂无数据</span>';
+        }
+
+        $displayParts = [];
+
+        // 显示5小时周期
+        if (isset($metrics['requests_5h'])) {
+            $data = $metrics['requests_5h'];
+            $used = (int) $data['used'];
+            $limit = (int) $data['limit'];
+            $percent = $limit > 0 ? round($used / $limit * 100, 1) : 0;
+
+            $color = $this->getColorByPercent($percent);
+            $displayParts[] = "<span class='text-{$color}'>5h: {$used}/{$limit}</span>";
+        }
+
+        // 显示周周期
+        if (isset($metrics['requests_weekly'])) {
+            $data = $metrics['requests_weekly'];
+            $used = (int) $data['used'];
+            $limit = (int) $data['limit'];
+            $percent = $limit > 0 ? round($used / $limit * 100, 1) : 0;
+
+            $color = $this->getColorByPercent($percent);
+            $displayParts[] = "<small class='text-{$color}'>周: {$used}/{$limit}</small>";
+        }
+
+        // 显示月周期
+        if (isset($metrics['requests_monthly'])) {
+            $data = $metrics['requests_monthly'];
+            $used = (int) $data['used'];
+            $limit = (int) $data['limit'];
+            $percent = $limit > 0 ? round($used / $limit * 100, 1) : 0;
+
+            $color = $this->getColorByPercent($percent);
+            $displayParts[] = "<small class='text-{$color}'>月: {$used}/{$limit}</small>";
+        }
+
+        return implode('<br>', $displayParts);
+    }
+
+    /**
+     * 根据百分比获取颜色
+     */
+    protected function getColorByPercent(float $percent): string
+    {
+        if ($percent >= 95) {
+            return 'danger';
+        }
+
+        if ($percent >= 90) {
+            return 'warning';
+        }
+
+        if ($percent >= 80) {
+            return 'info';
+        }
+
+        return 'success';
+    }
 }
