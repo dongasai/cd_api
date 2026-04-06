@@ -15,15 +15,10 @@ class SearchServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // 注册驱动管理器
+        // 注册驱动管理器（单例）
+        // 默认驱动由 SearchDriverManager 从数据库自动加载
         $this->app->singleton(SearchDriverManager::class, function ($app) {
-            $manager = new SearchDriverManager;
-
-            // 设置默认驱动
-            $defaultDriver = config('search.default', 'mock');
-            $manager->setDefaultDriver($defaultDriver);
-
-            return $manager;
+            return new SearchDriverManager;
         });
     }
 

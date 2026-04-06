@@ -95,6 +95,12 @@ Route::group([
     $router->get('mcp-clients/{id}/tools', 'McpClientController@listToolsApi')->name('mcp-clients.tools');
     $router->post('mcp-clients/{id}/call', 'McpClientController@callToolApi')->name('mcp-clients.call');
 
+    // 搜索驱动配置管理
+    $router->resource('search-drivers', 'SearchDriverController');
+
+    // 搜索日志 - 只读
+    $router->resource('search-logs', 'SearchLogController')->only(['index', 'show']);
+
     // 测试图表
     $router->get('test-chart', 'TestChartController@index')->name('test-chart');
 
