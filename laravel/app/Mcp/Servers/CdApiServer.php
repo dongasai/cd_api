@@ -2,7 +2,6 @@
 
 namespace App\Mcp\Servers;
 
-use App\Mcp\Tools\GetServerTimeTool;
 use App\Mcp\Tools\SearchTool;
 use App\Mcp\Tools\WebParserTool;
 use Laravel\Mcp\Server;
@@ -17,7 +16,7 @@ use Laravel\Mcp\Server\Attributes\Version;
  */
 #[Name('CdApi MCP Server')]
 #[Version('1.0.0')]
-#[Instructions('CdApi MCP 服务，提供服务器信息查询等工具。可通过 API Key 认证访问。')]
+#[Instructions('CdApi MCP 服务，提供搜索和网页解析等工具。可通过 API Key 认证访问。')]
 class CdApiServer extends Server
 {
     /**
@@ -26,7 +25,6 @@ class CdApiServer extends Server
      * @var array<int, class-string<\Laravel\Mcp\Server\Tool>>
      */
     protected array $tools = [
-        GetServerTimeTool::class,
         SearchTool::class,
         WebParserTool::class,
     ];
