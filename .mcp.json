@@ -6,6 +6,10 @@
                 "laravel/artisan",
                 "boost:mcp"
             ]
+        },
+        "dbhub": {
+            "type": "http",
+            "url": "http://192.168.4.107:32128/mcp"
         }
     }
 }

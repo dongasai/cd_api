@@ -5,4 +5,5 @@ return [
     App\Providers\ProtocolServiceProvider::class,
     App\Providers\ProviderServiceProvider::class,
     App\Providers\RouterServiceProvider::class,
+    App\Providers\SearchServiceProvider::class,
 ];
