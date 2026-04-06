@@ -138,6 +138,16 @@ class SystemSettingSeeder extends Seeder
             ],
             [
                 'group' => SettingGroup::FEATURES->value,
+                'key' => 'enable_audit_log',
+                'value' => '1',
+                'type' => SystemSetting::TYPE_BOOLEAN,
+                'label' => '启用审计日志',
+                'description' => '是否记录审计日志',
+                'is_public' => false,
+                'sort_order' => 3,
+            ],
+            [
+                'group' => SettingGroup::FEATURES->value,
                 'key' => 'enable_fallback',
                 'value' => '1',
                 'type' => SystemSetting::TYPE_BOOLEAN,
@@ -145,6 +155,28 @@ class SystemSettingSeeder extends Seeder
                 'description' => '请求失败时是否自动降级到其他渠道',
                 'is_public' => false,
                 'sort_order' => 4,
+            ],
+
+            // 渠道亲和性配置
+            [
+                'group' => SettingGroup::CHANNEL_AFFINITY->value,
+                'key' => 'enabled',
+                'value' => '1',
+                'type' => SystemSetting::TYPE_BOOLEAN,
+                'label' => '启用渠道亲和性',
+                'description' => '是否启用渠道亲和性功能',
+                'is_public' => true,
+                'sort_order' => 10,
+            ],
+            [
+                'group' => SettingGroup::CHANNEL_AFFINITY->value,
+                'key' => 'switch_on_success',
+                'value' => '1',
+                'type' => SystemSetting::TYPE_BOOLEAN,
+                'label' => '成功时切换渠道',
+                'description' => '请求成功时是否记录亲和性以切换到该渠道',
+                'is_public' => true,
+                'sort_order' => 20,
             ],
 
             // 测试配置

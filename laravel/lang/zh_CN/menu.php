@@ -36,6 +36,7 @@ return [
         'operation_logs' => '操作日志',
 
         // 应用设置子菜单
+        'system_settings' => '应用设置',
         'settings' => '系统设置',
         'channel_affinity' => '渠道亲和',
         'user_agents' => 'User Agents',

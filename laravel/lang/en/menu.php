@@ -21,6 +21,7 @@ return [
         'channel_request_logs' => 'Channel Request Logs',
         'operation_logs' => 'Operation Logs',
         'app_settings' => 'App Settings',
+        'system_settings' => 'App Settings',
         'settings' => 'System Settings',
         'channel_affinity' => 'Channel Affinity Rules',
         'user_agents' => 'User-Agent Rules',
