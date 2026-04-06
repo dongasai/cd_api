@@ -5,7 +5,8 @@ name: cdapi-prod
 services:
   app:
     container_name: cd_api_prod
-    image: ghbbb.xiaobei.fun/dongasai/cd_api:latest
+    # ghbbb 是 ghcr.io 的镜像
+    image: ghcr.io/dongasai/cd_api:latest
     restart: unless-stopped
     # command: composer run devd
     volumes:
