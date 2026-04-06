@@ -12,6 +12,7 @@ return [
         'model_management' => '模型管理',
         'logs' => '日志管理',
         'app_settings' => '应用设置',
+        'mcp_config' => 'MCP配置',
         'system' => '系统管理',
 
         // 渠道管理子菜单
@@ -33,13 +34,17 @@ return [
         'response_logs' => '响应日志',
         'channel_request_logs' => '渠道请求日志',
         'operation_logs' => '操作日志',
+        'search_logs' => '搜索日志',
 
         // 应用设置子菜单
         'settings' => '系统设置',
         'channel_affinity' => '渠道亲和',
         'user_agents' => 'User Agents',
         'preset_prompts' => '预设提示词',
+
+        // MCP配置子菜单
         'mcp_clients' => 'MCP 客户端',
+        'search_drivers' => '搜索引擎',
 
         // 系统管理子菜单
         'administrators' => '管理员',
