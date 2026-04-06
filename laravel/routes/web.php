@@ -32,7 +32,7 @@ Route::get('/debug/file', function (Request $request) {
         $lines = explode("\n", $content);
 
         return response()->json(['lines' => $lines]);
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
         return response()->json(['error' => 'Failed to read file'], 500);
     }
 })->name('debug.file');

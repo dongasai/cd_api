@@ -1,7 +1,10 @@
 @php
     $request = request();
     $trace = $exception->getTrace();
-    
+
+    // 判断是否为 MissingAppKeyException
+    $isMissingKey = $exception instanceof \Illuminate\Encryption\MissingAppKeyException;
+
     // 清理异常消息中的重复 View 路径
     function cleanMessage($msg) {
         if (empty($msg)) return 'Unknown Error';
@@ -9,9 +12,9 @@
         $msg = preg_replace('/\s+/', ' ', $msg);
         return trim($msg);
     }
-    
+
     $message = cleanMessage($exception->getMessage());
-    
+
     // 处理 Previous Exception
     $previous = $exception->getPrevious();
     $previousData = null;
@@ -117,6 +120,9 @@
             </div>
             <div class="header-actions">
                 <button class="copy-btn" onclick="copyToMd()">📋 CopyToMd</button>
+                @if($isMissingKey)
+                <button class="copy-btn" id="generateKeyBtn" onclick="generateAppKey()" style="background: #4caf50;">🔑 生成 APP_KEY</button>
+                @endif
             </div>
         </div>
     </div>
@@ -386,6 +392,42 @@
                 }
                 document.body.removeChild(textarea);
             }
+        }
+
+        function generateAppKey() {
+            const btn = document.getElementById('generateKeyBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ 生成中...';
+
+            fetch('/generate-key.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    btn.textContent = '✓ 生成成功';
+                    btn.style.background = '#2e7d32';
+                    setTimeout(() => { window.location.reload(); }, 1500);
+                } else {
+                    btn.textContent = '✗ ' + (data.message || '失败');
+                    btn.style.background = '#c62828';
+                    setTimeout(() => {
+                        btn.textContent = '🔑 生成 APP_KEY';
+                        btn.style.background = '#4caf50';
+                        btn.disabled = false;
+                    }, 2000);
+                }
+            })
+            .catch(err => {
+                btn.textContent = '✗ 请求失败';
+                btn.style.background = '#c62828';
+                setTimeout(() => {
+                    btn.textContent = '🔑 生成 APP_KEY';
+                    btn.style.background = '#4caf50';
+                    btn.disabled = false;
+                }, 2000);
+            });
         }
 
         function generateMdContent() {

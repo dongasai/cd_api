@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Middleware\SetUserInfo;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -13,14 +15,21 @@ return Application::configure(basePath: dirname(__DIR__))
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        then: function () {
+            // 安装/升级路由使用 install 中间件组（空组，无加密/会话等中间件）
+            Route::middleware('install')->group(base_path('routes/install.php'));
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // 定义 install 中间件组（空组，不包含任何中间件）
+        $middleware->group('install', []);
+
         $middleware->web(append: [
-            \App\Http\Middleware\SetUserInfo::class,
+            SetUserInfo::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        $renderErrorView = function (\Throwable $e, Request $request, int $statusCode) {
+        $renderErrorView = function (Throwable $e, Request $request, int $statusCode) {
             if ($request->wantsJson()) {
                 return null;
             }
@@ -38,7 +47,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 if (view()->exists('errors.500')) {
                     return response()->view('errors.500', ['exception' => $e], 500);
                 }
-            } catch (\Throwable $viewError) {
+            } catch (Throwable $viewError) {
                 return response()->make(
                     '<!DOCTYPE html><html><head><meta charset="utf-8"><title>'.$statusCode.' Error</title>'.
                     '<style>body{font-family:system-ui,sans-serif;background:#f3f4f6;color:#1f2937;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0}'.
@@ -52,7 +61,15 @@ return Application::configure(basePath: dirname(__DIR__))
             return null;
         };
 
-        $exceptions->render(function (\Throwable $e, Request $request) use ($renderErrorView) {
+        $exceptions->render(function (Throwable $e, Request $request) use ($renderErrorView) {
+            // 处理验证异常，返回 JSON 格式
+            if ($e instanceof ValidationException) {
+                return response()->json([
+                    'message' => $e->getMessage(),
+                    'errors' => $e->errors(),
+                ], 422);
+            }
+
             if ($e instanceof AuthenticationException) {
                 return null;
             }
