@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Request as HttpRequest;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Tool;
 
 /**
  * 搜索工具

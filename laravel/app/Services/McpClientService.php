@@ -4,14 +4,19 @@ namespace App\Services;
 
 use App\Models\McpClient;
 use Illuminate\Support\Facades\Log;
-use PhpMcp\Client\Client;
-use PhpMcp\Client\Enum\TransportType;
-use PhpMcp\Client\ServerConfig;
+use Mcp\Client;
+use Mcp\Client\Transport\HttpTransport;
+use Mcp\Client\Transport\StdioTransport;
+use Mcp\Schema\ClientCapabilities;
+use Mcp\Schema\Content\EmbeddedResource;
+use Mcp\Schema\Content\ImageContent;
+use Mcp\Schema\Content\TextContent;
+use Psr\Log\LoggerInterface;
 
 /**
  * MCP 客户端服务类
  *
- * 封装 php-mcp/client 的连接和调用逻辑
+ * 封装 mcp/sdk 的连接和调用逻辑，支持 Streamable HTTP 和 Stdio 传输
  */
 class McpClientService
 {
@@ -21,6 +26,13 @@ class McpClientService
      * @var array<int, Client>
      */
     protected array $connections = [];
+
+    /**
+     * 传输实例缓存
+     *
+     * @var array<int, HttpTransport|StdioTransport>
+     */
+    protected array $transports = [];
 
     /**
      * 创建并连接 MCP 客户端
@@ -37,12 +49,15 @@ class McpClientService
             return $this->connections[$client->id];
         }
 
-        $mcpClient = $this->createClient($client);
-
-        // 使用同步 API 初始化连接
         try {
-            $mcpClient->initialize();
+            $mcpClient = $this->createClient($client);
+            $transport = $this->createTransport($client);
+
+            // 连接到服务器
+            $mcpClient->connect($transport);
+
             $this->connections[$client->id] = $mcpClient;
+            $this->transports[$client->id] = $transport;
 
             // 更新状态
             $client->update([
@@ -90,6 +105,10 @@ class McpClientService
             unset($this->connections[$client->id]);
         }
 
+        if (isset($this->transports[$client->id])) {
+            unset($this->transports[$client->id]);
+        }
+
         $client->update([
             'status' => McpClient::STATUS_INACTIVE,
         ]);
@@ -99,26 +118,33 @@ class McpClientService
      * 测试客户端连接
      *
      * @param  McpClient  $client  MCP 客户端配置模型
+     * @param  bool  $persist  是否持久化状态到数据库（默认 true）
      * @return array{success: bool, message: string, capabilities: array|null}
      */
-    public function testConnection(McpClient $client): array
+    public function testConnection(McpClient $client, bool $persist = true): array
     {
         try {
             $mcpClient = $this->createClient($client);
-            $mcpClient->initialize();
+            $transport = $this->createTransport($client);
+
+            // 连接到服务器
+            $mcpClient->connect($transport);
 
             // 获取能力信息
             $capabilities = $this->fetchCapabilities($mcpClient);
 
+            // 断开连接
             $mcpClient->disconnect();
 
-            // 更新状态
-            $client->update([
-                'status' => McpClient::STATUS_ACTIVE,
-                'last_connected_at' => now(),
-                'connection_error' => null,
-                'capabilities' => $capabilities,
-            ]);
+            // 更新状态（仅在模型已存在时）
+            if ($persist && $client->exists) {
+                $client->update([
+                    'status' => McpClient::STATUS_ACTIVE,
+                    'last_connected_at' => now(),
+                    'connection_error' => null,
+                    'capabilities' => $capabilities,
+                ]);
+            }
 
             return [
                 'success' => true,
@@ -126,10 +152,12 @@ class McpClientService
                 'capabilities' => $capabilities,
             ];
         } catch (\Exception $e) {
-            $client->update([
-                'status' => McpClient::STATUS_ERROR,
-                'connection_error' => $e->getMessage(),
-            ]);
+            if ($persist && $client->exists) {
+                $client->update([
+                    'status' => McpClient::STATUS_ERROR,
+                    'connection_error' => $e->getMessage(),
+                ]);
+            }
 
             return [
                 'success' => false,
@@ -155,11 +183,11 @@ class McpClientService
             $result = $mcpClient->listTools();
             $tools = [];
 
-            foreach ($result->getTools() as $tool) {
+            foreach ($result->tools as $tool) {
                 $tools[] = [
-                    'name' => $tool->getName(),
-                    'description' => $tool->getDescription(),
-                    'input_schema' => $tool->getInputSchema(),
+                    'name' => $tool->name,
+                    'description' => $tool->description,
+                    'input_schema' => $tool->inputSchema,
                 ];
             }
 
@@ -197,32 +225,38 @@ class McpClientService
 
             $result = $mcpClient->callTool($toolName, $arguments);
 
-            // 解析结果
+            // 解析结果内容
             $content = [];
-            foreach ($result->getContent() as $item) {
-                if ($item->isText()) {
+            foreach ($result->content as $item) {
+                if ($item instanceof TextContent) {
                     $content[] = [
                         'type' => 'text',
-                        'text' => $item->getText(),
+                        'text' => $item->text,
                     ];
-                } elseif ($item->isImage()) {
+                } elseif ($item instanceof ImageContent) {
                     $content[] = [
                         'type' => 'image',
-                        'data' => $item->getData(),
-                        'mime_type' => $item->getMimeType(),
+                        'data' => $item->data,
+                        'mime_type' => $item->mimeType,
                     ];
-                } elseif ($item->isResource()) {
+                } elseif ($item instanceof EmbeddedResource) {
                     $content[] = [
                         'type' => 'resource',
-                        'uri' => $item->getUri(),
-                        'name' => $item->getName(),
+                        'uri' => $item->resource->uri,
+                        'name' => $item->resource->name ?? null,
+                    ];
+                } else {
+                    // 其他类型转为文本
+                    $content[] = [
+                        'type' => 'text',
+                        'text' => json_encode($item->jsonSerialize(), JSON_PRETTY_PRINT),
                     ];
                 }
             }
 
             return [
                 'content' => $content,
-                'is_error' => $result->isError(),
+                'is_error' => $result->isError,
             ];
         } catch (\Exception $e) {
             Log::error('MCP 调用工具失败', [
@@ -249,12 +283,12 @@ class McpClientService
             $result = $mcpClient->listResources();
             $resources = [];
 
-            foreach ($result->getResourceTemplates() as $resource) {
+            foreach ($result->resources as $resource) {
                 $resources[] = [
-                    'uri' => $resource->getUri(),
-                    'name' => $resource->getName(),
-                    'description' => $resource->getDescription(),
-                    'mime_type' => $resource->getMimeType(),
+                    'uri' => $resource->uri,
+                    'name' => $resource->name,
+                    'description' => $resource->description ?? null,
+                    'mime_type' => $resource->mimeType ?? null,
                 ];
             }
 
@@ -282,11 +316,11 @@ class McpClientService
             $result = $mcpClient->listPrompts();
             $prompts = [];
 
-            foreach ($result->getPrompts() as $prompt) {
+            foreach ($result->prompts as $prompt) {
                 $prompts[] = [
-                    'name' => $prompt->getName(),
-                    'description' => $prompt->getDescription(),
-                    'arguments' => $prompt->getArguments(),
+                    'name' => $prompt->name,
+                    'description' => $prompt->description ?? null,
+                    'arguments' => $prompt->arguments ?? [],
                 ];
             }
 
@@ -304,7 +338,7 @@ class McpClientService
      * 刷新服务器能力信息
      *
      * @param  McpClient  $client  模型实例
-     * @param  Client  $mcpClient  连接实例（可选）
+     * @param  Client|null  $mcpClient  连接实例（可选）
      */
     public function refreshCapabilities(McpClient $client, ?Client $mcpClient = null): void
     {
@@ -340,32 +374,43 @@ class McpClientService
      */
     protected function createClient(McpClient $client): Client
     {
-        // 构建服务器配置
+        // 使用 Builder 构建客户端
+        // 设置 roots 能力，确保 capabilities 序列化为对象而非空数组
+        // 阿里云等 MCP 服务器要求 capabilities 必须是对象格式 {}
+        $capabilities = new ClientCapabilities(roots: true);
+
+        $builder = Client::builder()
+            ->setClientInfo('CdApi MCP Client', '1.0.0')
+            ->setCapabilities($capabilities)
+            ->setRequestTimeout((int) $client->timeout)
+            ->setInitTimeout((int) $client->timeout);
+
+        return $builder->build();
+    }
+
+    /**
+     * 创建传输实例
+     *
+     * @param  McpClient  $client  MCP 客端配置模型
+     * @return HttpTransport|StdioTransport 传输实例
+     */
+    protected function createTransport(McpClient $client): HttpTransport|StdioTransport
+    {
         if ($client->isHttp()) {
-            // HTTP 传输
-            $serverConfig = new ServerConfig(
-                name: $client->slug,
-                transport: TransportType::Http,
-                timeout: (float) $client->timeout,
-                url: $client->url,
+            // HTTP 传输 (Streamable HTTP)
+            return new HttpTransport(
+                endpoint: $client->url,
                 headers: $client->headers ?? [],
+                logger: app(LoggerInterface::class),
             );
         } else {
             // Stdio 传输
-            $serverConfig = new ServerConfig(
-                name: $client->slug,
-                transport: TransportType::Stdio,
-                timeout: (float) $client->timeout,
+            return new StdioTransport(
                 command: $client->command,
                 args: $client->args ?? [],
+                logger: app(LoggerInterface::class),
             );
         }
-
-        // 使用 ClientBuilder 构建客户端
-        return Client::make()
-            ->withClientInfo('CdApi MCP Client', '1.0.0')
-            ->withServerConfig($serverConfig)
-            ->build();
     }
 
     /**
@@ -385,11 +430,13 @@ class McpClientService
 
         try {
             // 获取服务器信息
-            $capabilities['server_info'] = [
-                'name' => $mcpClient->getServerName(),
-                'version' => $mcpClient->getServerVersion(),
-                'protocol_version' => $mcpClient->getNegotiatedProtocolVersion(),
-            ];
+            $serverInfo = $mcpClient->getServerInfo();
+            if ($serverInfo !== null) {
+                $capabilities['server_info'] = [
+                    'name' => $serverInfo->name,
+                    'version' => $serverInfo->version,
+                ];
+            }
         } catch (\Exception $e) {
             Log::warning('获取服务器信息失败', ['error' => $e->getMessage()]);
         }
@@ -397,10 +444,10 @@ class McpClientService
         try {
             // 获取工具列表
             $toolsResult = $mcpClient->listTools();
-            foreach ($toolsResult->getTools() as $tool) {
+            foreach ($toolsResult->tools as $tool) {
                 $capabilities['tools'][] = [
-                    'name' => $tool->getName(),
-                    'description' => $tool->getDescription(),
+                    'name' => $tool->name,
+                    'description' => $tool->description,
                 ];
             }
         } catch (\Exception $e) {
@@ -410,10 +457,10 @@ class McpClientService
         try {
             // 获取资源列表
             $resourcesResult = $mcpClient->listResources();
-            foreach ($resourcesResult->getResourceTemplates() as $resource) {
+            foreach ($resourcesResult->resources as $resource) {
                 $capabilities['resources'][] = [
-                    'uri' => $resource->getUri(),
-                    'name' => $resource->getName(),
+                    'uri' => $resource->uri,
+                    'name' => $resource->name,
                 ];
             }
         } catch (\Exception $e) {
@@ -423,10 +470,10 @@ class McpClientService
         try {
             // 获取提示列表
             $promptsResult = $mcpClient->listPrompts();
-            foreach ($promptsResult->getPrompts() as $prompt) {
+            foreach ($promptsResult->prompts as $prompt) {
                 $capabilities['prompts'][] = [
-                    'name' => $prompt->getName(),
-                    'description' => $prompt->getDescription(),
+                    'name' => $prompt->name,
+                    'description' => $prompt->description,
                 ];
             }
         } catch (\Exception $e) {
