@@ -11,6 +11,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('search_drivers')) {
+            return;
+        }
         Schema::create('search_drivers', function (Blueprint $table) {
             $table->id();
             $table->string('name', 50)->comment('驱动名称');

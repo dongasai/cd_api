@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('coding_status_logs')) {
+            return;
+        }
         Schema::create('coding_status_logs', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('account_id')->comment('Coding账户ID');
@@ -31,19 +34,10 @@ return new class extends Migration
             // 时间
             $table->timestamp('created_at')->useCurrent();
 
-            // 索引和外键
+            // 索引
             $table->index(['account_id', 'created_at'], 'idx_status_logs_account_created');
             $table->index(['channel_id', 'created_at'], 'idx_status_logs_channel_created');
             $table->index(['from_status', 'to_status'], 'idx_status_logs_status_change');
-
-            $table->foreign('account_id')
-                ->references('id')
-                ->on('coding_accounts')
-                ->onDelete('cascade');
-            $table->foreign('channel_id')
-                ->references('id')
-                ->on('channels')
-                ->onDelete('set null');
         });
     }
 

@@ -8,6 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('operation_logs')) {
+            return;
+        }
         Schema::create('operation_logs', function (Blueprint $table) {
             $table->id();
             $table->string('type', 50)->comment('操作类型');

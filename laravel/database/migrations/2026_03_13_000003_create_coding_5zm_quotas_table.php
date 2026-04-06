@@ -12,9 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         // 创建 Request5ZM 驱动的配额表
+        if (Schema::hasTable('coding_5zm_quotas')) {
+            return;
+        }
         Schema::create('coding_5zm_quotas', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('account_id')->unique()->constrained('coding_accounts')->cascadeOnDelete()->comment('Coding账户ID');
+            $table->unsignedBigInteger('account_id')->unique()->comment('Coding账户ID');
 
             // 配额限制
             $table->unsignedInteger('limit_5h')->default(300)->comment('5小时周期限额');

@@ -16,9 +16,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('channel_user_agent')) {
+            return;
+        }
         Schema::create('channel_user_agent', function (Blueprint $table) {
-            $table->foreignId('channel_id')->constrained('channels', 'id')->cascadeOnDelete()->comment('渠道ID');
-            $table->foreignId('user_agent_id')->constrained('user_agents', 'id')->cascadeOnDelete()->comment('User-Agent ID');
+            $table->unsignedBigInteger('channel_id')->comment('渠道ID');
+            $table->unsignedBigInteger('user_agent_id')->comment('User-Agent ID');
             $table->timestamps();
 
             // 复合主键

@@ -11,10 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('channel_error_rules')) {
+            return;
+        }
         Schema::create('channel_error_rules', function (Blueprint $table) {
             $table->id();
             $table->string('name')->comment('规则名称');
-            $table->foreignId('coding_account_id')->nullable()->constrained()->nullOnDelete()->comment('账户级规则');
+            $table->unsignedBigInteger('coding_account_id')->nullable()->comment('账户级规则');
             $table->string('driver_class')->nullable()->comment('驱动类名（驱动级规则）');
             $table->enum('pattern_type', ['status_code', 'error_message', 'error_type', 'both'])->default('status_code')->comment('匹配类型');
             $table->string('pattern_value')->comment('匹配值');

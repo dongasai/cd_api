@@ -8,6 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('model_lists')) {
+            return;
+        }
         Schema::create('model_lists', function (Blueprint $table) {
             $table->id();
             $table->string('model_name', 100)->unique();

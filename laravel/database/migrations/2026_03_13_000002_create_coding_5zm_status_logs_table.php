@@ -11,10 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('coding_5zm_status_logs')) {
+            return;
+        }
         Schema::create('coding_5zm_status_logs', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('account_id')->constrained('coding_accounts')->cascadeOnDelete()->comment('Coding账户ID');
-            $table->foreignId('channel_id')->nullable()->constrained('channels')->nullOnDelete()->comment('关联渠道ID');
+            $table->unsignedBigInteger('account_id')->comment('Coding账户ID');
+            $table->unsignedBigInteger('channel_id')->nullable()->comment('关联渠道ID');
 
             // 状态变更
             $table->string('from_status', 20)->comment('原状态');
@@ -36,7 +39,7 @@ return new class extends Migration
 
             // 触发信息
             $table->enum('triggered_by', ['system', 'manual', 'api', 'sync', 'quota_exhausted', 'quota_recovered'])->default('system')->comment('触发方式');
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete()->comment('操作用户');
+            $table->unsignedBigInteger('user_id')->nullable()->comment('操作用户');
 
             // 周期信息
             $table->string('period_5h', 20)->nullable()->comment('5小时周期标识');

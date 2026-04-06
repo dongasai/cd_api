@@ -11,6 +11,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('search_logs')) {
+            return;
+        }
         Schema::create('search_logs', function (Blueprint $table) {
             $table->id();
             $table->string('query', 500)->comment('搜索查询内容');
@@ -34,9 +37,6 @@ return new class extends Migration
             $table->index('success');
             $table->index('searched_at');
             $table->index('query');
-
-            // 外键
-            $table->foreign('driver_id')->references('id')->on('search_drivers')->onDelete('set null');
         });
     }
 

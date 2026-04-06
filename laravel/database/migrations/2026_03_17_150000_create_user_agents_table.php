@@ -12,6 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         // 创建user_agents表
+        if (Schema::hasTable('user_agents')) {
+            return;
+        }
         Schema::create('user_agents', function (Blueprint $table) {
             $table->id();
             $table->string('name', 100)->comment('规则名称');
@@ -32,8 +35,6 @@ return new class extends Migration
             $table->timestamps();
 
             $table->primary(['channel_id', 'user_agent_id']);
-            $table->foreign('channel_id')->references('id')->on('channels')->onDelete('cascade');
-            $table->foreign('user_agent_id')->references('id')->on('user_agents')->onDelete('cascade');
 
             $table->index('channel_id', 'idx_channel_id');
             $table->index('user_agent_id', 'idx_user_agent_id');

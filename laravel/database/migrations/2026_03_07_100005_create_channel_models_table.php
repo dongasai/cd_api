@@ -11,14 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('channel_models')) {
+            return;
+        }
         Schema::create('channel_models', function (Blueprint $table) {
             $table->id();
 
             // 关联渠道
-            $table->foreignId('channel_id')
-                ->constrained('channels')
-                ->onDelete('cascade')
-                ->comment('关联的渠道 ID');
+            $table->unsignedBigInteger('channel_id')->comment('关联的渠道 ID');
 
             // 模型信息
             $table->string('model_name')->comment('模型名称，如 gpt-4、claude-3-opus');

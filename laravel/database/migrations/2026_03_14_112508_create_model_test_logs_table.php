@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('model_test_logs')) {
+            return;
+        }
         Schema::create('model_test_logs', function (Blueprint $table) {
             $table->id();
             $table->enum('test_type', ['channel_direct', 'system_api'])->comment('测试类型');

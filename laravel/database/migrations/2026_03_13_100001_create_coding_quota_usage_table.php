@@ -12,9 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         // 创建配额使用量表，用于替代 Redis 存储
+        if (Schema::hasTable('coding_quota_usage')) {
+            return;
+        }
         Schema::create('coding_quota_usage', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('account_id')->constrained('coding_accounts')->cascadeOnDelete()->comment('Coding账户ID');
+            $table->unsignedBigInteger('account_id')->comment('Coding账户ID');
 
             // 周期标识
             $table->string('metric', 50)->comment('指标名称: prompts, tokens, requests 等');
@@ -39,34 +42,30 @@ return new class extends Migration
         });
 
         // 创建渠道亲和力缓存表，用于替代 Redis 缓存
-        Schema::create('channel_affinity_cache', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('rule_id')->comment('规则ID');
-            $table->string('key_hash', 64)->comment('Key哈希值');
+        if (! Schema::hasTable('channel_affinity_cache')) {
+            Schema::create('channel_affinity_cache', function (Blueprint $table) {
+                $table->id();
+                $table->unsignedBigInteger('rule_id')->comment('规则ID');
+                $table->string('key_hash', 64)->comment('Key哈希值');
 
-            // 缓存数据
-            $table->unsignedBigInteger('channel_id')->comment('渠道ID');
-            $table->string('channel_name')->comment('渠道名称');
-            $table->string('key_hint')->nullable()->comment('Key提示');
-            $table->unsignedInteger('hit_count')->default(0)->comment('命中次数');
+                // 缓存数据
+                $table->unsignedBigInteger('channel_id')->comment('渠道ID');
+                $table->string('channel_name')->comment('渠道名称');
+                $table->string('key_hint')->nullable()->comment('Key提示');
+                $table->unsignedInteger('hit_count')->default(0)->comment('命中次数');
 
-            // 过期时间
-            $table->timestamp('expires_at')->nullable()->comment('过期时间');
+                // 过期时间
+                $table->timestamp('expires_at')->nullable()->comment('过期时间');
 
-            $table->timestamps();
+                $table->timestamps();
 
-            // 唯一索引
-            $table->unique(['rule_id', 'key_hash'], 'idx_unique_affinity');
+                // 唯一索引
+                $table->unique(['rule_id', 'key_hash'], 'idx_unique_affinity');
 
-            // 过期时间索引
-            $table->index(['expires_at'], 'idx_affinity_expires');
-
-            // 外键
-            $table->foreign('channel_id')
-                ->references('id')
-                ->on('channels')
-                ->onDelete('cascade');
-        });
+                // 过期时间索引
+                $table->index(['expires_at'], 'idx_affinity_expires');
+            });
+        }
     }
 
     /**

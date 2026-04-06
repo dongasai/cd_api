@@ -11,12 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('coding_5zm_usage_logs')) {
+            return;
+        }
         Schema::create('coding_5zm_usage_logs', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('account_id')->comment('Coding账户ID');
-            $table->foreign('account_id')->references('id')->on('coding_accounts')->cascadeOnDelete();
             $table->unsignedBigInteger('channel_id')->nullable()->comment('渠道ID');
-            $table->foreign('channel_id')->references('id')->on('channels')->nullOnDelete();
             $table->string('request_id', 64)->nullable()->index()->comment('请求ID');
 
             // 请求信息

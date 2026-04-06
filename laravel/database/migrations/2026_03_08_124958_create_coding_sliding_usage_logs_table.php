@@ -11,11 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('coding_sliding_usage_logs')) {
+            return;
+        }
         Schema::create('coding_sliding_usage_logs', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('account_id')->constrained('coding_accounts')->cascadeOnDelete();
-            $table->foreignId('window_id')->nullable()->constrained('coding_sliding_windows')->nullOnDelete();
-            $table->foreignId('channel_id')->nullable()->constrained('channels')->nullOnDelete();
+            $table->unsignedBigInteger('account_id')->comment('Coding账户ID');
+            $table->unsignedBigInteger('window_id')->nullable()->comment('滑动窗口ID');
+            $table->unsignedBigInteger('channel_id')->nullable()->comment('渠道ID');
             $table->string('request_id', 64)->nullable();
 
             // Usage fields

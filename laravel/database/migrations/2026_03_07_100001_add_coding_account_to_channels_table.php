@@ -16,10 +16,6 @@ return new class extends Migration
             $table->json('coding_status_override')->nullable()->after('coding_account_id')->comment('渠道级别的Coding状态覆盖配置');
 
             $table->index('coding_account_id', 'idx_coding_account');
-            $table->foreign('coding_account_id')
-                ->references('id')
-                ->on('coding_accounts')
-                ->onDelete('set null');
         });
     }
 
@@ -29,7 +25,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('channels', function (Blueprint $table) {
-            $table->dropForeign(['coding_account_id']);
             $table->dropIndex('idx_coding_account');
             $table->dropColumn('coding_account_id');
             $table->dropColumn('coding_status_override');

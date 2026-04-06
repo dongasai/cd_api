@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('log_storage_config')) {
+            return;
+        }
         Schema::create('log_storage_config', function (Blueprint $table) {
             $table->id();
 

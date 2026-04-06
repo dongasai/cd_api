@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -10,17 +11,35 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 获取所有有 models 或 default_model 或 model_mappings 数据的渠道
+        // 检查 channels 表是否存在
+        if (! Schema::hasTable('channels')) {
+            return;
+        }
+
+        // 构建查询，只选择存在的列
+        $query = DB::table('channels');
+        $columns = Schema::getColumnListing('channels');
+
+        $hasModels = in_array('models', $columns);
+        $hasDefaultModel = in_array('default_model', $columns);
+        $hasModelMappings = in_array('model_mappings', $columns);
+
+        // 如果没有任何相关列，直接返回
+        if (! $hasModels && ! $hasDefaultModel && ! $hasModelMappings) {
+            return;
+        }
+
+        // 构建条件
         $channels = DB::table('channels')
-            ->whereNotNull('models')
-            ->orWhereNotNull('default_model')
-            ->orWhereNotNull('model_mappings')
+            ->when($hasModels, fn ($q) => $q->orWhereNotNull('models'))
+            ->when($hasDefaultModel, fn ($q) => $q->orWhereNotNull('default_model'))
+            ->when($hasModelMappings, fn ($q) => $q->orWhereNotNull('model_mappings'))
             ->get();
 
         foreach ($channels as $channel) {
             $models = json_decode($channel->models ?? '{}', true) ?: [];
-            $modelMappings = json_decode($channel->model_mappings ?? '{}', true) ?: [];
-            $defaultModel = $channel->default_model;
+            $modelMappings = $hasModelMappings ? (json_decode($channel->model_mappings ?? '{}', true) ?: []) : [];
+            $defaultModel = $hasDefaultModel ? ($channel->default_model ?? null) : null;
 
             // 如果没有 models 但有 default_model，创建一个默认模型记录
             if (empty($models) && $defaultModel) {

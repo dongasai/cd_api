@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('preset_prompts')) {
+            return;
+        }
         Schema::create('preset_prompts', function (Blueprint $table) {
             $table->id();
             $table->string('name', 100)->comment('提示词名称');

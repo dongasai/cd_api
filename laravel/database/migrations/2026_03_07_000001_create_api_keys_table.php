@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('api_keys')) {
+            return;
+        }
         Schema::create('api_keys', function (Blueprint $table) {
             $table->id();
             $table->string('name')->comment('API密钥名称');

@@ -12,7 +12,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('api_keys', function (Blueprint $table) {
-            $table->json('allowed_channels')->nullable()->after('model_mappings')->comment('允许的渠道ID列表(白名单)');
+            // 检查 model_mappings 列是否存在
+            $columns = Schema::getColumnListing('api_keys');
+            $afterColumn = in_array('model_mappings', $columns) ? 'model_mappings' : 'allowed_models';
+
+            $table->json('allowed_channels')->nullable()->after($afterColumn)->comment('允许的渠道ID列表(白名单)');
             $table->json('not_allowed_channels')->nullable()->after('allowed_channels')->comment('禁止的渠道ID列表(黑名单)');
         });
     }

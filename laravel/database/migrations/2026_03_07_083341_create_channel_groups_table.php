@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('channel_groups')) {
+            return;
+        }
         Schema::create('channel_groups', function (Blueprint $table) {
             $table->id();
             $table->string('name')->comment('分组名称');

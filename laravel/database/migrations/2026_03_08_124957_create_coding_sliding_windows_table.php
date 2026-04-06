@@ -11,9 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('coding_sliding_windows')) {
+            return;
+        }
         Schema::create('coding_sliding_windows', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('account_id')->constrained('coding_accounts')->cascadeOnDelete();
+            $table->unsignedBigInteger('account_id')->comment('Coding账户ID');
             $table->string('window_type', 20)->comment('window type: 5h/1d/7d/30d');
             $table->unsignedInteger('window_seconds')->comment('window duration in seconds');
             $table->timestamp('started_at')->comment('window start time');

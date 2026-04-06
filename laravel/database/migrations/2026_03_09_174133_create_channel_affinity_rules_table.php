@@ -8,6 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('channel_affinity_rules')) {
+            return;
+        }
         Schema::create('channel_affinity_rules', function (Blueprint $table) {
             $table->id();
             $table->string('name', 100)->comment('规则名称');

@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('coding_usage_logs')) {
+            return;
+        }
         Schema::create('coding_usage_logs', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('account_id')->comment('Coding账户ID');
@@ -38,20 +41,11 @@ return new class extends Migration
             // 时间
             $table->timestamp('created_at')->useCurrent();
 
-            // 索引和外键
+            // 索引
             $table->index(['account_id', 'created_at'], 'idx_account_created');
             $table->index(['channel_id', 'created_at'], 'idx_channel_created');
             $table->index('request_id', 'idx_request');
             $table->index(['model', 'created_at'], 'idx_model_created');
-
-            $table->foreign('account_id')
-                ->references('id')
-                ->on('coding_accounts')
-                ->onDelete('cascade');
-            $table->foreign('channel_id')
-                ->references('id')
-                ->on('channels')
-                ->onDelete('set null');
         });
     }
 

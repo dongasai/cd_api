@@ -16,6 +16,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('mcp_clients')) {
+            return;
+        }
         Schema::create('mcp_clients', function (Blueprint $table) {
             $table->id();
             $table->string('name')->comment('客户端名称');

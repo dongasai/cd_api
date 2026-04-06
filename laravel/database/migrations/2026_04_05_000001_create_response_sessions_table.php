@@ -8,6 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('response_sessions')) {
+            return;
+        }
         Schema::create('response_sessions', function (Blueprint $table) {
             $table->id();
             $table->string('response_id', 255)->unique()->comment('当前响应 ID');

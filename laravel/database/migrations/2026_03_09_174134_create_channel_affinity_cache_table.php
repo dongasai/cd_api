@@ -16,11 +16,15 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('channel_affinity_cache')) {
+            return;
+        }
+
         Schema::create('channel_affinity_cache', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('rule_id')->constrained('channel_affinity_rules', 'id')->cascadeOnDelete()->comment('规则ID');
+            $table->unsignedBigInteger('rule_id')->comment('规则ID');
             $table->string('key_hash', 64)->comment('Key哈希值');
-            $table->foreignId('channel_id')->constrained('channels', 'id')->cascadeOnDelete()->comment('渠道ID');
+            $table->unsignedBigInteger('channel_id')->comment('渠道ID');
             $table->string('channel_name')->comment('渠道名称');
             $table->string('key_hint')->nullable()->comment('Key提示');
             $table->unsignedInteger('hit_count')->default(0)->comment('命中次数');
