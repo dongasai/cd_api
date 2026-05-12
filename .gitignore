@@ -8,3 +8,4 @@ docker/000-default.local.conf
 .playwright-mcp/
 .codex
 .golutra/
+.claude/settings.local.json

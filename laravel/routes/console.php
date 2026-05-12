@@ -2,4 +2,4 @@
 
 use Illuminate\Support\Facades\Schedule;
 
-Schedule::command('coding:auto-reopen')->everyFiveMinutes();
+Schedule::command('cdapi:coding:auto-reopen')->everyFiveMinutes();
