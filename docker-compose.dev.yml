@@ -4,13 +4,67 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile.dev
-    container_name: laravel_module_all
+      dockerfile: Dockerfile.Dev
+    image: cdapi-dev:latest
+    container_name: cdapi-dev-container
     restart: unless-stopped
     working_dir: /var/www/html
-    # command: composer run devd
-    volumes:
-      - .:/var/www/html
-      - ./docker/000-default.local.conf:/etc/apache2/sites-available/000-default.conf
+
+    # 端口映射
     ports:
-      - "32126:80"
+      - "32126:80"   # Apache Web Server
+      - "32127:22"   # SSH Server
+
+    # 用户: supervisord 需要以 root 运行管理多个服务
+    user: root
+
+    # 环境变量
+    environment:
+      - SSH_AUTH_SOCK=/ssh-agent
+      - TZ=Asia/Shanghai
+
+    # 卷挂载
+    volumes:
+      # 项目代码
+      - ./laravel:/var/www/html
+
+      # Composer 缓存(全局独立 volume，多容器可共享)
+      - composer-cache:/home/php/.composer
+
+      # Claude 配置
+      - ${HOME}/.claude:/home/php/.claude
+      - ${HOME}/.claude.json:/home/php/.claude.json
+
+      # SSH Agent Socket
+      - ${SSH_AUTH_SOCK:-/tmp/ssh-agent.sock}:/ssh-agent
+
+      # SSH 配置和密钥持久化(容器专用,与宿主机隔离)
+      - ssh-config:/home/php/.ssh
+      # Git 配置(只读)
+      - ${HOME}/.gitconfig:/home/php/.gitconfig:ro
+
+      # Apache 配置(只读)
+      - ./docker/000-default.local.conf:/etc/apache2/sites-available/000-default.conf:ro
+
+      # Supervisor 配置(只读)
+      - ./docker/supervisord.local.conf:/etc/supervisor/conf.d/supervisord.conf:ro
+
+    # 启动 Supervisor(前台运行，容器主进程)
+    command: supervisord -c /etc/supervisor/conf.d/supervisord.conf
+
+    # 健康检查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# 持久化卷(全局独立，可多容器共享)
+volumes:
+  # Composer 缓存 - 多个 PHP/Laravel 容器可共享此 volume
+  composer-cache:
+    name: composer-cache  # 预定义全局名称
+  # SSH 配置 - 多个 PHP/Laravel 容器可共享此 volume
+  ssh-config:
+    name: ssh-config  # 预定义全局名称

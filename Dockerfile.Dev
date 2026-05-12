@@ -1,5 +1,9 @@
-# MCP Tools 开发容器 - 基于 Apache + PHP 8.3
+# MCP Tools 开发容器 - 基于 Apache + PHP 8.3 + SSH + Supervisor
 FROM php:8.3-apache
+
+# 设置时区为北京时间
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # 设置工作目录
 WORKDIR /var/www/html
@@ -26,7 +30,14 @@ RUN apt-get install -y \
     libsqlite3-dev \
     libzip-dev \
     libicu-dev \
-    icu-devtools
+    icu-devtools \
+    supervisor \
+    openssh-server \
+    zsh \
+    zsh-common \
+    tmux \
+    tree \
+    && rm -rf /var/lib/apt/lists/*
 
 # Panther 无头浏览器依赖 (单独步骤，便于缓存和调试)
 RUN echo "🔧 安装 Panther 无头浏览器依赖..." && \
@@ -72,6 +83,13 @@ RUN echo '<VirtualHost *:80>\n\
     sed -i 's/\${APACHE_RUN_USER:=www-data}/\${APACHE_RUN_USER:=php}/g' /etc/apache2/envvars && \
     sed -i 's/\${APACHE_RUN_GROUP:=www-data}/\${APACHE_RUN_GROUP:=php}/g' /etc/apache2/envvars
 
+# 配置 SSH 服务
+RUN echo "🔧 配置 SSH 服务..." && \
+    mkdir -p /var/run/sshd && \
+    sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config && \
+    echo "✅ SSH 服务配置完成"
+
 #创建 php 用户和用户组
 RUN echo "📝 创建 php 用户..." && \
     groupadd -r -g 1000 php && \
@@ -101,7 +119,8 @@ RUN echo "🔧 安装 Node.js..." && \
     echo "✅ Node.js 安装完成" && \
     node --version && \
     npm --version
+
 USER php
 
-
-# 保持简洁，不运行杂七杂八的
+# 暴露端口
+EXPOSE 80 22
