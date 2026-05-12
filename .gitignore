@@ -7,3 +7,4 @@ docker/000-default.local.conf
 .ai/
 .playwright-mcp/
 .codex
+.golutra/
