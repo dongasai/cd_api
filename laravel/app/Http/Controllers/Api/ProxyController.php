@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\StreamedResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class ProxyController extends Controller
 {
@@ -52,7 +53,7 @@ class ProxyController extends Controller
     }
 
     /**
-     * 可用模型
+     * 可用模型（OpenAI格式）
      */
     public function models(Request $request): JsonResponse
     {
@@ -65,6 +66,42 @@ class ProxyController extends Controller
             'object' => 'list',
             'data' => $data,
         ]);
+    }
+
+    /**
+     * 可用模型（Anthropic格式）
+     */
+    public function anthropicModels(Request $request): JsonResponse
+    {
+        $apiKey = $request->attributes->get('api_key');
+
+        // 使用 ModelService 获取可用模型列表（OpenAI格式）
+        $openaiData = ModelService::getAvailableModels($apiKey);
+
+        // 转换为 Anthropic 格式
+        $data = array_map(function ($model) {
+            return [
+                'id' => $model['id'],
+                'type' => 'model',
+                'display_name' => $model['display_name'] ?? $model['id'],
+                'created_at' => isset($model['created'])
+                    ? date('c', $model['created'])  // ISO 8601 格式
+                    : date('c'),
+            ];
+        }, $openaiData);
+
+        $response = [
+            'data' => $data,
+            'has_more' => false,
+        ];
+
+        // 如果有数据，添加 first_id 和 last_id
+        if (! empty($data)) {
+            $response['first_id'] = $data[0]['id'];
+            $response['last_id'] = $data[count($data) - 1]['id'];
+        }
+
+        return response()->json($response);
     }
 
     public function anthropicMessages(Request $request): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
@@ -193,7 +230,7 @@ class ProxyController extends Controller
             return $e->getStatusCode();
         }
 
-        if ($e instanceof \Illuminate\Validation\ValidationException) {
+        if ($e instanceof ValidationException) {
             return 422;
         }
 

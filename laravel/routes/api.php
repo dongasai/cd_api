@@ -17,4 +17,8 @@ Route::middleware([AuthenticateApiKey::class])->group(function () {
 
     Route::post('/anthropic/messages', [ProxyController::class, 'anthropicMessages']);
     Route::post('/anthropic/v1/messages', [ProxyController::class, 'anthropicMessages']);
+
+    // Anthropic models endpoint
+    Route::get('/anthropic/models', [ProxyController::class, 'anthropicModels']);
+    Route::get('/anthropic/v1/models', [ProxyController::class, 'anthropicModels']);
 });

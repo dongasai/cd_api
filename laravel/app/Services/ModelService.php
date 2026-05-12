@@ -72,6 +72,7 @@ class ModelService
                     'object' => 'model',
                     'created' => $modelList->created_at?->timestamp ?? time(),
                     'owned_by' => $modelList->provider ?? 'system',
+                    'display_name' => $modelList->display_name ?? $modelList->model_name,
                 ];
             })->values()->toArray();
 
