@@ -7,6 +7,8 @@ use App\Enums\ChannelHealthStatus;
 use App\Enums\ChannelStatus;
 use App\Models\Channel;
 use App\Models\ChannelModel;
+use App\Models\CodingAccount;
+use App\Models\UserAgent;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
@@ -45,17 +47,17 @@ class ChannelController extends AdminController
             $grid->column('coding_account.name', admin_trans_field('coding_account'))->display(function () {
                 if ($this->codingAccount) {
                     $status = $this->codingAccount->status;
-                    $statusLabels = \App\Models\CodingAccount::getStatuses();
+                    $statusLabels = CodingAccount::getStatuses();
                     $statusLabel = $statusLabels[$status] ?? $status;
 
                     $colors = [
-                        \App\Models\CodingAccount::STATUS_ACTIVE => 'success',
-                        \App\Models\CodingAccount::STATUS_WARNING => 'warning',
-                        \App\Models\CodingAccount::STATUS_CRITICAL => 'danger',
-                        \App\Models\CodingAccount::STATUS_EXHAUSTED => 'secondary',
-                        \App\Models\CodingAccount::STATUS_EXPIRED => 'info',
-                        \App\Models\CodingAccount::STATUS_SUSPENDED => 'dark',
-                        \App\Models\CodingAccount::STATUS_ERROR => 'danger',
+                        CodingAccount::STATUS_ACTIVE => 'success',
+                        CodingAccount::STATUS_WARNING => 'warning',
+                        CodingAccount::STATUS_CRITICAL => 'danger',
+                        CodingAccount::STATUS_EXHAUSTED => 'secondary',
+                        CodingAccount::STATUS_EXPIRED => 'info',
+                        CodingAccount::STATUS_SUSPENDED => 'dark',
+                        CodingAccount::STATUS_ERROR => 'danger',
                     ];
                     $color = $colors[$status] ?? 'secondary';
 
@@ -69,7 +71,7 @@ class ChannelController extends AdminController
             // 状态列 - 支持直接切换（启用/禁用）
             $grid->column('status')->display(function ($value) {
                 // 将枚举转换为原始整数值供 switch 组件判断
-                return $value instanceof \App\Enums\ChannelStatus ? $value->value : $value;
+                return $value instanceof ChannelStatus ? $value->value : $value;
             })->switch();
             $grid->column('status2', admin_trans_field('health_status'))->display(function ($value) {
                 $status = $value instanceof ChannelHealthStatus ? $value : ChannelHealthStatus::tryFrom($value);
@@ -147,17 +149,17 @@ class ChannelController extends AdminController
             $show->field('coding_account_id', admin_trans_label('related_coding_account'))->as(function () {
                 if ($this->codingAccount) {
                     $status = $this->codingAccount->status;
-                    $statusLabels = \App\Models\CodingAccount::getStatuses();
+                    $statusLabels = CodingAccount::getStatuses();
                     $statusLabel = $statusLabels[$status] ?? $status;
 
                     $colors = [
-                        \App\Models\CodingAccount::STATUS_ACTIVE => 'success',
-                        \App\Models\CodingAccount::STATUS_WARNING => 'warning',
-                        \App\Models\CodingAccount::STATUS_CRITICAL => 'danger',
-                        \App\Models\CodingAccount::STATUS_EXHAUSTED => 'secondary',
-                        \App\Models\CodingAccount::STATUS_EXPIRED => 'info',
-                        \App\Models\CodingAccount::STATUS_SUSPENDED => 'dark',
-                        \App\Models\CodingAccount::STATUS_ERROR => 'danger',
+                        CodingAccount::STATUS_ACTIVE => 'success',
+                        CodingAccount::STATUS_WARNING => 'warning',
+                        CodingAccount::STATUS_CRITICAL => 'danger',
+                        CodingAccount::STATUS_EXHAUSTED => 'secondary',
+                        CodingAccount::STATUS_EXPIRED => 'info',
+                        CodingAccount::STATUS_SUSPENDED => 'dark',
+                        CodingAccount::STATUS_ERROR => 'danger',
                     ];
                     $color = $colors[$status] ?? 'secondary';
 
@@ -309,7 +311,7 @@ class ChannelController extends AdminController
                     ->help(admin_trans_label('health_status_remark_help'));
 
                 $form->select('coding_account_id')
-                    ->options(\App\Models\CodingAccount::pluck('name', 'id')->toArray())
+                    ->options(CodingAccount::pluck('name', 'id')->toArray())
                     ->help(admin_trans_label('coding_account_help'));
 
                 $form->number('weight')->default(1)->min(0)->max(100)
@@ -383,7 +385,7 @@ class ChannelController extends AdminController
             // User-Agent限制
             $form->tab(admin_trans_label('user_agent_restriction'), function (Form $form) {
                 $form->multipleSelect('allowedUserAgents', admin_trans_label('allowed_user_agents'))
-                    ->options(\App\Models\UserAgent::where('is_enabled', true)->pluck('name', 'id'))
+                    ->options(UserAgent::where('is_enabled', true)->pluck('name', 'id'))
                     ->customFormat(function ($v) {
                         if (! $v) {
                             return [];
@@ -414,9 +416,13 @@ class ChannelController extends AdminController
 
             // 保存后更新has_user_agent_restriction标志
             $form->saved(function (Form $form) {
-                $channel = $form->model();
-                $hasRestriction = $channel->allowedUserAgents()->exists();
-                $channel->update(['has_user_agent_restriction' => $hasRestriction]);
+                $channelId = $form->model()->id;
+                // 从数据库重新查询模型，因为 $form->model() 返回的是 Fluent 对象
+                $channel = Channel::find($channelId);
+                if ($channel) {
+                    $hasRestriction = $channel->allowedUserAgents()->exists();
+                    $channel->update(['has_user_agent_restriction' => $hasRestriction]);
+                }
             });
         });
     }
