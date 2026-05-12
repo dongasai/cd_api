@@ -1,0 +1,62 @@
+{
+	"name": "CdApi Dev Container",
+	"dockerComposeFile": [
+		"../compose.yml"
+	],
+	"service": "app",
+	"workspaceFolder": "${localWorkspaceFolder}/laravel",
+	"shutdownAction": "none",
+	"postStartCommand": "supervisorctl restart all",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"bmewburn.vscode-intelephense-client",
+				"mehedidracula.php-constructor",
+				"mikestead.dotenv",
+				"EditorConfig.EditorConfig",
+				"onecentlin.laravel-blade",
+				"onecentlin.laravel5-snippets",
+				"amiralizadeh9480.laravel-extra-intellisense",
+				"stef-k.laravel-goto-controller",
+				"ryannaddy.laravel-artisan",
+				"DavidAnssports.oftherestart",
+				"Anthropic.claude-code",
+				"moshfeu.compare-folders",
+				"ms-azuretools.vscode-docker",
+				"mhutchie.git-graph",
+				"eamodio.gitlens"
+			],
+			"settings": {
+				"intelephense.environment.phpVersion": "8.3",
+				"intelephense.files.associations": [
+					 "*.php"
+				],
+				"intelephense.files.maxSize": 50000,
+				"intelephense.stubs": [
+					"apache", "bcmath", "blade", "calendar", "Core", "ctype", "curl", "date", "dom", "exif", "fileinfo", "filter", "gd", "hash", "intl", "json", "libxml", "mbstring", "mysql", "mysqli", "pdo", "pdo_mysql", "pdo_sqlite", "Phar", "posix", "readline", "Reflection", "session", "SimpleXML", "sockets", "SPL", "standard", "tokenizer", "xml", "xmlreader", "xmlwriter", "zip", "zlib"
+				],
+				"files.exclude": {
+					"**/.git": true,
+					"**/.DS_Store": true,
+					"**/vendor": false
+				},
+				"php.validate.executablePath": "/usr/local/bin/php",
+				"php.debug.executablePath": "/usr/local/bin/php",
+				"terminal.integrated.profiles.linux": {
+					"bash": {
+						"path": "/bin/bash"
+					}
+				},
+				"git.enableSmartCommit": true,
+				"git.autofetch": true,
+				"remote.SSH.enableDynamicForwarding": true
+			}
+		}
+	},
+	"remoteUser": "php",
+	"remoteEnv": {
+		"SSH_AUTH_SOCK": "/ssh-agent",
+		"COMPOSER_HOME": "/home/php/.composer"
+	},
+	"features": {}
+}
