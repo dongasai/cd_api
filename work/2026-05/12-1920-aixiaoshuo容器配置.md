@@ -22,8 +22,8 @@
 
 | 容器 | Web端口 | SSH端口 | 状态 |
 |------|---------|---------|------|
-| xiaoshuo-dev | 32216 | 32217 | 主开发容器 |
-| xiaoshuo-dev (DevContainer) | 32216 | 30222 | VSCode远程开发 |
+| xiaoshuo-dev | 36126 | 32217 | 主开发容器 |
+| xiaoshuo-dev (DevContainer) | 36126 | 30222 | VSCode远程开发 |
 | laravel_module_all | 34007 | - | 生产测试容器 |
 
 ---
@@ -82,7 +82,7 @@ services:
     image: xiaoshuo-dev:latest
     container_name: xiaoshuo-dev-container
     ports:
-      - "32216:80"   # Web
+      - "36126:80"   # Web
       - "32217:22"   # SSH
     user: root        # Supervisor需root运行
     command: supervisord -c /etc/supervisor/conf.d/supervisord.conf
@@ -104,7 +104,7 @@ services:
   devcontainer:
     container_name: xiaoshuo-dev
     ports:
-      - "32216:80"
+      - "36126:80"
       - "30222:22"
     user: php         # 开发模式用php用户
     working_dir: /data/project/aixiaoshuo/moyuanai
@@ -144,7 +144,7 @@ services:
     image: xiaoshuo-dev:latest
     container_name: xiaoshuo-dev-container
     ports:
-      - "32216:80"
+      - "36126:80"
       - "32217:22"
     working_dir: /data/project/aixiaoshuo/moyuanai
     user: root
@@ -311,4 +311,4 @@ USER php
 1. **生产镜像 (Dockerfile)**: 完整开发环境，包含 Xdebug、SSH、Supervisor、Rust、Claude Code CLI，适合远程开发和调试
 2. **开发镜像 (Dockerfile.dev)**: 精简环境，仅包含 PHP + Apache + Node.js，适合快速迭代
 
-端口 32216 为 Web 服务固定端口，可通过 http://192.168.4.107:32216 访问。
+端口 36126 为 Web 服务固定端口，可通过 http://192.168.4.107:36126 访问。
