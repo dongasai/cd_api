@@ -3,10 +3,12 @@
 namespace App\Services\Router;
 
 use App\Models\Channel;
+use App\Models\ChannelRequestLog;
 use App\Models\RequestLog;
 use App\Services\ChannelAffinity\ChannelAffinityService;
 use App\Services\CodingStatus\ChannelCodingStatusService;
 use App\Services\CodingStatus\ChannelErrorHandlingService;
+use App\Services\ModelService;
 use App\Services\Protocol\Contracts\ProtocolRequest;
 use App\Services\Protocol\ProtocolConverter;
 use App\Services\Provider\Exceptions\ProviderException;
@@ -21,6 +23,9 @@ use Generator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 
 /**
  * 代理服务器
@@ -67,7 +72,7 @@ class ProxyServer
 
     protected ?Channel $selectedChannel = null;
 
-    protected ?\App\Models\ChannelRequestLog $channelRequestLog = null;
+    protected ?ChannelRequestLog $channelRequestLog = null;
 
     protected ?string $currentGroup = null;
 
@@ -122,7 +127,7 @@ class ProxyServer
      * @param  string  $protocol  源协议类型（openai_chat_completions/anthropic_messages）
      * @return array|Generator 响应数组或流式生成器
      *
-     * @throws \Exception
+     * @throws Exception
      */
     public function proxy(Request $request, string $protocol = 'openai_chat_completions'): array|Generator
     {
@@ -207,7 +212,7 @@ class ProxyServer
                 }
 
                 if ($this->selectedChannel === null) {
-                    throw new \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException('No available channel for model: '.$modelName);
+                    throw new ServiceUnavailableHttpException('No available channel for model: '.$modelName);
                 }
 
                 // 解析实际模型名称
@@ -282,7 +287,7 @@ class ProxyServer
                 // 创建渠道请求日志（提前创建，确保即使后续异常也有记录）
                 try {
                     $this->createChannelRequestLog($requestLog, $this->selectedChannel, $protocolRequest, $channelProtocol, $provider, $auditLog);
-                } catch (\Exception $logException) {
+                } catch (Exception $logException) {
                     // 日志创建失败不应影响主流程，记录错误即可
                     Log::error('Failed to create channel request log', [
                         'request_id' => $this->requestId,
@@ -303,7 +308,8 @@ class ProxyServer
                         $this->startTime,  // 保持浮点数精度
                         $auditLog,  // 传递已创建的审计日志
                         $this->selectedChannel,  // 传递选中的渠道
-                        $protocolContext  // 传递协议上下文（状态管理）
+                        $protocolContext,  // 传递协议上下文（状态管理）
+                        $this->channelRequestLog  // 传递渠道请求日志实例
                     );
                 }
 
@@ -317,7 +323,8 @@ class ProxyServer
                     $this->startTime,  // 保持浮点数精度
                     $auditLog,  // 传递已创建的审计日志
                     $this->selectedChannel,  // 传递选中的渠道
-                    $protocolContext  // 传递协议上下文（状态管理）
+                    $protocolContext,  // 传递协议上下文（状态管理）
+                    $this->channelRequestLog  // 传递渠道请求日志实例
                 );
             } catch (Exception $e) {
                 $lastException = $e;
@@ -383,7 +390,7 @@ class ProxyServer
             ];
 
             // 如果是 ProviderException，记录原始错误信息
-            if ($e instanceof \App\Services\Provider\Exceptions\ProviderException) {
+            if ($e instanceof ProviderException) {
                 $rawError = $e->getRawError();
                 if ($rawError !== null) {
                     $updateData['response_body'] = $rawError;
@@ -397,7 +404,7 @@ class ProxyServer
             if ($channel && $channel->hasCodingAccount()) {
                 try {
                     $this->errorHandlingService->handleRequestError($channel, $this->channelRequestLog);
-                } catch (\Exception $handlingError) {
+                } catch (Exception $handlingError) {
                     // 错误处理失败不应影响主流程
                     Log::error('Error handling failed', [
                         'request_id' => $this->requestId,
@@ -449,7 +456,7 @@ class ProxyServer
         // 使用 Provider 的 buildRequestBody 方法获取最终请求体（包含渠道配置）
         $requestBody = $provider->buildRequestBody($protocolRequest);
 
-        $this->channelRequestLog = \App\Models\ChannelRequestLog::create([
+        $this->channelRequestLog = ChannelRequestLog::create([
             'request_log_id' => $requestLog->id,
             'request_id' => $this->requestId,
             'audit_log_id' => $auditLog?->id,
@@ -528,12 +535,12 @@ class ProxyServer
     {
         $apiKey = $request->attributes->get('api_key');
 
-        if (! \App\Services\ModelService::isModelAvailable($model, $apiKey)) {
+        if (! ModelService::isModelAvailable($model, $apiKey)) {
             if ($apiKey && ! empty($apiKey->allowed_models)) {
-                throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException("Model '{$model}' is not in the allowed models list for this API key");
+                throw new BadRequestHttpException("Model '{$model}' is not in the allowed models list for this API key");
             }
 
-            throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException("Model '{$model}' is not available");
+            throw new NotFoundHttpException("Model '{$model}' is not available");
         }
     }
 

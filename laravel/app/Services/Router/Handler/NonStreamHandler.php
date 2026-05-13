@@ -3,12 +3,14 @@
 namespace App\Services\Router\Handler;
 
 use App\Models\RequestLog;
+use App\Services\ChannelAffinity\ChannelAffinityService;
 use App\Services\Protocol\Contracts\ProtocolRequest;
 use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Protocol\ProtocolConverter;
 use App\Services\Provider\ProviderManager;
 use App\Services\Router\Logger\AuditLogger;
 use App\Services\Router\Logger\ResponseLogger;
+use App\Services\Shared\DTO\Message;
 use Illuminate\Http\Request as HttpRequest;
 
 /**
@@ -39,7 +41,7 @@ class NonStreamHandler
         $this->providerManager = $providerManager;
         $this->auditLogger = $auditLogger;
         $this->responseLogger = $responseLogger;
-        $this->affinityService = $affinityService ?? app(\App\Services\ChannelAffinity\ChannelAffinityService::class);
+        $this->affinityService = $affinityService ?? app(ChannelAffinityService::class);
     }
 
     /**
@@ -55,7 +57,8 @@ class NonStreamHandler
         float $startTime,  // 保持浮点数精度
         $auditLog = null,  // 接收已创建的审计日志
         $selectedChannel = null,  // 接收选中的渠道
-        $protocolContext = null  // 协议上下文（状态管理）
+        $protocolContext = null,  // 协议上下文（状态管理）
+        $channelRequestLog = null  // 渠道请求日志实例
     ): array {
         $this->selectedChannel = $selectedChannel;  // 保存渠道引用
         $providerResponse = $provider->send($protocolRequest);
@@ -130,6 +133,17 @@ class NonStreamHandler
             $this->extractContent($providerResponse)
         );
 
+        // 更新渠道请求日志（记录上游返回的原始响应）
+        if ($channelRequestLog !== null) {
+            $this->updateChannelRequestLog(
+                $channelRequestLog,
+                $providerResponse,
+                $response,
+                $latencyMs,
+                $usage
+            );
+        }
+
         // 记录渠道亲和性（成功请求后更新缓存）
         $this->recordAffinity($httpRequest, $modelName);
 
@@ -149,7 +163,7 @@ class NonStreamHandler
                 continue;
             }
             // 处理 Message DTO 对象和数组两种情况
-            if ($message instanceof \App\Services\Shared\DTO\Message) {
+            if ($message instanceof Message) {
                 $content .= $message->getTextContent();
             } elseif (is_array($message) && isset($message['content'])) {
                 $content .= $message['content'];
@@ -167,5 +181,47 @@ class NonStreamHandler
         if ($this->affinityService !== null && $this->selectedChannel !== null) {
             $this->affinityService->recordAffinity($request, $this->selectedChannel, $model);
         }
+    }
+
+    /**
+     * 更新渠道请求日志（非流式响应）
+     */
+    protected function updateChannelRequestLog(
+        $channelRequestLog,
+        ProtocolResponse $providerResponse,
+        array $response,
+        int $latencyMs,
+        $usage
+    ): void {
+        // 获取响应体JSON
+        $responseBodyJson = json_encode($response);
+        $responseSize = strlen($responseBodyJson);
+
+        // 提取响应头（如果有）
+        $responseHeaders = ['content-type' => 'application/json'];
+
+        // 更新渠道请求日志
+        $updateData = [
+            'response_status' => 200,
+            'response_headers' => $responseHeaders,
+            'response_body' => $response,  // 保存为数组格式，模型会自动转为JSON
+            'response_size' => $responseSize,
+            'latency_ms' => $latencyMs,
+            'ttfb_ms' => $latencyMs,  // 非流式请求，首字延迟=总延迟
+            'is_success' => true,
+        ];
+
+        // 记录token使用量
+        if ($usage !== null) {
+            $updateData['usage'] = [
+                'prompt_tokens' => $usage->inputTokens ?? 0,
+                'completion_tokens' => $usage->outputTokens ?? 0,
+                'total_tokens' => ($usage->inputTokens ?? 0) + ($usage->outputTokens ?? 0),
+                'cache_read_tokens' => $usage->cacheReadInputTokens ?? 0,
+                'cache_write_tokens' => $usage->cacheCreationInputTokens ?? 0,
+            ];
+        }
+
+        $channelRequestLog->update($updateData);
     }
 }

@@ -3,7 +3,9 @@
 namespace App\Services\Router\Handler;
 
 use App\Models\RequestLog;
+use App\Services\ChannelAffinity\ChannelAffinityService;
 use App\Services\Protocol\Contracts\ProtocolRequest;
+use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Protocol\ProtocolConverter;
 use App\Services\Provider\ProviderManager;
 use App\Services\Router\Logger\AuditLogger;
@@ -11,6 +13,7 @@ use App\Services\Router\Logger\ResponseLogger;
 use App\Services\Shared\DTO\StreamChunk;
 use Generator;
 use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Support\Facades\Log;
 
 /**
  * 流式请求处理器
@@ -40,7 +43,7 @@ class StreamHandler
         $this->providerManager = $providerManager;
         $this->auditLogger = $auditLogger;
         $this->responseLogger = $responseLogger;
-        $this->affinityService = $affinityService ?? app(\App\Services\ChannelAffinity\ChannelAffinityService::class);
+        $this->affinityService = $affinityService ?? app(ChannelAffinityService::class);
     }
 
     /**
@@ -56,7 +59,8 @@ class StreamHandler
         float $startTime,  // 保持浮点数精度，用于计算首字延迟
         $auditLog = null,  // 接收已创建的审计日志
         $selectedChannel = null,  // 接收选中的渠道
-        $protocolContext = null  // 协议上下文（状态管理）
+        $protocolContext = null,  // 协议上下文（状态管理）
+        $channelRequestLog = null  // 渠道请求日志实例
     ): Generator {
         $this->selectedChannel = $selectedChannel;  // 保存渠道引用，用于记录亲和性
 
@@ -154,7 +158,7 @@ class StreamHandler
             }
 
             // 记录错误日志
-            \Illuminate\Support\Facades\Log::error('Stream iteration failed', [
+            Log::error('Stream iteration failed', [
                 'request_id' => $auditLog?->request_id,
                 'channel_id' => $selectedChannel?->id,
                 'error' => $e->getMessage(),
@@ -209,6 +213,19 @@ class StreamHandler
             $generatedText,
             $streamChunks
         );
+
+        // 更新渠道请求日志（记录上游返回的原始响应）
+        if ($channelRequestLog !== null) {
+            $this->updateChannelRequestLog(
+                $channelRequestLog,
+                $streamChunks,
+                $latencyMs,
+                $firstTokenMs,
+                $collectedUsage,
+                $collectedFinishReason,
+                $actualModel
+            );
+        }
     }
 
     /**
@@ -362,7 +379,7 @@ class StreamHandler
      *
      * 用于调用 postStreamProcess()
      */
-    protected function buildResponseFromChunks(array $chunks, string $protocol): \App\Services\Protocol\Contracts\ProtocolResponse
+    protected function buildResponseFromChunks(array $chunks, string $protocol): ProtocolResponse
     {
         // 获取响应类
         $responseClass = $this->protocolConverter->getResponseClass($protocol);
@@ -383,5 +400,69 @@ class StreamHandler
         }
 
         return $response;
+    }
+
+    /**
+     * 更新渠道请求日志（流式响应）
+     */
+    protected function updateChannelRequestLog(
+        $channelRequestLog,
+        array $streamChunks,
+        int $latencyMs,
+        ?int $firstTokenMs,
+        $usage,
+        $finishReason,
+        ?string $actualModel
+    ): void {
+        // 构建完整的响应体（用于记录）
+        $responseBody = [];
+        foreach ($streamChunks as $chunk) {
+            if ($chunk instanceof StreamChunk) {
+                // 将每个chunk转换为数组格式
+                $responseBody[] = [
+                    'id' => $chunk->id ?? null,
+                    'model' => $chunk->model ?? null,
+                    'delta' => $chunk->delta ?? null,
+                    'content_delta' => $chunk->contentDelta ?? null,
+                    'reasoning_delta' => $chunk->reasoningDelta ?? null,
+                    'tool_calls' => $chunk->toolCalls ?? null,
+                    'finish_reason' => $chunk->finishReason?->value ?? null,
+                    'usage' => $chunk->usage ? [
+                        'input_tokens' => $chunk->usage->inputTokens ?? 0,
+                        'output_tokens' => $chunk->usage->outputTokens ?? 0,
+                        'cache_read_input_tokens' => $chunk->usage->cacheReadInputTokens ?? 0,
+                        'cache_creation_input_tokens' => $chunk->usage->cacheCreationInputTokens ?? 0,
+                    ] : null,
+                ];
+            }
+        }
+
+        // 计算响应大小
+        $responseSize = strlen(json_encode($responseBody));
+
+        // 更新渠道请求日志
+        $updateData = [
+            'response_status' => 200,
+            'response_headers' => ['content-type' => 'text/event-stream'],
+            'response_body' => $responseBody,
+            'response_body_chunks' => $streamChunks,  // 保存原始chunk对象数组
+            'response_size' => $responseSize,
+            'latency_ms' => $latencyMs,
+            'ttfb_ms' => $firstTokenMs,  // 首字延迟
+            'is_success' => true,
+        ];
+
+        // 记录token使用量
+        if ($usage !== null) {
+            $updateData['usage'] = [
+                'prompt_tokens' => $usage->inputTokens ?? 0,
+                'completion_tokens' => $usage->outputTokens ?? 0,
+                'total_tokens' => ($usage->inputTokens ?? 0) + ($usage->outputTokens ?? 0),
+                'cache_read_tokens' => $usage->cacheReadInputTokens ?? 0,
+                'cache_write_tokens' => $usage->cacheCreationInputTokens ?? 0,
+            ];
+        }
+
+        $channelRequestLog->update($updateData);
     }
 }
