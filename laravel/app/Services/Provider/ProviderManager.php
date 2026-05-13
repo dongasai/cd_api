@@ -4,6 +4,7 @@ namespace App\Services\Provider;
 
 use App\Models\Channel;
 use App\Services\Provider\Driver\AnthropicProvider;
+use App\Services\Provider\Driver\DeepSeekProvider;
 use App\Services\Provider\Driver\OpenAICompatibleProvider;
 use App\Services\Provider\Driver\OpenAIProvider;
 use App\Services\Provider\Driver\ProviderInterface;
@@ -115,6 +116,7 @@ class ProviderManager
         return match ($providerName) {
             'openai' => new OpenAIProvider($config),
             'anthropic' => new AnthropicProvider($config),
+            'deepseek' => new DeepSeekProvider($config),
             default => new OpenAICompatibleProvider($config),
         };
     }
