@@ -3,6 +3,10 @@
 namespace App\Providers;
 
 use App\Services\ChannelAffinity\ChannelAffinityService;
+use App\Services\CodingStatus\ChannelCodingStatusService;
+use App\Services\CodingStatus\ChannelErrorHandlingService;
+use App\Services\Protocol\ProtocolConverter;
+use App\Services\Provider\ProviderManager;
 use App\Services\Router\ChannelRouterService;
 use App\Services\Router\ProxyServer;
 use Illuminate\Support\ServiceProvider;
@@ -21,10 +25,11 @@ class RouterServiceProvider extends ServiceProvider
 
         $this->app->singleton(ProxyServer::class, function ($app) {
             return new ProxyServer(
-                $app->make(\App\Services\Protocol\ProtocolConverter::class),
-                $app->make(\App\Services\Provider\ProviderManager::class),
+                $app->make(ProtocolConverter::class),
+                $app->make(ProviderManager::class),
                 $app->make(ChannelRouterService::class),
-                $app->make(\App\Services\CodingStatus\ChannelCodingStatusService::class),
+                $app->make(ChannelCodingStatusService::class),
+                $app->make(ChannelErrorHandlingService::class),
                 $app->make(ChannelAffinityService::class)
             );
         });
