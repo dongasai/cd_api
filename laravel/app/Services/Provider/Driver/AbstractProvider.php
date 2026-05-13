@@ -8,6 +8,7 @@ use App\Services\Provider\Exceptions\ProviderException;
 use App\Services\Shared\DTO\ActualRequestInfo;
 use App\Services\Shared\DTO\StreamChunk;
 use App\Services\Shared\DTO\Usage;
+use App\Services\Shared\Enums\FinishReason;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -383,16 +384,16 @@ abstract class AbstractProvider implements ProviderInterface
                 // ]);
 
                 // 调试：检查 messages[0].content 的类型
-                if (isset($body['messages'][0]['content'])) {
-                    Log::debug('Provider request message[0] check', [
-                        'content_type' => gettype($body['messages'][0]['content']),
-                        'content_is_object' => is_object($body['messages'][0]['content']),
-                        'content_is_array' => is_array($body['messages'][0]['content']),
-                        'content_preview' => is_string($body['messages'][0]['content'])
-                            ? mb_substr($body['messages'][0]['content'], 0, 100)
-                            : json_encode($body['messages'][0]['content']),
-                    ]);
-                }
+                // if (isset($body['messages'][0]['content'])) {
+                //     Log::debug('Provider request message[0] check', [
+                //         'content_type' => gettype($body['messages'][0]['content']),
+                //         'content_is_object' => is_object($body['messages'][0]['content']),
+                //         'content_is_array' => is_array($body['messages'][0]['content']),
+                //         'content_preview' => is_string($body['messages'][0]['content'])
+                //             ? mb_substr($body['messages'][0]['content'], 0, 100)
+                //             : json_encode($body['messages'][0]['content']),
+                //     ]);
+                // }
 
                 $response = Http::withHeaders($headers)
                     ->timeout($this->timeout)
@@ -554,17 +555,17 @@ abstract class AbstractProvider implements ProviderInterface
 
         if (isset($choice['finish_reason']) && $choice['finish_reason'] !== null) {
             $finishReason = match ($choice['finish_reason']) {
-                'stop' => \App\Services\Shared\Enums\FinishReason::Stop,
-                'tool_calls' => \App\Services\Shared\Enums\FinishReason::ToolUse,
-                'length' => \App\Services\Shared\Enums\FinishReason::MaxTokens,
-                default => \App\Services\Shared\Enums\FinishReason::Stop,
+                'stop' => FinishReason::Stop,
+                'tool_calls' => FinishReason::ToolUse,
+                'length' => FinishReason::MaxTokens,
+                default => FinishReason::Stop,
             };
         } elseif (isset($data['finish_reason']) && $data['finish_reason'] !== null) {
             $finishReason = match ($data['finish_reason']) {
-                'stop' => \App\Services\Shared\Enums\FinishReason::Stop,
-                'tool_calls' => \App\Services\Shared\Enums\FinishReason::ToolUse,
-                'length' => \App\Services\Shared\Enums\FinishReason::MaxTokens,
-                default => \App\Services\Shared\Enums\FinishReason::Stop,
+                'stop' => FinishReason::Stop,
+                'tool_calls' => FinishReason::ToolUse,
+                'length' => FinishReason::MaxTokens,
+                default => FinishReason::Stop,
             };
         }
 
@@ -704,7 +705,7 @@ abstract class AbstractProvider implements ProviderInterface
 
             // 如果无法提取模型名称，但错误消息看起来是关于模型不存在的
             // 例如包含"模型"或"Model"关键字
-            if (preg_match('/模型|Model/i', $this->lastErrorMessage)) {
+            if (\preg_match('/模型|Model/i', $this->lastErrorMessage)) {
                 // 使用"unknown"作为模型名称，避免产生奇怪的错误消息
                 return ProviderException::modelNotFound('unknown', $body);
             }
@@ -892,10 +893,10 @@ abstract class AbstractProvider implements ProviderInterface
         $delta = $choice['delta'] ?? [];
         $finishReason = isset($choice['finish_reason']) && $choice['finish_reason'] !== null
             ? match ($choice['finish_reason']) {
-                'stop' => \App\Services\Shared\Enums\FinishReason::Stop,
-                'tool_calls' => \App\Services\Shared\Enums\FinishReason::ToolUse,
-                'length' => \App\Services\Shared\Enums\FinishReason::MaxTokens,
-                default => \App\Services\Shared\Enums\FinishReason::Stop,
+                'stop' => FinishReason::Stop,
+                'tool_calls' => FinishReason::ToolUse,
+                'length' => FinishReason::MaxTokens,
+                default => FinishReason::Stop,
             }
         : null;
 
