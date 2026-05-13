@@ -4,6 +4,7 @@ namespace App\Services\Protocol\Driver\OpenAI;
 
 use App\Services\Protocol\Driver\Concerns\Convertible;
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
+use App\Services\Shared\DTO\ContentBlock;
 use App\Services\Shared\DTO\Message as SharedMessage;
 use App\Services\Shared\Enums\MessageRole;
 
@@ -219,7 +220,7 @@ class Message
                     $contentBlocks[] = $part->toSharedDTO();
                 } elseif (is_array($part)) {
                     // 直接构建 ContentBlock，不调用 fromOpenAI
-                    $contentBlocks[] = \App\Services\Shared\DTO\ContentBlock::fromArray($part);
+                    $contentBlocks[] = ContentBlock::fromArray($part);
                 }
             }
         }
@@ -263,6 +264,7 @@ class Message
         // 处理 content
         $content = null;
         $toolCalls = null;
+        $reasoningContent = null;
 
         if ($dto->content !== null) {
             $content = $dto->content;
@@ -283,10 +285,11 @@ class Message
                         ],
                     ]);
                 } elseif ($block->type === 'thinking') {
-                    // thinking 内容暂时忽略，或可转为 reasoning_content
-                    // 注意：OpenAI 某些模型支持 reasoning_content 字段
-                    // 这里暂时跳过，避免污染 content
-                    continue;
+                    // thinking 内容转换为 reasoningContent（DeepSeek 等模型需要）
+                    if ($block->text !== null) {
+                        $reasoningContent = $reasoningContent ?? '';
+                        $reasoningContent .= $block->text;
+                    }
                 } else {
                     // 其他类型正常转换为 ContentPart
                     $contentParts[] = ContentPart::fromSharedDTO($block);
@@ -328,6 +331,7 @@ class Message
             toolCalls: $toolCalls,
             toolCallId: $dto->toolCallId,
             name: $dto->name ?? null,
+            reasoningContent: $reasoningContent,
         );
     }
 }

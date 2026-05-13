@@ -47,15 +47,35 @@ class Usage
 
     /**
      * 从数组创建
+     *
+     * 兼容 OpenAI 和 Anthropic 两种格式：
+     * - OpenAI: prompt_tokens, completion_tokens, total_tokens
+     * - Anthropic: input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens
      */
     public static function fromArray(array $data): static
     {
+        // 兼容 Anthropic 格式：将 input_tokens 映射到 prompt_tokens
+        $promptTokens = $data['prompt_tokens'] ?? $data['input_tokens'] ?? 0;
+        $completionTokens = $data['completion_tokens'] ?? $data['output_tokens'] ?? 0;
+        $totalTokens = $data['total_tokens'] ?? ($promptTokens + $completionTokens);
+
+        // 兼容 Anthropic 缓存字段
+        $promptTokensDetails = $data['prompt_tokens_details'] ?? null;
+        $completionTokensDetails = $data['completion_tokens_details'] ?? null;
+
+        // 如果有 Anthropic 的缓存字段，转换为 OpenAI 格式
+        if ($promptTokensDetails === null && isset($data['cache_read_input_tokens'])) {
+            $promptTokensDetails = [
+                'cached_tokens' => $data['cache_read_input_tokens'],
+            ];
+        }
+
         return new self(
-            prompt_tokens: $data['prompt_tokens'] ?? 0,
-            completion_tokens: $data['completion_tokens'] ?? 0,
-            total_tokens: $data['total_tokens'] ?? 0,
-            prompt_tokens_details: $data['prompt_tokens_details'] ?? null,
-            completion_tokens_details: $data['completion_tokens_details'] ?? null,
+            prompt_tokens: $promptTokens,
+            completion_tokens: $completionTokens,
+            total_tokens: $totalTokens,
+            prompt_tokens_details: $promptTokensDetails,
+            completion_tokens_details: $completionTokensDetails,
         );
     }
 
