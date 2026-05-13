@@ -111,6 +111,8 @@ RUN usermod -a -G www-data php && \
     mkdir -p /var/www/html/storage /var/www/html/storage/logs /var/www/html/storage/framework/cache /var/www/html/storage/framework/sessions /var/www/html/storage/framework/testing /var/www/html/storage/framework/views /var/www/html/bootstrap/cache && \
     chown -R php:php /var/www/html/storage /var/www/html/bootstrap/cache
 
+USER php
+WORKDIR /home/php
 
 # 增加 node
 RUN echo "🔧 安装 Node.js..." && \
@@ -119,8 +121,14 @@ RUN echo "🔧 安装 Node.js..." && \
     echo "✅ Node.js 安装完成" && \
     node --version && \
     npm --version
+# 安装 Claude Code CLI
+RUN npm install -g @anthropic-ai/claude-code intelephense
+
+# 配置全局环境变量
+ENV PATH="/usr/local/cargo/bin:${PATH}"
 
 USER php
+WORKDIR /home/php
 
 # 暴露端口
 EXPOSE 80 22

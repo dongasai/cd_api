@@ -12,8 +12,8 @@ services:
 
     # 端口映射
     ports:
-      - "32126:80"   # Apache Web Server
-      - "32127:22"   # SSH Server
+      - "36126:80"   # Apache Web Server
+      - "36127:22"   # SSH Server
 
     # 用户: supervisord 需要以 root 运行管理多个服务
     user: root
