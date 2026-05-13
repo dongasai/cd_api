@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ChannelStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -151,7 +152,7 @@ class ApiKey extends Model
 
     public function getAllowedChannels()
     {
-        $query = Channel::where('status', 'active');
+        $query = Channel::where('status', ChannelStatus::ACTIVE);
 
         if ($this->hasChannelBlacklist()) {
             $query->whereNotIn('id', $this->getNotAllowedChannelIds());

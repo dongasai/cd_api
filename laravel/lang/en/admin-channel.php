@@ -120,6 +120,7 @@ return [
             'openai' => 'OpenAI',
             'anthropic' => 'Anthropic',
             'google' => 'Google',
+            'deepseek' => 'deepseek',
             'openai_compatible' => 'OpenAI Compatible',
         ],
         'inherit_mode' => [

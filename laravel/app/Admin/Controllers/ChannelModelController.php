@@ -2,6 +2,7 @@
 
 namespace App\Admin\Controllers;
 
+use App\Admin\Actions\CopyChannelModel;
 use App\Models\Channel;
 use App\Models\ChannelModel;
 use Dcat\Admin\Form;
@@ -74,6 +75,8 @@ class ChannelModelController extends AdminController
             $grid->actions(function (Grid\Displayers\Actions $actions) {
                 // 查看详情
                 $actions->append(new Grid\Actions\Show);
+                // 复制渠道模型
+                $actions->append(new CopyChannelModel);
             });
 
             // 批量操作（默认已启用批量删除）
