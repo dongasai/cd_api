@@ -22,4 +22,11 @@ Key级别模型映射: 每个 API Key 可配置独立的模型别名映射，支
 ## 使用说明
 
 ### claude code
-域名/api/anthropic 
+域名 /api/anthropic/messages 
+域名 /api/anthropic/v1/messages 
+域名 /api/anthropic/models 
+域名 /api/anthropic/v1/models 
+
+### openai
+域名 /api/openai/v1/chat/completions
+域名 /api/openai/v1/models

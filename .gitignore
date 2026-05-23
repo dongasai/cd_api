@@ -9,3 +9,4 @@ docker/000-default.local.conf
 .codex
 .golutra/
 .claude/settings.local.json
+**/settings.local.json

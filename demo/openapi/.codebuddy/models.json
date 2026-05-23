@@ -1,0 +1,17 @@
+{
+  "models": [
+    {
+      "id": "model-id",
+      "name": "Model Display Name",
+      "vendor": "vendor-name",
+      "apiKey": "sk-actual-api-key-value",
+      "maxInputTokens": 200000,
+      "maxOutputTokens": 8192,
+      "url": "http://127.0.0.1/v1/chat/completions",
+      "temperature": 0.7,
+      "supportsToolCall": true,
+      "supportsImages": true
+    }
+  ],
+  "availableModels": ["model-id-1", "model-id-2"]
+}
