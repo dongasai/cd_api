@@ -28,7 +28,7 @@ CdApi 是一个AI大模型API网关工具,基于 Laravel 12 + Dcat Admin v2 构�
 
 - **禁止使用 CDN 资源**
 - **不使用 Vite 进行资源构建**
-- Filament 已包含所需的前端资源
+- Dcat Admin v2 已包含所需的前端资源
 
 ### 数据库操作
 

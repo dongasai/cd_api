@@ -208,7 +208,7 @@
 
                 {{-- Description --}}
                 <p class="description">
-                    基于 Laravel 12 + Filament 构建的现代化 API 基座，为 AI Coding 平台提供稳定、可扩展的渠道管理服务。
+                    基于 Laravel 12 + Dcat Admin 构建的现代化 API 基座，为 AI Coding 平台提供稳定、可扩展的渠道管理服务。
                 </p>
 
                 {{-- CTA Buttons --}}
