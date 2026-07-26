@@ -9,7 +9,7 @@
 ## 对外支持
 - Openai-compatible
 - Anthropic Claude Messages API
-- 可互相转换
+- 可互相转换(规划)
 
 ## 项目特征
 统一接口：一个 API 端点接入所有 AI 服务，兼容 OpenAI 标准格式/Anthropic  Claude Messages API
