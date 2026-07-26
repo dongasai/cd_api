@@ -1,0 +1,59 @@
+name: Docker 构建推送
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+      - master
+
+env:
+  REGISTRY: tea.2sxo.com
+  IMAGE_NAME: ${{ gitea.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. 检出代码
+      - name: 检出代码
+        uses: http://192.168.4.101:32127/github/actions_checkout@v4
+
+      # 2. 设置构建信息（Shell 命令在步骤中执行）
+      - name: 设置构建信息
+        id: build-info
+        run: |
+          echo "build-time=$(date '+%Y-%m-%d %H:%M:%S %Z')" >> "$GITEA_OUTPUT"
+          echo "git-sha-short=$(echo '${{ gitea.sha }}' | cut -c1-7)" >> "$GITEA_OUTPUT"
+
+      # 3. 登录 Registry（PR 不推送，无需登录）
+      - name: 登录 Registry
+        if: gitea.event_name != 'pull_request'
+        uses: http://192.168.4.101:32127/github/docker_login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ gitea.actor }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      # 4. 构建并推送镜像
+      - name: 构建并推送
+        uses: http://192.168.4.101:32127/github/docker_build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ gitea.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ steps.build-info.outputs.git-sha-short }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ gitea.ref_name }}
+          build-args: |
+            BUILD_TIME=${{ steps.build-info.outputs.build-time }}
+            BUILD_BRANCH=${{ gitea.ref_name }}
+            BUILD_COMMIT=${{ gitea.sha }}
+            BUILD_RUNNER=${{ gitea.runner_name || 'default' }}
+          platforms: linux/amd64

@@ -1,5 +1,17 @@
+# 接收 workflow 构建参数
+ARG BUILD_TIME
+ARG BUILD_BRANCH
+ARG BUILD_COMMIT
+ARG BUILD_RUNNER
+
 # php容器 - 基于 Apache + PHP 8.3（生产）
 FROM php:8.3-apache
+
+# 接收构建参数（多阶段构建需要重新声明）
+ARG BUILD_TIME
+ARG BUILD_BRANCH
+ARG BUILD_COMMIT
+ARG BUILD_RUNNER
 
 # 设置工作目录
 WORKDIR /var/www/html
@@ -113,6 +125,12 @@ COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # 创建 supervisor 日志目录
 RUN mkdir -p /var/log/supervisor
+
+# 存储构建信息到镜像标签（可用 docker inspect 查看）
+LABEL build.time="${BUILD_TIME}" \
+      build.branch="${BUILD_BRANCH}" \
+      build.commit="${BUILD_COMMIT}" \
+      build.runner="${BUILD_RUNNER}"
 
 # 启动 supervisor
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
