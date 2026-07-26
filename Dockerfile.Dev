@@ -1,5 +1,5 @@
-# MCP Tools 开发容器 - 基于 Apache + PHP 8.3 + SSH + Supervisor
-FROM php:8.3-apache
+# MCP Tools 开发容器 - 基于 Apache + PHP 8.4 + SSH + Supervisor
+FROM php:8.4-apache
 
 # 设置时区为北京时间
 ENV TZ=Asia/Shanghai

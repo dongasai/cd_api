@@ -4,7 +4,7 @@ ARG BUILD_BRANCH
 ARG BUILD_COMMIT
 ARG BUILD_RUNNER
 
-# php容器 - 基于 Apache + PHP 8.3（生产）
+# php容器 - 基于 Apache + PHP 8.4（生产）
 FROM php:8.4-apache
 
 # 接收构建参数（多阶段构建需要重新声明）
