@@ -1,17 +1,5 @@
-# 接收 workflow 构建参数
-ARG BUILD_TIME
-ARG BUILD_BRANCH
-ARG BUILD_COMMIT
-ARG BUILD_RUNNER
-
 # php容器 - 基于 Apache + PHP 8.4（生产）
 FROM php:8.4-apache
-
-# 接收构建参数（多阶段构建需要重新声明）
-ARG BUILD_TIME
-ARG BUILD_BRANCH
-ARG BUILD_COMMIT
-ARG BUILD_RUNNER
 
 # 设置工作目录
 WORKDIR /var/www/html
@@ -115,21 +103,27 @@ RUN usermod -a -G www-data php && \
 
 
 
-COPY laravel /var/www/html
+# 先复制 composer 文件，利用 Docker 层缓存
+COPY laravel/composer.json laravel/composer.lock ./
 
-# 确保 storage 和 bootstrap/cache 目录权限正确
-RUN mkdir -p /var/www/html/storage/logs /var/www/html/storage/framework/cache /var/www/html/storage/framework/sessions /var/www/html/storage/framework/testing /var/www/html/storage/framework/views /var/www/html/bootstrap/cache && \
-    chown -R php:php /var/www/html/storage /var/www/html/bootstrap/cache
-
-# 安装 PHP 依赖（在 root 用户下执行，确保权限正确）
-RUN composer install --no-dev --optimize-autoloader --no-interaction && \
+# 安装 PHP 依赖（只有 composer.json/lock 变化时才会重新执行）
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress --no-scripts && \
     chown -R php:php /var/www/html/vendor
+
+# 复制项目代码
+COPY --chown=php:php laravel /var/www/html
 
 # 复制 supervisor 配置
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # 创建 supervisor 日志目录
 RUN mkdir -p /var/log/supervisor
+
+# 接收构建参数（仅在 LABEL 中使用，不影响前面步骤的缓存）
+ARG BUILD_TIME
+ARG BUILD_BRANCH
+ARG BUILD_COMMIT
+ARG BUILD_RUNNER
 
 # 存储构建信息到镜像标签（可用 docker inspect 查看）
 LABEL build.time="${BUILD_TIME}" \
