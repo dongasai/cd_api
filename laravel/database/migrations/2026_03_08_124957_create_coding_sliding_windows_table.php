@@ -19,8 +19,8 @@ return new class extends Migration
             $table->unsignedBigInteger('account_id')->comment('Coding账户ID');
             $table->string('window_type', 20)->comment('window type: 5h/1d/7d/30d');
             $table->unsignedInteger('window_seconds')->comment('window duration in seconds');
-            $table->timestamp('started_at')->comment('window start time');
-            $table->timestamp('ends_at')->comment('window end time');
+            $table->timestamp('started_at')->useCurrent()->comment('window start time');
+            $table->timestamp('ends_at')->useCurrent()->comment('window end time');
             $table->string('status', 20)->default('active')->comment('status: active/expired');
             $table->timestamps();
 

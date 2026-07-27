@@ -26,7 +26,7 @@ return new class extends Migration
             $table->unsignedInteger('message_count')->default(0)->comment('消息数量');
 
             // 时间管理
-            $table->timestamp('expires_at')->comment('过期时间');
+            $table->timestamp('expires_at')->useCurrent()->comment('过期时间');
             $table->timestamps();
 
             // 索引
