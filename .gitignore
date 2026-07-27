@@ -10,3 +10,4 @@ docker/000-default.local.conf
 .golutra/
 .claude/settings.local.json
 **/settings.local.json
+.env.*
