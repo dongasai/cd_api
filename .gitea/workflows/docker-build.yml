@@ -31,9 +31,8 @@ jobs:
           echo "build-time=$(date '+%Y-%m-%d %H:%M:%S %Z')" >> "$GITEA_OUTPUT"
           echo "git-sha-short=$(echo '${{ gitea.sha }}' | cut -c1-7)" >> "$GITEA_OUTPUT"
 
-      # 3. 登录 Registry（PR 不推送，无需登录）
+      # 3. 登录 Registry（PR 也需要登录以拉取缓存镜像）
       - name: 登录 Registry
-        if: gitea.event_name != 'pull_request'
         uses: http://192.168.4.101:32127/github/docker_login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -57,3 +56,5 @@ jobs:
             BUILD_COMMIT=${{ gitea.sha }}
             BUILD_RUNNER=${{ gitea.runner_name || 'default' }}
           platforms: linux/amd64
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cache,mode=max
