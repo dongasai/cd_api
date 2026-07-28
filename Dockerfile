@@ -44,6 +44,11 @@ RUN echo "🔧 安装 Node.js..." && \
     node --version && \
     npm --version
 
+# 安装 Redis 扩展
+RUN echo "🔧 安装 Redis..." && \
+    pecl install redis && \
+    docker-php-ext-enable redis && \
+    echo "✅ Redis 扩展安装完成"
 # 安装 PHP 扩展 (仅必需的)
 RUN docker-php-ext-install \
     pdo \

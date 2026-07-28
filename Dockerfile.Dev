@@ -63,6 +63,12 @@ RUN docker-php-ext-install \
     zip \
     intl
 
+# 安装 Redis 扩展
+RUN echo "🔧 安装 Redis..." && \
+    pecl install redis && \
+    docker-php-ext-enable redis && \
+    echo "✅ Redis 扩展安装完成"
+
 # 复制自定义 PHP 配置
 COPY docker/php.ini /usr/local/etc/php/conf.d/custom.ini
 
