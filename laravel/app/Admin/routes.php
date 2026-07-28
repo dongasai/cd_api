@@ -101,6 +101,10 @@ Route::group([
     // 搜索日志 - 只读
     $router->resource('search-logs', 'SearchLogController')->only(['index', 'show']);
 
+    // 数据库迁移管理 - 只读 + 执行操作
+    $router->resource('migrations', 'MigrationController')->only(['index']);
+    $router->post('migrations/migrate-all', 'MigrationController@migrateAll')->name('migrations.migrate-all');
+
     // 测试图表
     $router->get('test-chart', 'TestChartController@index')->name('test-chart');
 

@@ -23,7 +23,7 @@ class MigrationService
 
         try {
             $ranMigrations = DB::table('migrations')->pluck('migration')->toArray();
-        } catch (\Exception $e) {
+        } catch (\Exception) {
             $ranMigrations = [];
         }
 
@@ -91,6 +91,48 @@ class MigrationService
                 'success' => false,
                 'output' => Artisan::output(),
                 'message' => '数据库迁移失败: '.$e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * 回滚单个迁移文件
+     */
+    public function rollbackOne(string $migrationName): array
+    {
+        try {
+            $filePath = database_path("migrations/{$migrationName}.php");
+            if (! file_exists($filePath)) {
+                return [
+                    'success' => false,
+                    'message' => "迁移文件不存在: {$migrationName}",
+                ];
+            }
+
+            // 检查迁移是否已执行
+            $exists = DB::table('migrations')->where('migration', $migrationName)->exists();
+            if (! $exists) {
+                return [
+                    'success' => false,
+                    'message' => '该迁移尚未执行，无需回滚',
+                ];
+            }
+
+            // 加载并执行迁移的 down 方法
+            $migrationInstance = require $filePath;
+            $migrationInstance->down();
+
+            // 从 migrations 表删除记录
+            DB::table('migrations')->where('migration', $migrationName)->delete();
+
+            return [
+                'success' => true,
+                'message' => '回滚成功',
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'message' => '回滚失败: '.$e->getMessage(),
             ];
         }
     }

@@ -20,6 +20,9 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::middleware('install')->group(base_path('routes/install.php'));
         },
     )
+    ->withCommands([
+        __DIR__.'/../app/Admin/Console',
+    ])
     ->withMiddleware(function (Middleware $middleware): void {
         // 定义 install 中间件组（空组，不包含任何中间件）
         $middleware->group('install', []);

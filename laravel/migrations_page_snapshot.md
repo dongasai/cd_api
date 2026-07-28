@@ -1,0 +1,754 @@
+- generic [ref=f11e1]:
+  - generic [ref=f11e2]:
+    - complementary [ref=f11e3]:
+      - list [ref=f11e5]:
+        - listitem [ref=f11e6]:
+          - link [ref=f11e7] [cursor=pointer]:
+            - /url: http://192.168.4.107:36126/admin
+      - list [ref=f11e11]:
+        - listitem [ref=f11e12]:
+          - link " 仪表盘" [ref=f11e13] [cursor=pointer]:
+            - /url: http://192.168.4.107:36126/admin
+            - generic [ref=f11e14]: 
+            - paragraph [ref=f11e15]: 仪表盘
+        - listitem [ref=f11e16]:
+          - link [ref=f11e17] [cursor=pointer]:
+            - /url: http://192.168.4.107:36126/admin/api-keys
+            - paragraph [ref=f11e18]: API Keys
+        - listitem [ref=f11e19]:
+          - link " 模型测试 " [ref=f11e20] [cursor=pointer]:
+            - /url: "#"
+            - generic [ref=f11e21]: 
+            - paragraph [ref=f11e22]:
+              - text: 模型测试
+              - generic [ref=f11e23]: 
+          - text:  
+        - listitem [ref=f11e24]:
+          - link " 渠道管理 " [ref=f11e25] [cursor=pointer]:
+            - /url: "#"
+            - generic [ref=f11e26]: 
+            - paragraph [ref=f11e27]:
+              - text: 渠道管理
+              - generic [ref=f11e28]: 
+          - text:     
+        - listitem [ref=f11e29]:
+          - link "数据统计 " [ref=f11e30] [cursor=pointer]:
+            - /url: "#"
+            - paragraph [ref=f11e31]:
+              - text: 数据统计
+              - generic [ref=f11e32]: 
+        - listitem [ref=f11e33]:
+          - link " 模型管理 " [ref=f11e34] [cursor=pointer]:
+            - /url: "#"
+            - generic [ref=f11e35]: 
+            - paragraph [ref=f11e36]:
+              - text: 模型管理
+              - generic [ref=f11e37]: 
+          - text: 
+        - listitem [ref=f11e38]:
+          - link " 日志管理 " [ref=f11e39] [cursor=pointer]:
+            - /url: "#"
+            - generic [ref=f11e40]: 
+            - paragraph [ref=f11e41]:
+              - text: 日志管理
+              - generic [ref=f11e42]: 
+          - text:     
+        - listitem [ref=f11e43]:
+          - link " 应用设置 " [ref=f11e44] [cursor=pointer]:
+            - /url: "#"
+            - generic [ref=f11e45]: 
+            - paragraph [ref=f11e46]:
+              - text: 应用设置
+              - generic [ref=f11e47]: 
+          - text:   
+        - listitem [ref=f11e48]:
+          - link " 系统管理 " [ref=f11e49] [cursor=pointer]:
+            - /url: "#"
+            - generic [ref=f11e50]: 
+            - paragraph [ref=f11e51]:
+              - text: 系统管理
+              - generic [ref=f11e52]: 
+          - list [ref=f11e53]:
+            - listitem [ref=f11e54]:
+              - link " 管理员" [ref=f11e55] [cursor=pointer]:
+                - /url: http://192.168.4.107:36126/admin/auth/users
+                - generic [ref=f11e56]: 
+                - paragraph [ref=f11e57]: 管理员
+            - listitem [ref=f11e58]:
+              - link " 角色" [ref=f11e59] [cursor=pointer]:
+                - /url: http://192.168.4.107:36126/admin/auth/roles
+                - generic [ref=f11e60]: 
+                - paragraph [ref=f11e61]: 角色
+            - listitem [ref=f11e62]:
+              - link " 权限" [ref=f11e63] [cursor=pointer]:
+                - /url: http://192.168.4.107:36126/admin/auth/permissions
+                - generic [ref=f11e64]: 
+                - paragraph [ref=f11e65]: 权限
+            - listitem [ref=f11e66]:
+              - link " 菜单" [ref=f11e67] [cursor=pointer]:
+                - /url: http://192.168.4.107:36126/admin/auth/menu
+                - generic [ref=f11e68]: 
+                - paragraph [ref=f11e69]: 菜单
+            - listitem [ref=f11e70]:
+              - link " 数据库迁移" [ref=f11e71] [cursor=pointer]:
+                - /url: http://192.168.4.107:36126/admin/migrations
+                - generic [ref=f11e72]: 
+                - paragraph [ref=f11e73]: 数据库迁移
+        - listitem [ref=f11e74]:
+          - link " 开发工具 " [ref=f11e75] [cursor=pointer]:
+            - /url: "#"
+            - generic [ref=f11e76]: 
+            - paragraph [ref=f11e77]:
+              - text: 开发工具
+              - generic [ref=f11e78]: 
+          - text:   
+    - navigation [ref=f11e79]:
+      - generic [ref=f11e81]:
+        - list [ref=f11e83]:
+          - listitem [ref=f11e84]:
+            - generic [ref=f11e85] [cursor=pointer]: 
+        - list [ref=f11e89]:
+          - listitem [ref=f11e90]:
+            - link "马元杰  在线 avatar" [ref=f11e91] [cursor=pointer]:
+              - /url: "#"
+              - generic [ref=f11e92]:
+                - generic [ref=f11e93]: 马元杰
+                - generic [ref=f11e94]:
+                  - generic [ref=f11e95]: 
+                  - text: 在线
+              - img "avatar" [ref=f11e97]
+            - text:  
+    - generic [ref=f11e99]:
+      - generic [ref=f11e101]:
+        - heading "数据库迁移管理 列表" [level=1] [ref=f11e102]:
+          - text: 数据库迁移管理
+          - generic [ref=f11e103]: 列表
+        - list [ref=f11e104]:
+          - listitem [ref=f11e105]:
+            - link " 主页" [ref=f11e106] [cursor=pointer]:
+              - /url: http://192.168.4.107:36126/admin
+              - generic [ref=f11e107]: 
+              - text: 主页
+          - listitem [ref=f11e108]:
+            - text: /
+            - link "migrations" [ref=f11e109] [cursor=pointer]:
+              - /url: ""
+      - generic [ref=f11e114]:
+        - generic [ref=f11e118]:
+          - text:  
+          - button " 刷新" [ref=f11e119] [cursor=pointer]:
+            - generic [ref=f11e120]: 
+            - text: 刷新
+          - button " 筛选" [ref=f11e122] [cursor=pointer]:
+            - generic [ref=f11e123]: 
+            - text: 筛选
+          - link " 执行全部" [ref=f11e124] [cursor=pointer]:
+            - /url: javascript:void(0);
+            - generic [ref=f11e125]: 
+            - text: 执行全部
+        - generic [ref=f11e129]:
+          - generic [ref=f11e132]:
+            - generic [ref=f11e133]: 状态
+            - combobox [ref=f11e136]
+            - combobox [ref=f11e139] [cursor=pointer]:
+              - textbox [ref=f11e140]
+          - button " 搜索" [ref=f11e141] [cursor=pointer]:
+            - generic [ref=f11e142]: 
+            - text: 搜索
+          - link " 重置" [ref=f11e143] [cursor=pointer]:
+            - /url: http://192.168.4.107:36126/admin/migrations
+            - generic [ref=f11e144]: 
+            - text: 重置
+        - table [ref=f11e146]:
+          - rowgroup [ref=f11e147]:
+            - row [ref=f11e148]:
+              - columnheader "" [ref=f11e149]:
+                - generic [ref=f11e150]:
+                  - checkbox [ref=f11e151] [cursor=pointer]
+                  - generic [ref=f11e152] [cursor=pointer]: 
+              - columnheader [ref=f11e155]:
+                - text: 迁移名称
+                - link "" [ref=f11e157] [cursor=pointer]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?_sort%5Bcolumn%5D=name&_sort%5Btype%5D=desc
+              - columnheader [ref=f11e158]:
+                - text: 状态
+                - generic [ref=f11e159]:
+                  - generic [ref=f11e161]:
+                    - link "" [ref=f11e162] [cursor=pointer]:
+                      - /url: javascript:void(0);
+                    - text:  
+                  - link "" [ref=f11e163] [cursor=pointer]:
+                    - /url: http://192.168.4.107:36126/admin/migrations?_sort%5Bcolumn%5D=status&_sort%5Btype%5D=desc
+              - columnheader [ref=f11e164]:
+                - text: 批次
+                - link "" [ref=f11e166] [cursor=pointer]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?_sort%5Bcolumn%5D=batch&_sort%5Btype%5D=desc
+              - columnheader "文件名" [ref=f11e167]
+              - columnheader "操作" [ref=f11e168]
+          - rowgroup [ref=f11e169]:
+            - row [ref=f11e170] [cursor=pointer]:
+              - cell "" [ref=f11e171]:
+                - generic [ref=f11e172]:
+                  - checkbox [ref=f11e173]
+                  - generic [ref=f11e174]: 
+              - cell "2026_07_28_103000_create_migration_verify_test_table" [ref=f11e177]
+              - cell [ref=f11e178]:
+                - link "已执行" [ref=f11e179]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e181]:
+                  - /url: "#"
+              - cell "81" [ref=f11e182]
+              - cell "2026_07_28_103000_create_migration_verify_test_table.php" [ref=f11e183]
+              - cell [ref=f11e184]:
+                - link " 回滚" [ref=f11e185]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e186]: 
+                  - text: 回滚
+            - row [ref=f11e187] [cursor=pointer]:
+              - cell "" [ref=f11e188]:
+                - generic [ref=f11e189]:
+                  - checkbox [ref=f11e190]
+                  - generic [ref=f11e191]: 
+              - cell "2026_07_27_143800_add_migrations_menu" [ref=f11e194]
+              - cell [ref=f11e195]:
+                - link "已执行" [ref=f11e196]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e198]:
+                  - /url: "#"
+              - cell "80" [ref=f11e199]
+              - cell "2026_07_27_143800_add_migrations_menu.php" [ref=f11e200]
+              - cell [ref=f11e201]:
+                - link " 回滚" [ref=f11e202]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e203]: 
+                  - text: 回滚
+            - row [ref=f11e204] [cursor=pointer]:
+              - cell "" [ref=f11e205]:
+                - generic [ref=f11e206]:
+                  - checkbox [ref=f11e207]
+                  - generic [ref=f11e208]: 
+              - cell "2026_04_06_153501_create_search_logs_table" [ref=f11e211]
+              - cell [ref=f11e212]:
+                - link "已执行" [ref=f11e213]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e215]:
+                  - /url: "#"
+              - cell "79" [ref=f11e216]
+              - cell "2026_04_06_153501_create_search_logs_table.php" [ref=f11e217]
+              - cell [ref=f11e218]:
+                - link " 回滚" [ref=f11e219]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e220]: 
+                  - text: 回滚
+            - row [ref=f11e221] [cursor=pointer]:
+              - cell "" [ref=f11e222]:
+                - generic [ref=f11e223]:
+                  - checkbox [ref=f11e224]
+                  - generic [ref=f11e225]: 
+              - cell "2026_04_06_153500_create_search_drivers_table" [ref=f11e228]
+              - cell [ref=f11e229]:
+                - link "已执行" [ref=f11e230]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e232]:
+                  - /url: "#"
+              - cell "78" [ref=f11e233]
+              - cell "2026_04_06_153500_create_search_drivers_table.php" [ref=f11e234]
+              - cell [ref=f11e235]:
+                - link " 回滚" [ref=f11e236]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e237]: 
+                  - text: 回滚
+            - row [ref=f11e238] [cursor=pointer]:
+              - cell "" [ref=f11e239]:
+                - generic [ref=f11e240]:
+                  - checkbox [ref=f11e241]
+                  - generic [ref=f11e242]: 
+              - cell "2026_04_06_151000_create_account_management_menu" [ref=f11e245]
+              - cell [ref=f11e246]:
+                - link "已执行" [ref=f11e247]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e249]:
+                  - /url: "#"
+              - cell "77" [ref=f11e250]
+              - cell "2026_04_06_151000_create_account_management_menu.php" [ref=f11e251]
+              - cell [ref=f11e252]:
+                - link " 回滚" [ref=f11e253]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e254]: 
+                  - text: 回滚
+            - row [ref=f11e255] [cursor=pointer]:
+              - cell "" [ref=f11e256]:
+                - generic [ref=f11e257]:
+                  - checkbox [ref=f11e258]
+                  - generic [ref=f11e259]: 
+              - cell "2026_04_06_140904_create_channel_error_handling_logs_table" [ref=f11e262]
+              - cell [ref=f11e263]:
+                - link "已执行" [ref=f11e264]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e266]:
+                  - /url: "#"
+              - cell "76" [ref=f11e267]
+              - cell "2026_04_06_140904_create_channel_error_handling_logs_table.php" [ref=f11e268]
+              - cell [ref=f11e269]:
+                - link " 回滚" [ref=f11e270]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e271]: 
+                  - text: 回滚
+            - row [ref=f11e272] [cursor=pointer]:
+              - cell "" [ref=f11e273]:
+                - generic [ref=f11e274]:
+                  - checkbox [ref=f11e275]
+                  - generic [ref=f11e276]: 
+              - cell "2026_04_06_140903_add_pause_fields_to_coding_accounts_table" [ref=f11e279]
+              - cell [ref=f11e280]:
+                - link "已执行" [ref=f11e281]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e283]:
+                  - /url: "#"
+              - cell "75" [ref=f11e284]
+              - cell "2026_04_06_140903_add_pause_fields_to_coding_accounts_table.php" [ref=f11e285]
+              - cell [ref=f11e286]:
+                - link " 回滚" [ref=f11e287]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e288]: 
+                  - text: 回滚
+            - row [ref=f11e289] [cursor=pointer]:
+              - cell "" [ref=f11e290]:
+                - generic [ref=f11e291]:
+                  - checkbox [ref=f11e292]
+                  - generic [ref=f11e293]: 
+              - cell "2026_04_06_140902_create_channel_error_rules_table" [ref=f11e296]
+              - cell [ref=f11e297]:
+                - link "已执行" [ref=f11e298]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e300]:
+                  - /url: "#"
+              - cell "74" [ref=f11e301]
+              - cell "2026_04_06_140902_create_channel_error_rules_table.php" [ref=f11e302]
+              - cell [ref=f11e303]:
+                - link " 回滚" [ref=f11e304]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e305]: 
+                  - text: 回滚
+            - row [ref=f11e306] [cursor=pointer]:
+              - cell "" [ref=f11e307]:
+                - generic [ref=f11e308]:
+                  - checkbox [ref=f11e309]
+                  - generic [ref=f11e310]: 
+              - cell "2026_04_06_134200_add_mcp_clients_menu" [ref=f11e313]
+              - cell [ref=f11e314]:
+                - link "已执行" [ref=f11e315]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e317]:
+                  - /url: "#"
+              - cell "73" [ref=f11e318]
+              - cell "2026_04_06_134200_add_mcp_clients_menu.php" [ref=f11e319]
+              - cell [ref=f11e320]:
+                - link " 回滚" [ref=f11e321]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e322]: 
+                  - text: 回滚
+            - row [ref=f11e323] [cursor=pointer]:
+              - cell "" [ref=f11e324]:
+                - generic [ref=f11e325]:
+                  - checkbox [ref=f11e326]
+                  - generic [ref=f11e327]: 
+              - cell "2026_04_06_131855_update_mcp_clients_transport_enum" [ref=f11e330]
+              - cell [ref=f11e331]:
+                - link "已执行" [ref=f11e332]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e334]:
+                  - /url: "#"
+              - cell "72" [ref=f11e335]
+              - cell "2026_04_06_131855_update_mcp_clients_transport_enum.php" [ref=f11e336]
+              - cell [ref=f11e337]:
+                - link " 回滚" [ref=f11e338]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e339]: 
+                  - text: 回滚
+            - row [ref=f11e340] [cursor=pointer]:
+              - cell "" [ref=f11e341]:
+                - generic [ref=f11e342]:
+                  - checkbox [ref=f11e343]
+                  - generic [ref=f11e344]: 
+              - cell "2026_04_06_131338_create_mcp_clients_table" [ref=f11e347]
+              - cell [ref=f11e348]:
+                - link "已执行" [ref=f11e349]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e351]:
+                  - /url: "#"
+              - cell "71" [ref=f11e352]
+              - cell "2026_04_06_131338_create_mcp_clients_table.php" [ref=f11e353]
+              - cell [ref=f11e354]:
+                - link " 回滚" [ref=f11e355]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e356]: 
+                  - text: 回滚
+            - row [ref=f11e357] [cursor=pointer]:
+              - cell "" [ref=f11e358]:
+                - generic [ref=f11e359]:
+                  - checkbox [ref=f11e360]
+                  - generic [ref=f11e361]: 
+              - cell "2026_04_05_000001_create_response_sessions_table" [ref=f11e364]
+              - cell [ref=f11e365]:
+                - link "已执行" [ref=f11e366]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e368]:
+                  - /url: "#"
+              - cell "70" [ref=f11e369]
+              - cell "2026_04_05_000001_create_response_sessions_table.php" [ref=f11e370]
+              - cell [ref=f11e371]:
+                - link " 回滚" [ref=f11e372]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e373]: 
+                  - text: 回滚
+            - row [ref=f11e374] [cursor=pointer]:
+              - cell "" [ref=f11e375]:
+                - generic [ref=f11e376]:
+                  - checkbox [ref=f11e377]
+                  - generic [ref=f11e378]: 
+              - cell "2026_03_29_233743_add_apply_data_to_audit_logs_table" [ref=f11e381]
+              - cell [ref=f11e382]:
+                - link "已执行" [ref=f11e383]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e385]:
+                  - /url: "#"
+              - cell "69" [ref=f11e386]
+              - cell "2026_03_29_233743_add_apply_data_to_audit_logs_table.php" [ref=f11e387]
+              - cell [ref=f11e388]:
+                - link " 回滚" [ref=f11e389]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e390]: 
+                  - text: 回滚
+            - row [ref=f11e391] [cursor=pointer]:
+              - cell "" [ref=f11e392]:
+                - generic [ref=f11e393]:
+                  - checkbox [ref=f11e394]
+                  - generic [ref=f11e395]: 
+              - cell "2026_03_29_022927_add_aliases_to_model_lists_table" [ref=f11e398]
+              - cell [ref=f11e399]:
+                - link "已执行" [ref=f11e400]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e402]:
+                  - /url: "#"
+              - cell "68" [ref=f11e403]
+              - cell "2026_03_29_022927_add_aliases_to_model_lists_table.php" [ref=f11e404]
+              - cell [ref=f11e405]:
+                - link " 回滚" [ref=f11e406]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e407]: 
+                  - text: 回滚
+            - row [ref=f11e408] [cursor=pointer]:
+              - cell "" [ref=f11e409]:
+                - generic [ref=f11e410]:
+                  - checkbox [ref=f11e411]
+                  - generic [ref=f11e412]: 
+              - cell "2026_03_24_013632_alter_channels_status_to_integer" [ref=f11e415]
+              - cell [ref=f11e416]:
+                - link "已执行" [ref=f11e417]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e419]:
+                  - /url: "#"
+              - cell "67" [ref=f11e420]
+              - cell "2026_03_24_013632_alter_channels_status_to_integer.php" [ref=f11e421]
+              - cell [ref=f11e422]:
+                - link " 回滚" [ref=f11e423]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e424]: 
+                  - text: 回滚
+            - row [ref=f11e425] [cursor=pointer]:
+              - cell "" [ref=f11e426]:
+                - generic [ref=f11e427]:
+                  - checkbox [ref=f11e428]
+                  - generic [ref=f11e429]: 
+              - cell "2026_03_23_004727_alter_audit_logs_target_protocol_length" [ref=f11e432]
+              - cell [ref=f11e433]:
+                - link "已执行" [ref=f11e434]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e436]:
+                  - /url: "#"
+              - cell "66" [ref=f11e437]
+              - cell "2026_03_23_004727_alter_audit_logs_target_protocol_length.php" [ref=f11e438]
+              - cell [ref=f11e439]:
+                - link " 回滚" [ref=f11e440]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e441]: 
+                  - text: 回滚
+            - row [ref=f11e442] [cursor=pointer]:
+              - cell "" [ref=f11e443]:
+                - generic [ref=f11e444]:
+                  - checkbox [ref=f11e445]
+                  - generic [ref=f11e446]: 
+              - cell "2026_03_18_100001_migrate_coding_fields_to_accounts_table" [ref=f11e449]
+              - cell [ref=f11e450]:
+                - link "已执行" [ref=f11e451]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e453]:
+                  - /url: "#"
+              - cell "65" [ref=f11e454]
+              - cell "2026_03_18_100001_migrate_coding_fields_to_accounts_table.php" [ref=f11e455]
+              - cell [ref=f11e456]:
+                - link " 回滚" [ref=f11e457]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e458]: 
+                  - text: 回滚
+            - row [ref=f11e459] [cursor=pointer]:
+              - cell "" [ref=f11e460]:
+                - generic [ref=f11e461]:
+                  - checkbox [ref=f11e462]
+                  - generic [ref=f11e463]: 
+              - cell "2026_03_17_235510_update_admin_menu_titles_for_multilanguage" [ref=f11e466]
+              - cell [ref=f11e467]:
+                - link "已执行" [ref=f11e468]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e470]:
+                  - /url: "#"
+              - cell "64" [ref=f11e471]
+              - cell "2026_03_17_235510_update_admin_menu_titles_for_multilanguage.php" [ref=f11e472]
+              - cell [ref=f11e473]:
+                - link " 回滚" [ref=f11e474]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e475]: 
+                  - text: 回滚
+            - row [ref=f11e476] [cursor=pointer]:
+              - cell "" [ref=f11e477]:
+                - generic [ref=f11e478]:
+                  - checkbox [ref=f11e479]
+                  - generic [ref=f11e480]: 
+              - cell "2026_03_17_234843_add_health_status_to_channels_table" [ref=f11e483]
+              - cell [ref=f11e484]:
+                - link "已执行" [ref=f11e485]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e487]:
+                  - /url: "#"
+              - cell "63" [ref=f11e488]
+              - cell "2026_03_17_234843_add_health_status_to_channels_table.php" [ref=f11e489]
+              - cell [ref=f11e490]:
+                - link " 回滚" [ref=f11e491]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e492]: 
+                  - text: 回滚
+            - row [ref=f11e493] [cursor=pointer]:
+              - cell "" [ref=f11e494]:
+                - generic [ref=f11e495]:
+                  - checkbox [ref=f11e496]
+                  - generic [ref=f11e497]: 
+              - cell "2026_03_17_234002_add_language_to_admin_users_table" [ref=f11e500]
+              - cell [ref=f11e501]:
+                - link "已执行" [ref=f11e502]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e504]:
+                  - /url: "#"
+              - cell "62" [ref=f11e505]
+              - cell "2026_03_17_234002_add_language_to_admin_users_table.php" [ref=f11e506]
+              - cell [ref=f11e507]:
+                - link " 回滚" [ref=f11e508]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e509]: 
+                  - text: 回滚
+            - row [ref=f11e510] [cursor=pointer]:
+              - cell "" [ref=f11e511]:
+                - generic [ref=f11e512]:
+                  - checkbox [ref=f11e513]
+                  - generic [ref=f11e514]: 
+              - cell "2026_03_17_150001_create_channel_user_agent_table" [ref=f11e517]
+              - cell [ref=f11e518]:
+                - link "已执行" [ref=f11e519]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e521]:
+                  - /url: "#"
+              - cell "61" [ref=f11e522]
+              - cell "2026_03_17_150001_create_channel_user_agent_table.php" [ref=f11e523]
+              - cell [ref=f11e524]:
+                - link " 回滚" [ref=f11e525]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e526]: 
+                  - text: 回滚
+            - row [ref=f11e527] [cursor=pointer]:
+              - cell "" [ref=f11e528]:
+                - generic [ref=f11e529]:
+                  - checkbox [ref=f11e530]
+                  - generic [ref=f11e531]: 
+              - cell "2026_03_17_150000_create_user_agents_table" [ref=f11e534]
+              - cell [ref=f11e535]:
+                - link "已执行" [ref=f11e536]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e538]:
+                  - /url: "#"
+              - cell "60" [ref=f11e539]
+              - cell "2026_03_17_150000_create_user_agents_table.php" [ref=f11e540]
+              - cell [ref=f11e541]:
+                - link " 回滚" [ref=f11e542]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e543]: 
+                  - text: 回滚
+            - row [ref=f11e544] [cursor=pointer]:
+              - cell "" [ref=f11e545]:
+                - generic [ref=f11e546]:
+                  - checkbox [ref=f11e547]
+                  - generic [ref=f11e548]: 
+              - cell "2026_03_17_101535_add_protocol_fields_to_audit_logs_table" [ref=f11e551]
+              - cell [ref=f11e552]:
+                - link "已执行" [ref=f11e553]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e555]:
+                  - /url: "#"
+              - cell "59" [ref=f11e556]
+              - cell "2026_03_17_101535_add_protocol_fields_to_audit_logs_table.php" [ref=f11e557]
+              - cell [ref=f11e558]:
+                - link " 回滚" [ref=f11e559]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e560]: 
+                  - text: 回滚
+            - row [ref=f11e561] [cursor=pointer]:
+              - cell "" [ref=f11e562]:
+                - generic [ref=f11e563]:
+                  - checkbox [ref=f11e564]
+                  - generic [ref=f11e565]: 
+              - cell "2026_03_16_000002_remove_key_prefix_from_api_keys" [ref=f11e568]
+              - cell [ref=f11e569]:
+                - link "已执行" [ref=f11e570]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e572]:
+                  - /url: "#"
+              - cell "58" [ref=f11e573]
+              - cell "2026_03_16_000002_remove_key_prefix_from_api_keys.php" [ref=f11e574]
+              - cell [ref=f11e575]:
+                - link " 回滚" [ref=f11e576]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e577]: 
+                  - text: 回滚
+            - row [ref=f11e578] [cursor=pointer]:
+              - cell "" [ref=f11e579]:
+                - generic [ref=f11e580]:
+                  - checkbox [ref=f11e581]
+                  - generic [ref=f11e582]: 
+              - cell "2026_03_16_000001_remove_key_hash_from_api_keys" [ref=f11e585]
+              - cell [ref=f11e586]:
+                - link "已执行" [ref=f11e587]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e589]:
+                  - /url: "#"
+              - cell "57" [ref=f11e590]
+              - cell "2026_03_16_000001_remove_key_hash_from_api_keys.php" [ref=f11e591]
+              - cell [ref=f11e592]:
+                - link " 回滚" [ref=f11e593]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e594]: 
+                  - text: 回滚
+            - row [ref=f11e595] [cursor=pointer]:
+              - cell "" [ref=f11e596]:
+                - generic [ref=f11e597]:
+                  - checkbox [ref=f11e598]
+                  - generic [ref=f11e599]: 
+              - cell "2026_03_15_174851_add_body_passthrough_to_channels_table" [ref=f11e602]
+              - cell [ref=f11e603]:
+                - link "已执行" [ref=f11e604]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e606]:
+                  - /url: "#"
+              - cell "56" [ref=f11e607]
+              - cell "2026_03_15_174851_add_body_passthrough_to_channels_table.php" [ref=f11e608]
+              - cell [ref=f11e609]:
+                - link " 回滚" [ref=f11e610]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e611]: 
+                  - text: 回滚
+            - row [ref=f11e612] [cursor=pointer]:
+              - cell "" [ref=f11e613]:
+                - generic [ref=f11e614]:
+                  - checkbox [ref=f11e615]
+                  - generic [ref=f11e616]: 
+              - cell "2026_03_15_005447_add_response_body_chunks_to_channel_req..." [ref=f11e619]
+              - cell [ref=f11e620]:
+                - link "已执行" [ref=f11e621]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e623]:
+                  - /url: "#"
+              - cell "55" [ref=f11e624]
+              - cell "2026_03_15_005447_add_response_body_chunks_to_channel_request_logs_table.php" [ref=f11e625]
+              - cell [ref=f11e626]:
+                - link " 回滚" [ref=f11e627]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e628]: 
+                  - text: 回滚
+            - row [ref=f11e629] [cursor=pointer]:
+              - cell "" [ref=f11e630]:
+                - generic [ref=f11e631]:
+                  - checkbox [ref=f11e632]
+                  - generic [ref=f11e633]: 
+              - cell "2026_03_14_112508_create_preset_prompts_table" [ref=f11e636]
+              - cell [ref=f11e637]:
+                - link "已执行" [ref=f11e638]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e640]:
+                  - /url: "#"
+              - cell "54" [ref=f11e641]
+              - cell "2026_03_14_112508_create_preset_prompts_table.php" [ref=f11e642]
+              - cell [ref=f11e643]:
+                - link " 回滚" [ref=f11e644]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e645]: 
+                  - text: 回滚
+            - row [ref=f11e646] [cursor=pointer]:
+              - cell "" [ref=f11e647]:
+                - generic [ref=f11e648]:
+                  - checkbox [ref=f11e649]
+                  - generic [ref=f11e650]: 
+              - cell "2026_03_14_112508_create_model_test_logs_table" [ref=f11e653]
+              - cell [ref=f11e654]:
+                - link "已执行" [ref=f11e655]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e657]:
+                  - /url: "#"
+              - cell "53" [ref=f11e658]
+              - cell "2026_03_14_112508_create_model_test_logs_table.php" [ref=f11e659]
+              - cell [ref=f11e660]:
+                - link " 回滚" [ref=f11e661]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e662]: 
+                  - text: 回滚
+            - row [ref=f11e663] [cursor=pointer]:
+              - cell "" [ref=f11e664]:
+                - generic [ref=f11e665]:
+                  - checkbox [ref=f11e666]
+                  - generic [ref=f11e667]: 
+              - cell "2026_03_14_081334_alter_channel_affinity_rules_path_patte..." [ref=f11e670]
+              - cell [ref=f11e671]:
+                - link "已执行" [ref=f11e672]:
+                  - /url: http://192.168.4.107:36126/admin/migrations?filter-status=ran
+                - link "" [ref=f11e674]:
+                  - /url: "#"
+              - cell "52" [ref=f11e675]
+              - cell "2026_03_14_081334_alter_channel_affinity_rules_path_patterns_to_text.php" [ref=f11e676]
+              - cell [ref=f11e677]:
+                - link " 回滚" [ref=f11e678]:
+                  - /url: javascript:void(0)
+                  - generic [ref=f11e679]: 
+                  - text: 回滚
+        - generic [ref=f11e680]:
+          - generic [ref=f11e681]: 从 1 到 30 ，总共 81 条
+          - list [ref=f11e682]:
+            - listitem [ref=f11e683]:
+              - generic: 
+            - listitem [ref=f11e684]:
+              - generic [ref=f11e685]: "1"
+            - listitem [ref=f11e686]:
+              - link "2" [ref=f11e687] [cursor=pointer]:
+                - /url: /?page=2
+            - listitem [ref=f11e688]:
+              - link "3" [ref=f11e689] [cursor=pointer]:
+                - /url: /?page=3
+            - listitem [ref=f11e690]:
+              - link "" [ref=f11e691] [cursor=pointer]:
+                - /url: /?page=2
+          - link "30 " [ref=f11e694] [cursor=pointer]:
+            - /url: javascript:void(0)
+  - contentinfo [ref=f11e695]:
+    - paragraph [ref=f11e696]:
+      - generic [ref=f11e697]:
+        - text: Powered by
+        - link "Dcat Admin" [ref=f11e698] [cursor=pointer]:
+          - /url: https://github.com/jqhph/dcat-admin
+        - text: · v
+      - text: 
