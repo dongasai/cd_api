@@ -2,10 +2,10 @@
 
 namespace App\Admin\Controllers;
 
-use App\Admin\Actions\BatchMigrate;
-use App\Admin\Actions\MigrateAll;
-use App\Admin\Actions\MigrateOne;
-use App\Admin\Actions\RollbackOne;
+use App\Admin\Actions\Migration\BatchMigrate;
+use App\Admin\Actions\Migration\MigrateAll;
+use App\Admin\Actions\Migration\MigrateOne;
+use App\Admin\Actions\Migration\RollbackOne;
 use App\Admin\Repositories\MigrationRepository;
 use App\Services\Install\MigrationService;
 use Dcat\Admin\Grid;

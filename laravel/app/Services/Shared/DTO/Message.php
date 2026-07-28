@@ -46,6 +46,25 @@ class Message
     public ?string $name = null;
 
     /**
+     * 构造函数
+     */
+    public function __construct(
+        MessageRole $role,
+        ?string $content = null,
+        ?array $toolCalls = null,
+        ?string $toolCallId = null,
+        ?array $contentBlocks = null,
+        ?string $name = null,
+    ) {
+        $this->role = $role;
+        $this->content = $content;
+        $this->toolCalls = $toolCalls;
+        $this->toolCallId = $toolCallId;
+        $this->contentBlocks = $contentBlocks;
+        $this->name = $name;
+    }
+
+    /**
      * 获取纯文本内容
      */
     public function getTextContent(): string

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Admin\Actions;
+namespace App\Admin\Actions\McpClient;
 
 use App\Models\McpClient;
 use App\Services\McpClientService;

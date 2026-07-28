@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Admin\Actions;
+namespace App\Admin\Actions\Migration;
 
 use Dcat\Admin\Grid\Tools\AbstractTool;
 

@@ -3,6 +3,7 @@
 namespace App\Services\Protocol\Driver\OpenAI;
 
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
+use App\Services\Shared\Enums\MessageRole;
 
 /**
  * OpenAI 响应选择结构体（非流式）
@@ -24,7 +25,7 @@ class Choice
      */
     public function __construct(
         public int $index = 0,
-        public Message $message = new Message('assistant'),
+        public Message $message = new Message(MessageRole::Assistant),
         public ?string $finishReason = null,
         public ?Logprobs $logprobs = null,
     ) {}

@@ -2,7 +2,9 @@
 
 namespace App\Admin\Controllers;
 
-use App\Admin\Actions\CopyChannel;
+use App\Admin\Actions\Channel\CopyChannel;
+use App\Admin\Actions\Channel\TestChannelNative;
+use App\Admin\Actions\Channel\TestChannelProxy;
 use App\Enums\ChannelHealthStatus;
 use App\Enums\ChannelStatus;
 use App\Models\Channel;
@@ -118,6 +120,8 @@ class ChannelController extends AdminController
             $grid->actions(function (Grid\Displayers\Actions $actions) {
                 $actions->append('<a href="'.admin_url('channels/'.$this->id).'" class="btn btn-primary btn-sm mr-1"><i class="fa fa-eye"></i> '.admin_trans_label('view').'</a>');
                 $actions->append(new CopyChannel);
+                $actions->append(new TestChannelNative);
+                $actions->append(new TestChannelProxy);
             });
 
             // 批量操作

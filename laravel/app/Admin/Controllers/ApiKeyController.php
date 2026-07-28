@@ -2,12 +2,13 @@
 
 namespace App\Admin\Controllers;
 
-use App\Admin\Actions\RefreshModelCache;
-use App\Admin\Actions\ResetApiKey;
+use App\Admin\Actions\ApiKey\ResetApiKey;
+use App\Admin\Actions\Cache\RefreshModelCache;
 use App\Admin\Grids\ChannelSelectGrid;
 use App\Models\ApiKey;
 use App\Models\Channel;
 use App\Services\ModelService;
+use App\Services\SettingService;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
@@ -330,7 +331,7 @@ class ApiKeyController extends AdminController
     protected function generateApiKey(): string
     {
         // 获取系统配置的密钥前缀，默认为 cdapi-
-        $prefix = app(\App\Services\SettingService::class)->get('security.api_key_prefix', 'cdapi-');
+        $prefix = app(SettingService::class)->get('security.api_key_prefix', 'cdapi-');
 
         return $prefix.Str::random(48);
     }

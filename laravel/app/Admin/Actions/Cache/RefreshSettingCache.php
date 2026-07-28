@@ -1,15 +1,15 @@
 <?php
 
-namespace App\Admin\Actions;
+namespace App\Admin\Actions\Cache;
 
-use App\Services\ModelService;
+use App\Services\SettingService;
 use Dcat\Admin\Actions\Response;
-use Dcat\Admin\Show\AbstractTool;
+use Dcat\Admin\Grid\Tools\AbstractTool;
 
 /**
- * 刷新模型缓存操作
+ * 刷新设置缓存操作
  */
-class RefreshModelCache extends AbstractTool
+class RefreshSettingCache extends AbstractTool
 {
     /**
      * 处理请求
@@ -18,13 +18,11 @@ class RefreshModelCache extends AbstractTool
      */
     public function handle()
     {
-        $id = $this->getKey();
-
         try {
-            // 清除指定 API Key 的模型缓存
-            ModelService::clearCache((int) $id);
+            // 清除系统设置缓存
+            app(SettingService::class)->clearCache();
 
-            return $this->response()->success(admin_trans_action('model_cache_refreshed'))->refresh();
+            return $this->response()->success(admin_trans_action('setting_cache_refreshed'))->refresh();
         } catch (\Exception $e) {
             return $this->response()->error(admin_trans_action('refresh_failed').': '.$e->getMessage());
         }
@@ -37,7 +35,7 @@ class RefreshModelCache extends AbstractTool
      */
     public function confirm()
     {
-        return [admin_trans_action('refresh_model_cache_confirm')];
+        return [admin_trans_action('refresh_setting_cache_confirm')];
     }
 
     /**
@@ -47,10 +45,10 @@ class RefreshModelCache extends AbstractTool
      */
     public function html()
     {
-        $title = admin_trans_action('refresh_model_cache');
+        $title = admin_trans_action('refresh_setting_cache');
 
         return <<<HTML
-<a class="{$this->getElementClass()}" href="javascript:void(0);">
+<a class="{$this->getElementClass()} btn btn-primary btn-sm" href="javascript:void(0);">
     <i class="feather icon-refresh-cw"></i> {$title}
 </a>
 HTML;

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Admin\Actions;
+namespace App\Admin\Actions\Migration;
 
 use App\Services\Install\MigrationService;
 use Dcat\Admin\Grid\RowAction;

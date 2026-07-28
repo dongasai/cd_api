@@ -6,7 +6,10 @@ use App\Services\Protocol\Contracts\ProtocolRequest;
 use App\Services\Protocol\Driver\Concerns\Convertible;
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
 use App\Services\Protocol\Driver\Concerns\Validatable;
+use App\Services\Shared\DTO\ContentBlock;
 use App\Services\Shared\DTO\Request as SharedRequest;
+use App\Services\Shared\Enums\MessageRole;
+use Illuminate\Support\Facades\Log;
 
 /**
  * OpenAI Chat Completions API 请求结构体
@@ -321,16 +324,17 @@ class ChatCompletionRequest implements ProtocolRequest
 
                 // 如果有其他内容块（如 text），保留为原角色的消息
                 if (! empty($otherBlocks)) {
-                    $userMsg = new \App\Services\Shared\DTO\Message;
-                    $userMsg->role = $msg->role;
-                    $userMsg->contentBlocks = $otherBlocks;
+                    $userMsg = new \App\Services\Shared\DTO\Message(
+                        role: $msg->role,
+                        contentBlocks: $otherBlocks,
+                    );
                     $messages[] = Message::fromSharedDTO($userMsg);
                 }
 
                 // 每个 tool_result 转换为独立的 tool 消息
                 foreach ($toolResults as $toolResult) {
                     $messages[] = new Message(
-                        role: 'tool',
+                        role: MessageRole::Tool,
                         content: $toolResult->toolResultContent ?? '',
                         toolCallId: $toolResult->toolResultId ?? '',
                     );
@@ -354,7 +358,7 @@ class ChatCompletionRequest implements ProtocolRequest
                     if (is_array($block)) {
                         // 检查是否是 content block 格式
                         if (isset($block['type'])) {
-                            $contentBlock = \App\Services\Shared\DTO\ContentBlock::fromArray($block);
+                            $contentBlock = ContentBlock::fromArray($block);
                             $systemContent[] = ContentPart::fromSharedDTO($contentBlock);
                         } else {
                             // 普通数组，转为 JSON 字符串
@@ -376,7 +380,7 @@ class ChatCompletionRequest implements ProtocolRequest
             }
 
             array_unshift($messages, new Message(
-                role: 'system',
+                role: MessageRole::System,
                 content: $systemContent,
             ));
         }
@@ -387,7 +391,7 @@ class ChatCompletionRequest implements ProtocolRequest
         $toolChoice = $dto->toolChoice;  // 初始化 tool_choice
         if ($dto->tools !== null) {
             // DEBUG: 记录原始 tools
-            \Illuminate\Support\Facades\Log::debug('ChatCompletionRequest.fromSharedDTO: Input tools', [
+            Log::debug('ChatCompletionRequest.fromSharedDTO: Input tools', [
                 'tools_count' => count($dto->tools),
                 'first_tool' => $dto->tools[0] ?? null,
             ]);
@@ -417,7 +421,7 @@ class ChatCompletionRequest implements ProtocolRequest
                         }
                         $tools[] = Tool::fromArray($wrappedTool);
 
-                        \Illuminate\Support\Facades\Log::debug('ChatCompletionRequest.fromSharedDTO: Wrapped Responses tool', [
+                        Log::debug('ChatCompletionRequest.fromSharedDTO: Wrapped Responses tool', [
                             'original' => $tool,
                             'wrapped' => $wrappedTool,
                         ]);
@@ -430,9 +434,9 @@ class ChatCompletionRequest implements ProtocolRequest
                 $tools = null;
                 $toolChoice = null;  // tools 为空时 tool_choice 必须为空
 
-                \Illuminate\Support\Facades\Log::debug('ChatCompletionRequest.fromSharedDTO: Tools filtered to empty');
+                Log::debug('ChatCompletionRequest.fromSharedDTO: Tools filtered to empty');
             } else {
-                \Illuminate\Support\Facades\Log::debug('ChatCompletionRequest.fromSharedDTO: Output tools', [
+                Log::debug('ChatCompletionRequest.fromSharedDTO: Output tools', [
                     'tools_count' => count($tools),
                     'tool_choice' => $toolChoice,
                 ]);

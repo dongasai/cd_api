@@ -2,7 +2,7 @@
 
 namespace App\Admin\Controllers;
 
-use App\Admin\Actions\CopyChannelModel;
+use App\Admin\Actions\Channel\CopyChannelModel;
 use App\Models\Channel;
 use App\Models\ChannelModel;
 use Dcat\Admin\Form;

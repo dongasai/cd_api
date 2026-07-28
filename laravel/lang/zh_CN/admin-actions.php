@@ -49,4 +49,20 @@ return [
     'refresh_setting_cache' => '刷新缓存',
     'refresh_setting_cache_confirm' => '确定要刷新系统设置缓存吗？这将清除所有设置缓存并重新加载。',
     'setting_cache_refreshed' => '系统设置缓存已刷新',
+
+    // TestChannelNative
+    'test_channel_native' => '原生测试',
+    'test_channel_native_confirm' => '确认使用原生SDK测试此渠道?',
+    'test_channel_native_confirm_desc' => '将使用 OpenAI/Anthropic 原生SDK直接请求上游渠道，验证连接和模型是否可用。',
+    'test_channel_proxy' => '中转测试',
+    'test_channel_proxy_confirm' => '确认通过中转测试此渠道?',
+    'test_channel_proxy_confirm_desc' => '将通过系统网关流程测试渠道，验证完整链路是否正常。',
+    'test_channel_success' => '渠道测试成功！',
+    'test_channel_failed' => '渠道测试失败',
+    'test_channel_proxy_success' => '中转测试成功！',
+    'test_channel_proxy_failed' => '中转测试失败',
+    'test_channel_native_success' => '原生测试成功！',
+    'test_channel_native_failed' => '原生测试失败',
+    'channel_no_api_key' => '渠道未配置API Key',
+    'channel_no_default_model' => '渠道未配置默认模型',
 ];

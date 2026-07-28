@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Admin\Actions;
+namespace App\Admin\Actions\Channel;
 
 use App\Models\Channel;
 use Dcat\Admin\Grid\RowAction;

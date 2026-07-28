@@ -245,13 +245,14 @@ class Message
             ];
         }
 
-        $dto = new SharedMessage;
-        $dto->role = MessageRole::from($this->role);
-        $dto->content = $content;
-        $dto->toolCalls = $toolCalls;
-        $dto->toolCallId = $this->toolCallId;
-        $dto->contentBlocks = $contentBlocks;
-        $dto->name = $this->name;
+        $dto = new SharedMessage(
+            role: MessageRole::from($this->role),
+            content: $content,
+            toolCalls: $toolCalls,
+            toolCallId: $this->toolCallId,
+            contentBlocks: $contentBlocks,
+            name: $this->name,
+        );
 
         return $dto;
     }

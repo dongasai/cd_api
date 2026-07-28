@@ -2,13 +2,14 @@
 
 namespace App\Admin\Controllers;
 
-use App\Admin\Actions\TestMcpConnection;
+use App\Admin\Actions\McpClient\TestMcpConnection;
 use App\Models\McpClient;
 use App\Services\McpClientService;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
 use Dcat\Admin\Show;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
@@ -179,7 +180,7 @@ class McpClientController extends AdminController
     /**
      * 测试连接接口
      *
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     public function testConnectionApi(Request $request, $id)
     {
@@ -195,7 +196,7 @@ class McpClientController extends AdminController
      * 获取工具列表接口
      *
      * @param  int  $id
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     public function listToolsApi(Request $request, $id)
     {
@@ -221,7 +222,7 @@ class McpClientController extends AdminController
      * 调用工具接口
      *
      * @param  int  $id
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     public function callToolApi(Request $request, $id)
     {

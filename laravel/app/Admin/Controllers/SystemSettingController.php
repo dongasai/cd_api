@@ -2,7 +2,7 @@
 
 namespace App\Admin\Controllers;
 
-use App\Admin\Actions\RefreshSettingCache;
+use App\Admin\Actions\Cache\RefreshSettingCache;
 use App\Enums\SettingGroup;
 use App\Models\SystemSetting;
 use Dcat\Admin\Form;

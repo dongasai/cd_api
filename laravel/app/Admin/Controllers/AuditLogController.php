@@ -2,13 +2,14 @@
 
 namespace App\Admin\Controllers;
 
-use App\Admin\Actions\CompareRequestDiff;
-use App\Admin\Actions\ViewAffinityHit;
-use App\Admin\Actions\ViewChannelRequestLog;
-use App\Admin\Actions\ViewRequestLog;
-use App\Admin\Actions\ViewResponseLog;
+use App\Admin\Actions\Channel\ViewAffinityHit;
+use App\Admin\Actions\Channel\ViewChannelRequestLog;
+use App\Admin\Actions\Log\CompareRequestDiff;
+use App\Admin\Actions\Log\ViewRequestLog;
+use App\Admin\Actions\Log\ViewResponseLog;
 use App\Models\AuditLog;
 use Dcat\Admin\Grid;
+use Dcat\Admin\Grid\Displayers\Actions;
 use Dcat\Admin\Http\Controllers\AdminController;
 use Dcat\Admin\Show;
 
@@ -213,10 +214,10 @@ class AuditLogController extends AdminController
             $grid->showViewButton();
 
             // 直接显示操作按钮（不使用下拉菜单）
-            $grid->setActionClass(\Dcat\Admin\Grid\Displayers\Actions::class);
+            $grid->setActionClass(Actions::class);
 
             // 添加自定义行操作按钮
-            $grid->actions(function (Grid\Displayers\Actions $actions) {
+            $grid->actions(function (Actions $actions) {
                 $actions->append(new CompareRequestDiff);
                 $actions->append(new ViewRequestLog);
                 $actions->append(new ViewChannelRequestLog);

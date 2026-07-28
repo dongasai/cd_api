@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Admin\Actions;
+namespace App\Admin\Actions\ApiKey;
 
 use App\Models\ApiKey;
 use App\Services\ModelService;

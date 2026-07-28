@@ -49,4 +49,20 @@ return [
     'refresh_setting_cache' => 'Refresh Cache',
     'refresh_setting_cache_confirm' => 'Are you sure to refresh the system settings cache? This will clear all settings cache and reload.',
     'setting_cache_refreshed' => 'System settings cache has been refreshed',
+
+    // TestChannelNative
+    'test_channel_native' => 'Native Test',
+    'test_channel_native_confirm' => 'Confirm to test this channel with native SDK?',
+    'test_channel_native_confirm_desc' => 'A test request will be sent directly to the upstream channel using OpenAI/Anthropic SDK to verify connectivity.',
+    'test_channel_proxy' => 'Proxy Test',
+    'test_channel_proxy_confirm' => 'Confirm to test this channel via proxy?',
+    'test_channel_proxy_confirm_desc' => 'A test request will be sent through the system gateway to verify the full pipeline.',
+    'test_channel_success' => 'Channel test successful!',
+    'test_channel_failed' => 'Channel test failed',
+    'test_channel_proxy_success' => 'Proxy test successful!',
+    'test_channel_proxy_failed' => 'Proxy test failed',
+    'test_channel_native_success' => 'Native test successful!',
+    'test_channel_native_failed' => 'Native test failed',
+    'channel_no_api_key' => 'Channel has no API Key configured',
+    'channel_no_default_model' => 'Channel has no default model configured',
 ];

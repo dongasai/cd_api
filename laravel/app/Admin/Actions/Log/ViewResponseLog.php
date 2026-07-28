@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Admin\Actions;
+namespace App\Admin\Actions\Log;
 
 use Dcat\Admin\Grid\RowAction;
 

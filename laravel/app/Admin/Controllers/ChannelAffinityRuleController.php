@@ -2,7 +2,7 @@
 
 namespace App\Admin\Controllers;
 
-use App\Admin\Actions\CopyChannelAffinityRule;
+use App\Admin\Actions\Channel\CopyChannelAffinityRule;
 use App\Enums\PathPattern;
 use App\Models\ChannelAffinityRule;
 use Dcat\Admin\Form;

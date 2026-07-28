@@ -2,6 +2,8 @@
 
 namespace App\Services\Shared\DTO;
 
+use App\Services\Shared\Enums\MessageRole;
+
 /**
  * 统一请求 DTO
  *
@@ -117,6 +119,53 @@ class Request
     public ?object $protocolContext = null;
 
     /**
+     * 构造函数
+     */
+    public function __construct(
+        string $model = '',
+        array $messages = [],
+        ?int $maxTokens = null,
+        ?float $temperature = null,
+        ?float $topP = null,
+        ?int $topK = null,
+        ?bool $stream = false,
+        ?array $streamOptions = null,
+        ?array $stopSequences = null,
+        string|array|null $system = null,
+        ?array $tools = null,
+        $toolChoice = null,
+        ?array $thinking = null,
+        ?array $metadata = null,
+        ?string $user = null,
+        array $additionalParams = [],
+        ?array $rawRequest = null,
+        ?string $rawBodyString = null,
+        ?string $queryString = null,
+        ?object $protocolContext = null,
+    ) {
+        $this->model = $model;
+        $this->messages = $messages;
+        $this->maxTokens = $maxTokens;
+        $this->temperature = $temperature;
+        $this->topP = $topP;
+        $this->topK = $topK;
+        $this->stream = $stream;
+        $this->streamOptions = $streamOptions;
+        $this->stopSequences = $stopSequences;
+        $this->system = $system;
+        $this->tools = $tools;
+        $this->toolChoice = $toolChoice;
+        $this->thinking = $thinking;
+        $this->metadata = $metadata;
+        $this->user = $user;
+        $this->additionalParams = $additionalParams;
+        $this->rawRequest = $rawRequest;
+        $this->rawBodyString = $rawBodyString;
+        $this->queryString = $queryString;
+        $this->protocolContext = $protocolContext;
+    }
+
+    /**
      * 获取消息数量
      */
     public function getMessageCount(): int
@@ -216,13 +265,13 @@ class Request
                     $contentBlocks = $msg['content_blocks'];
                 }
 
-                $message = new Message;
-                $message->role = \App\Services\Shared\Enums\MessageRole::from($msg['role'] ?? 'user');
-                $message->content = $content;
-                $message->toolCalls = $msg['tool_calls'] ?? null;
-                $message->toolCallId = $msg['tool_call_id'] ?? null;
-                $message->contentBlocks = $contentBlocks;
-                $messages[] = $message;
+                $messages[] = new Message(
+                    role: MessageRole::from($msg['role'] ?? 'user'),
+                    content: $content,
+                    toolCalls: $msg['tool_calls'] ?? null,
+                    toolCallId: $msg['tool_call_id'] ?? null,
+                    contentBlocks: $contentBlocks,
+                );
             }
         }
 
