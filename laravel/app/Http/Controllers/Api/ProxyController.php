@@ -24,11 +24,15 @@ class ProxyController extends Controller
 
     public function chatCompletions(Request $request): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
     {
+        Log::debug('收到新请求 chatCompletions');
+
         return $this->handleRequest($request, 'openai');
     }
 
     public function completions(Request $request): JsonResponse|StreamedResponse
     {
+        Log::debug('收到新请求 completions');
+
         return $this->handleRequest($request, 'openai');
     }
 
@@ -106,6 +110,8 @@ class ProxyController extends Controller
 
     public function anthropicMessages(Request $request): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
     {
+        Log::debug('收到新请求 anthropicMessages');
+
         return $this->handleRequest($request, 'anthropic');
     }
 
@@ -114,6 +120,8 @@ class ProxyController extends Controller
      */
     public function openai_responses(Request $request): JsonResponse|\Symfony\Component\HttpFoundation\StreamedResponse
     {
+        Log::debug('收到新请求 openai_responses');
+
         // 标记请求为 Responses 协议
         $request->attributes->set('protocol', 'openai_responses');
 
@@ -137,6 +145,10 @@ class ProxyController extends Controller
 
     protected function streamResponse(Generator $generator, string $protocol): \Symfony\Component\HttpFoundation\StreamedResponse
     {
+        // 确保客户端断开连接后脚本继续执行，以便更新审计日志
+        //        ignore_user_abort(true);
+        //        set_time_limit(0);
+
         $headers = [
             'Content-Type' => 'text/event-stream',
             'Cache-Control' => 'no-cache',
@@ -151,6 +163,11 @@ class ProxyController extends Controller
         return response()->stream(function () use ($generator) {
             try {
                 foreach ($generator as $chunk) {
+                    // 检查客户端是否已断开连接
+                    if (connection_aborted()) {
+                        Log::info('客户端断开连接，停止发送但继续更新审计日志', []);
+                        break;
+                    }
                     Log::debug("streamResponsetoClient \n".$chunk);
                     echo $chunk;
                     if (ob_get_level() > 0) {
@@ -159,17 +176,17 @@ class ProxyController extends Controller
                     flush();
                 }
             } finally {
-                // 确保 Generator 被关闭，触发 ProxyServer 中的 finally 块
-                // 这样即使客户端断开连接，审计日志也会被正确更新
-                if ($generator instanceof Generator) {
-                    // 如果 Generator 还没有完成，强制关闭它
-                    if ($generator->valid()) {
-                        try {
-                            // 尝试获取 Generator 的返回值（这会触发 finally 块）
-                            $generator->getReturn();
-                        } catch (\Exception $e) {
-                            // 忽略异常，重点是触发 finally 块
-                        }
+                // 强制关闭 Generator，触发其内部的 finally 块
+                // 注意：不能使用 getReturn() 等待完成，因为上游流可能不关闭
+                if ($generator instanceof Generator && $generator->valid()) {
+                    try {
+                        // 使用 throw 强制终止 Generator，触发 finally 块
+                        $generator->throw(new \RuntimeException('Client disconnected'));
+                    } catch (\Throwable $e) {
+                        // 捕获 Generator 抛出的异常，重点是触发其 finally 块
+                        Log::debug('Generator terminated', [
+                            'error' => $e->getMessage(),
+                        ]);
                     }
                 }
             }

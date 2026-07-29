@@ -11,6 +11,7 @@ use App\Services\Provider\ProviderManager;
 use App\Services\Router\Logger\AuditLogger;
 use App\Services\Router\Logger\ResponseLogger;
 use App\Services\Shared\DTO\StreamChunk;
+use App\Services\Shared\Enums\FinishReason;
 use Generator;
 use Illuminate\Http\Request as HttpRequest;
 use Illuminate\Support\Facades\Log;
@@ -103,6 +104,7 @@ class StreamHandler
         $streamChunks = [];
         $collectedUsage = null;
         $collectedFinishReason = null;
+        $auditLogUpdated = false;  // 标记审计日志是否已更新（防止重复更新）
         // protocolContext 已通过参数传递，无需从请求提取
 
         // 检查是否需要过滤 thinking 内容
@@ -137,38 +139,167 @@ class StreamHandler
                     // 收集 finishReason
                     if ($chunk->finishReason !== null) {
                         $collectedFinishReason = $chunk->finishReason;
+                        Log::debug('StreamHandler: 收到 finishReason', [
+                            'finish_reason' => $chunk->finishReason->value,
+                            'chunk_content_delta' => $chunk->contentDelta,
+                            'chunk_reasoning_delta' => $chunk->reasoningDelta,
+                            'has_usage' => $chunk->usage !== null,
+                        ]);
                     }
 
                     // 转换并输出
-                    yield $this->protocolConverter->convertStreamChunk($chunk, $sourceProtocol);
+                    $converted = $this->protocolConverter->convertStreamChunk($chunk, $sourceProtocol);
+                    if ($converted === '' || $converted === null) {
+                        Log::debug('StreamHandler: convertStreamChunk 返回空', [
+                            'finish_reason' => $chunk->finishReason?->value,
+                            'content_delta' => $chunk->contentDelta,
+                            'reasoning_delta' => $chunk->reasoningDelta,
+                            'has_usage' => $chunk->usage !== null,
+                        ]);
+                    } elseif ($chunk->finishReason !== null) {
+                        Log::debug('StreamHandler: finishReason chunk 转换结果', [
+                            'finish_reason' => $chunk->finishReason->value,
+                            'converted_length' => strlen($converted),
+                            'converted_preview' => substr($converted, 0, 200),
+                        ]);
+
+                        // 关键修复：在 yield finishReason 之前更新审计日志
+                        // 因为客户端收到 finishReason 后可能立即断开连接，导致 Generator 后续代码无法执行
+                        $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+                        // 提取实际模型名
+                        $actualModel = null;
+                        foreach ($streamChunks as $c) {
+                            if (! empty($c->model)) {
+                                $actualModel = $c->model;
+                                break;
+                            }
+                        }
+
+                        // 提前更新审计日志（包含 token 使用信息）
+                        $this->updateAuditLogWithUsage($auditLog, $latencyMs, $firstTokenMs, $collectedUsage, $collectedFinishReason, $actualModel);
+                        $auditLogUpdated = true;  // 标记已更新
+
+                        Log::debug('StreamHandler: 审计日志已更新（提前）', [
+                            'audit_log_id' => $auditLog->id,
+                            'latency_ms' => $latencyMs,
+                            'first_token_ms' => $firstTokenMs,
+                            'finish_reason' => $collectedFinishReason?->value,
+                        ]);
+                    }
+                    yield $converted;
                 }
             }
         } catch (\Exception $e) {
-            // 流式迭代过程中的异常处理
+            // 流式迭代过程中的异常处理（包括客户端断开导致的 Generator throw）
             $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
-            $statusCode = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
+
+            // 客户端断开连接不是错误，按成功处理
+            $isClientDisconnect = str_contains($e->getMessage(), 'Client disconnected');
+            $statusCode = $isClientDisconnect ? 200 : (method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500);
+
+            // 提取已收集的模型名
+            $actualModel = null;
+            foreach ($streamChunks as $chunk) {
+                if (! empty($chunk->model)) {
+                    $actualModel = $chunk->model;
+                    break;
+                }
+            }
+
+            // 更新审计日志（包含已有的使用信息）
+            $auditData = [
+                'status_code' => $statusCode,
+                'latency_ms' => $latencyMs,
+            ];
+
+            // 客户端断开时，不记录错误信息
+            if (! $isClientDisconnect) {
+                $auditData['error_type'] = get_class($e);
+                $auditData['error_message'] = $e->getMessage();
+            }
+
+            // 如果有实际模型名，记录
+            if ($actualModel !== null) {
+                $auditData['actual_model'] = $actualModel;
+            }
+
+            // 如果有首字延迟，记录
+            if ($firstTokenMs !== null) {
+                $auditData['first_token_ms'] = $firstTokenMs;
+            }
+
+            // 如果有 token 使用信息，记录
+            if ($collectedUsage !== null) {
+                $auditData['prompt_tokens'] = $collectedUsage->inputTokens ?? 0;
+                $auditData['completion_tokens'] = $collectedUsage->outputTokens ?? 0;
+                $auditData['total_tokens'] = ($collectedUsage->inputTokens ?? 0) + ($collectedUsage->outputTokens ?? 0);
+                $auditData['cache_read_tokens'] = $collectedUsage->cacheReadInputTokens ?? 0;
+                $auditData['cache_write_tokens'] = $collectedUsage->cacheCreationInputTokens ?? 0;
+            }
 
             if ($auditLog !== null) {
-                $this->auditLogger->update($auditLog, [
+                $this->auditLogger->update($auditLog, $auditData);
+                $auditLogUpdated = true;
+                Log::debug('StreamHandler: 审计日志已更新（异常路径）', [
+                    'audit_log_id' => $auditLog->id,
                     'status_code' => $statusCode,
                     'latency_ms' => $latencyMs,
-                    'error_type' => get_class($e),
-                    'error_message' => $e->getMessage(),
+                    'is_client_disconnect' => $isClientDisconnect,
                 ]);
             }
 
-            // 记录错误日志
-            Log::error('Stream iteration failed', [
-                'request_id' => $auditLog?->request_id,
-                'channel_id' => $selectedChannel?->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+            // 记录错误日志（客户端断开不记录错误）
+            if (! $isClientDisconnect) {
+                Log::error('Stream iteration failed', [
+                    'request_id' => $auditLog?->request_id,
+                    'channel_id' => $selectedChannel?->id,
+                    'error' => $e->getMessage(),
+                    'chunks_count' => count($streamChunks),
+                    'latency_ms' => $latencyMs,
+                ]);
+            }
 
-            throw $e;
+            // 客户端断开时不抛出异常，让 Generator 正常结束
+            if (! $isClientDisconnect) {
+                throw $e;
+            }
+        }
+
+        // foreach 循环结束，Generator 后续代码开始执行
+        Log::debug('StreamHandler: Generator foreach 结束，开始后续处理', [
+            'chunks_count' => count($streamChunks),
+            'has_finish_reason' => $collectedFinishReason !== null,
+        ]);
+
+        // 如果上游没有发送 finishReason（某些上游直接关闭连接），
+        // 需要补充发送结束事件，否则客户端会认为响应不完整
+        if ($collectedFinishReason === null) {
+            Log::warning('StreamHandler: 上游未发送 finishReason，补充发送结束事件');
+            $collectedFinishReason = FinishReason::Stop;
+
+            // 构建一个补充的结束 chunk
+            $endChunk = new StreamChunk;
+            $endChunk->id = '';
+            $endChunk->model = '';
+            $endChunk->finishReason = FinishReason::Stop;
+            $endChunk->usage = $collectedUsage;
+            $endChunk->delta = '';
+            $endChunk->contentDelta = null;
+            $endChunk->reasoningDelta = null;
+
+            yield $this->protocolConverter->convertStreamChunk($endChunk, $sourceProtocol);
         }
 
         $latencyMs = (int) ((microtime(true) - $startTime) * 1000);
+
+        Log::debug('StreamHandler: 流式迭代完成，开始更新审计日志', [
+            'latency_ms' => $latencyMs,
+            'first_token_ms' => $firstTokenMs,
+            'chunks_count' => count($streamChunks),
+            'has_usage' => $collectedUsage !== null,
+            'finish_reason' => $collectedFinishReason?->value,
+        ]);
 
         // 注意：上游已经发送了 message_stop 事件，透传模式下不需要额外发送结束标记
         // yield $this->protocolConverter->driver($sourceProtocol)->buildStreamDone();
@@ -189,7 +320,16 @@ class StreamHandler
         }
 
         // 更新审计日志（包含 token 使用信息和实际模型名）
-        $this->updateAuditLogWithUsage($auditLog, $latencyMs, $firstTokenMs, $collectedUsage, $collectedFinishReason, $actualModel);
+        // 如果已经提前更新过，则跳过（避免重复更新）
+        if (! $auditLogUpdated) {
+            $this->updateAuditLogWithUsage($auditLog, $latencyMs, $firstTokenMs, $collectedUsage, $collectedFinishReason, $actualModel);
+            Log::debug('StreamHandler: 审计日志已更新（正常）', [
+                'audit_log_id' => $auditLog->id,
+                'latency_ms' => $latencyMs,
+                'first_token_ms' => $firstTokenMs,
+                'finish_reason' => $collectedFinishReason?->value,
+            ]);
+        }
 
         // 记录渠道亲和性（成功请求后更新缓存）
         $this->recordAffinity($httpRequest, $modelName);
@@ -269,6 +409,14 @@ class StreamHandler
         }
 
         $auditLog->update($data);
+
+        Log::debug('StreamHandler: 审计日志已更新', [
+            'audit_log_id' => $auditLog->id,
+            'status_code' => $data['status_code'],
+            'latency_ms' => $data['latency_ms'],
+            'first_token_ms' => $firstTokenMs,
+            'finish_reason' => $finishReason?->value,
+        ]);
     }
 
     /**
@@ -337,6 +485,44 @@ class StreamHandler
             }
         }
 
+        // 提取 tool_calls（从流式块中收集）
+        $toolCalls = [];
+        foreach ($streamChunks as $chunk) {
+            if ($chunk->toolCalls !== null) {
+                foreach ($chunk->toolCalls as $tc) {
+                    $tcIndex = $tc['index'] ?? 0;
+                    if (isset($tc['id']) && ! empty($tc['id'])) {
+                        // 新工具调用开始
+                        $toolCalls[$tcIndex] = $tc;
+                    } elseif (isset($toolCalls[$tcIndex])) {
+                        // 参数增量追加
+                        if (isset($tc['function']['arguments'])) {
+                            $toolCalls[$tcIndex]['function']['arguments'] .= $tc['function']['arguments'];
+                        }
+                    }
+                }
+            }
+            // 兼容单个 toolCall 字段
+            if ($chunk->toolCall !== null) {
+                $tc = $chunk->toolCall;
+                $tcIndex = $tc->index ?? 0;
+                $tcId = $tc->id ?? '';
+                if (! empty($tcId) && ! isset($toolCalls[$tcIndex])) {
+                    $toolCalls[$tcIndex] = [
+                        'id' => $tcId,
+                        'type' => $tc->type ?? 'function',
+                        'function' => [
+                            'name' => $tc->name ?? '',
+                            'arguments' => $tc->arguments ?? '',
+                        ],
+                    ];
+                } elseif (isset($toolCalls[$tcIndex]) && ! empty($tc->arguments)) {
+                    $toolCalls[$tcIndex]['function']['arguments'] .= $tc->arguments;
+                }
+            }
+        }
+        $toolCalls = array_values($toolCalls); // 重新索引
+
         // 构建标准 OpenAI 格式响应
         $response = [
             'id' => $id ?: 'chatcmpl-'.uniqid(),
@@ -358,6 +544,15 @@ class StreamHandler
         // 添加推理内容（如果有）
         if ($reasoningContent) {
             $response['choices'][0]['message']['reasoning_content'] = $reasoningContent;
+        }
+
+        // 添加 tool_calls（如果有）
+        if (! empty($toolCalls)) {
+            $response['choices'][0]['message']['tool_calls'] = $toolCalls;
+            // 有 tool_calls 时 content 不能为 null
+            if ($response['choices'][0]['message']['content'] === null) {
+                $response['choices'][0]['message']['content'] = '';
+            }
         }
 
         // 添加 usage
