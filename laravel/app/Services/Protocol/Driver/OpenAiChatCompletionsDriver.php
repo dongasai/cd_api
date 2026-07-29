@@ -59,6 +59,32 @@ class OpenAiChatCompletionsDriver extends AbstractDriver
      */
     public function buildStreamChunk(StreamChunk $chunk): string
     {
+        // 处理 message_start 事件（Anthropic → OpenAI 转换）
+        // OpenAI 的第一个 chunk 通常包含 delta: {role: "assistant"}
+        if ($chunk->event === 'message_start') {
+            $result = [
+                'id' => $chunk->id ?: 'chatcmpl-'.uniqid(),
+                'object' => 'chat.completion.chunk',
+                'created' => time(),
+                'model' => $chunk->model,
+                'choices' => [
+                    [
+                        'index' => 0,
+                        'delta' => ['role' => 'assistant'],
+                        'finish_reason' => null,
+                    ],
+                ],
+            ];
+
+            return 'data: '.$this->safeJsonEncode($result)."\n\n";
+        }
+
+        // 处理 message_stop 事件（Anthropic → OpenAI 转换）
+        // 生成 [DONE] 标记
+        if ($chunk->event === 'message_stop') {
+            return "data: [DONE]\n\n";
+        }
+
         $delta = [];
 
         // 兼容旧字段

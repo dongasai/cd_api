@@ -287,9 +287,11 @@ class Message
                     ]);
                 } elseif ($block->type === 'thinking') {
                     // thinking 内容转换为 reasoningContent（DeepSeek 等模型需要）
-                    if ($block->text !== null) {
+                    // 注意：thinking 内容在 thinking 属性中，不在 text 属性中
+                    $thinkingText = $block->thinking ?? $block->text;
+                    if ($thinkingText !== null) {
                         $reasoningContent = $reasoningContent ?? '';
-                        $reasoningContent .= $block->text;
+                        $reasoningContent .= $thinkingText;
                     }
                 } else {
                     // 其他类型正常转换为 ContentPart
@@ -298,8 +300,20 @@ class Message
             }
 
             // 设置 content（如果有非 tool_use/thinking 内容）
+            // OpenAI Chat API: assistant 消息有 tool_calls 时，content 应为字符串而非数组
             if (! empty($contentParts)) {
-                $content = $contentParts;
+                if (! empty($toolCallsFromBlocks)) {
+                    // 有 tool_calls 时，content 必须是字符串
+                    $textParts = [];
+                    foreach ($contentParts as $part) {
+                        if ($part instanceof ContentPart && $part->type === 'text') {
+                            $textParts[] = $part->text ?? '';
+                        }
+                    }
+                    $content = implode("\n", $textParts);
+                } else {
+                    $content = $contentParts;
+                }
             }
 
             // 合并 toolCalls（从 contentBlocks 和 dto->toolCalls）
@@ -318,6 +332,22 @@ class Message
                     $dto->toolCalls
                 )
             );
+        }
+
+        // OpenAI Chat API: 有 tool_calls 时 content 必须是字符串
+        if (! empty($toolCalls) && is_array($content)) {
+            $textParts = [];
+            foreach ($content as $part) {
+                if ($part instanceof ContentPart && $part->type === 'text') {
+                    $textParts[] = $part->text ?? '';
+                }
+            }
+            $content = implode("\n", $textParts);
+        }
+
+        // OpenAI Chat API: assistant 有 tool_calls 时 content 不能为 null
+        if (! empty($toolCalls) && $content === null) {
+            $content = '';
         }
 
         // 转换角色：developer -> user（上游 API 不支持 developer 角色）

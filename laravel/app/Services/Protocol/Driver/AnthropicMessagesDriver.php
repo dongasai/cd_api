@@ -7,6 +7,7 @@ use App\Services\Protocol\Contracts\ProtocolResponse;
 use App\Services\Protocol\Driver\Anthropic\MessagesRequest;
 use App\Services\Protocol\Driver\Anthropic\MessagesResponse;
 use App\Services\Shared\DTO\StreamChunk;
+use App\Services\Shared\DTO\ToolCall;
 
 /**
  * Anthropic Messages 协议驱动
@@ -63,6 +64,11 @@ class AnthropicMessagesDriver extends AbstractDriver
     private bool $toolCallBlockStarted = false;
 
     /**
+     * 是否已发送 message_start 事件（O2A 转换时需要自动补充）
+     */
+    private bool $messageStarted = false;
+
+    /**
      * 获取协议名称
      */
     public function getProtocolName(): string
@@ -105,9 +111,72 @@ class AnthropicMessagesDriver extends AbstractDriver
     {
         // 根据事件类型选择构建方法
         if ($chunk->event === self::EVENT_MESSAGE_START) {
+            $this->messageStarted = true;
+
             return $this->buildMessageStartEvent($chunk);
         }
 
+        // 对于需要 message_start 的后续事件，自动补充 message_start（O2A 转换场景）
+        if (! $this->messageStarted && $this->needsMessageStart($chunk)) {
+            $this->messageStarted = true;
+            // 生成一个默认的 message_start 事件
+            $startChunk = new StreamChunk;
+            $startChunk->id = $chunk->id ?: ('msg_'.uniqid());
+            $startChunk->model = $chunk->model ?: '';
+            $output = $this->buildMessageStartEvent($startChunk);
+
+            // 然后处理当前事件
+            return $output.$this->buildStreamChunkInternal($chunk);
+        }
+
+        return $this->buildStreamChunkInternal($chunk);
+    }
+
+    /**
+     * 判断是否需要先发送 message_start
+     */
+    private function needsMessageStart(StreamChunk $chunk): bool
+    {
+        // 内容相关事件
+        if (in_array($chunk->event, [
+            self::EVENT_CONTENT_BLOCK_START,
+            self::EVENT_CONTENT_BLOCK_DELTA,
+            self::EVENT_CONTENT_BLOCK_STOP,
+            self::EVENT_MESSAGE_DELTA,
+            self::EVENT_MESSAGE_STOP,
+        ])) {
+            return true;
+        }
+
+        // 有内容增量
+        if (($chunk->delta !== '' && $chunk->delta !== null) ||
+            ($chunk->contentDelta !== null && $chunk->contentDelta !== '')) {
+            return true;
+        }
+
+        // 有推理内容
+        if ($chunk->reasoningDelta !== null && $chunk->reasoningDelta !== '') {
+            return true;
+        }
+
+        // 有工具调用
+        if ($chunk->toolCalls !== null || $chunk->toolCall !== null) {
+            return true;
+        }
+
+        // 有结束原因
+        if ($chunk->finishReason !== null) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * 内部构建方法（已处理 message_start）
+     */
+    private function buildStreamChunkInternal(StreamChunk $chunk): string
+    {
         if ($chunk->event === self::EVENT_PING) {
             // 使用原始数据，如果没有则使用默认格式
             $data = ! empty($chunk->data) ? json_encode($chunk->data, JSON_UNESCAPED_UNICODE) : '{}';
@@ -354,7 +423,7 @@ class AnthropicMessagesDriver extends AbstractDriver
         // 处理兼容字段
         if ($toolCalls !== null && ! empty($toolCalls)) {
             $tc = $toolCalls[0];
-            $toolCall = new \App\Services\Shared\DTO\ToolCall;
+            $toolCall = new ToolCall;
             $toolCall->id = $tc['id'] ?? '';
             $toolCall->type = $tc['type'] ?? 'function';
             $toolCall->name = $tc['function']['name'] ?? '';
@@ -382,6 +451,17 @@ class AnthropicMessagesDriver extends AbstractDriver
                 ];
                 $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_STOP, $this->safeJsonEncode($blockStop));
                 $this->contentBlockStarted = false;
+                $this->currentBlockIndex++;
+            }
+
+            // 如果之前的工具调用块没关闭，先关闭（多工具调用场景）
+            if ($this->toolCallBlockStarted) {
+                $blockStop = [
+                    'type' => self::EVENT_CONTENT_BLOCK_STOP,
+                    'index' => $this->currentBlockIndex,
+                ];
+                $output .= $this->buildSSEEvent(self::EVENT_CONTENT_BLOCK_STOP, $this->safeJsonEncode($blockStop));
+                $this->toolCallBlockStarted = false;
                 $this->currentBlockIndex++;
             }
 

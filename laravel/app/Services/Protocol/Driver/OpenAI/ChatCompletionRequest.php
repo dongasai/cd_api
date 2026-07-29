@@ -334,14 +334,22 @@ class ChatCompletionRequest implements ProtocolRequest
                 // 每个 tool_result 转换为独立的 tool 消息
                 foreach ($toolResults as $toolResult) {
                     $messages[] = new Message(
-                        role: MessageRole::Tool,
+                        role: MessageRole::Tool->value,
                         content: $toolResult->toolResultContent ?? '',
                         toolCallId: $toolResult->toolResultId ?? '',
                     );
                 }
             } else {
                 // 没有 tool_result，保持原有转换逻辑
-                $messages[] = Message::fromSharedDTO($msg);
+                $openaiMsg = Message::fromSharedDTO($msg);
+
+                // OpenAI Chat API 不允许 system 角色出现在消息中间
+                // Anthropic 的 system-reminder 消息在 OpenAI 中应转为 user 角色
+                if ($openaiMsg->role === 'system' && ! empty($messages)) {
+                    $openaiMsg->role = 'user';
+                }
+
+                $messages[] = $openaiMsg;
             }
         }
 
@@ -380,7 +388,7 @@ class ChatCompletionRequest implements ProtocolRequest
             }
 
             array_unshift($messages, new Message(
-                role: MessageRole::System,
+                role: MessageRole::System->value,
                 content: $systemContent,
             ));
         }

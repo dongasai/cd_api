@@ -2,6 +2,7 @@
 
 namespace App\Services\Protocol\Driver\Anthropic;
 
+use Anthropic\Messages\MessageParam;
 use App\Services\Protocol\Driver\Concerns\Convertible;
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
 use App\Services\Shared\DTO\Message as SharedMessage;
@@ -14,7 +15,7 @@ use App\Services\Shared\Enums\MessageRole;
  * 官方 SDK 的 Message 类对应本项目中的 MessagesResponse（响应消息）
  *
  * @see https://docs.anthropic.com/en/api/messages#request-body-messages
- * @see \Anthropic\Messages\MessageParam 官方 SDK 对应类
+ * @see MessageParam 官方 SDK 对应类
  */
 class Message
 {
@@ -106,10 +107,11 @@ class Message
             }
         }
 
-        $dto = new SharedMessage;
-        $dto->role = MessageRole::from($this->role);
-        $dto->content = $content;
-        $dto->contentBlocks = $contentBlocks;
+        $dto = new SharedMessage(
+            role: MessageRole::from($this->role),
+            content: $content,
+            contentBlocks: $contentBlocks,
+        );
 
         return $dto;
     }
