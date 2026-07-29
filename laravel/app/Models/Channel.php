@@ -4,6 +4,11 @@ namespace App\Models;
 
 use App\Enums\ChannelHealthStatus;
 use App\Enums\ChannelStatus;
+use App\Services\Provider\ProviderManager;
+use App\Services\Router\ChannelRouterService;
+use App\Services\Router\ProxyServer;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,10 +16,112 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * @property int|null $coding_account_id
+ * 渠道模型
+ *
+ * 管理上游 AI 服务提供商的渠道配置，支持继承、负载均衡、健康监控等功能。
+ *
+ * 数据表结构 (channels):
+ * ┌──────────────────────────┬──────────────────┬─────────────────────────────────────────────┐
+ * │ 字段名                    │ 类型              │ 说明                                         │
+ * ├──────────────────────────┼──────────────────┼─────────────────────────────────────────────┤
+ * │ id                       │ bigint unsigned   │ 主键，自增                                    │
+ * │ parent_id                │ bigint unsigned   │ 父渠道 ID（继承关系）                          │
+ * │ inherit_mode             │ enum              │ 继承模式：merge/override/extend               │
+ * │ name                     │ varchar(255)      │ 渠道名称                                      │
+ * │ slug                     │ varchar(100)      │ 渠道标识                                      │
+ * │ provider                 │ varchar(50)       │ 提供商类型（openai/anthropic/azure等）         │
+ * │ base_url                 │ varchar(500)      │ API 基础 URL                                  │
+ * │ api_key                  │ text              │ 加密的 API Key                                │
+ * │ api_key_hash             │ varchar(64)       │ API Key 指纹（SHA256前8位）                    │
+ * │ weight                   │ int unsigned      │ 负载均衡权重 (1-100)                           │
+ * │ priority                 │ int unsigned      │ 优先级（越小越优先）                           │
+ * │ status                   │ tinyint unsigned  │ 运营状态: 0=禁用, 1=启用                       │
+ * │ status2                  │ enum              │ 健康状态：normal/disabled                      │
+ * │ status2_remark           │ text              │ 健康状态备注                                   │
+ * │ failure_count            │ int unsigned      │ 连续失败次数                                   │
+ * │ success_count            │ int unsigned      │ 连续成功次数                                   │
+ * │ last_check_at            │ timestamp         │ 最后健康检查时间                               │
+ * │ last_failure_at          │ timestamp         │ 最后失败时间                                   │
+ * │ last_success_at          │ timestamp         │ 最后成功时间                                   │
+ * │ total_requests           │ bigint unsigned   │ 总请求数                                      │
+ * │ total_tokens             │ bigint unsigned   │ 总 Token 数                                   │
+ * │ total_cost               │ decimal(12,6)     │ 总成本                                        │
+ * │ avg_latency_ms           │ int unsigned      │ 平均延迟（毫秒）                               │
+ * │ success_rate             │ decimal(5,4)      │ 成功率（0.0000-1.0000）                        │
+ * │ config                   │ json              │ 额外配置（filter_thinking/body_passthrough等）│
+ * │ forward_headers          │ json              │ 转发到上游的请求头配置                          │
+ * │ coding_account_id        │ bigint unsigned   │ 关联 Coding 账户 ID                           │
+ * │ description              │ text              │ 渠道描述                                      │
+ * │ has_user_agent_restriction│ tinyint(1)       │ 是否有 User-Agent 限制                         │
+ * │ created_at               │ timestamp         │ 创建时间                                      │
+ * │ updated_at               │ timestamp         │ 更新时间                                      │
+ * │ deleted_at               │ timestamp         │ 软删除时间                                    │
+ * └──────────────────────────┴──────────────────┴─────────────────────────────────────────────┘
+ *
+ * 迁移历史：
+ * - 2026_03_07_083340: 初始创建表（含继承关系、状态管理、统计信息）
+ * - 2026_03_07_100001: 添加 coding_account_id 和 coding_status_override
+ * - 2026_03_07_100005: 创建 channel_models 表（模型配置独立）
+ * - 2026_03_07_100006: 迁移 models 数据到 channel_models 表
+ * - 2026_03_07_201642: 添加 forward_headers（请求头转发配置）
+ * - 2026_03_09_012009: 添加 coding_last_check_at（已移除）
+ * - 2026_03_09_160238: 移除 health_status 字段
+ * - 2026_03_15_174851: 在 config 中添加 body_passthrough 配置
+ * - 2026_03_17_150000: 添加 has_user_agent_restriction 标志
+ * - 2026_03_17_234843: 添加 status2 和 status2_remark（健康状态）
+ * - 2026_03_24_013632: 将 status 从 enum 改为 tinyint
+ *
+ * 核心功能：
+ * 1. 渠道继承：支持父子渠道继承配置（merge/override/extend）
+ * 2. 负载均衡：基于权重和优先级的智能路由
+ * 3. 健康监控：失败/成功计数、自动禁用、状态管理
+ * 4. 模型管理：通过 channel_models 表管理支持的模型列表
+ * 5. 请求头转发：可配置转发特定请求头到上游
+ * 6. User-Agent 限制：支持基于 UA 的访问控制
+ * 7. Coding 账户绑定：关联 Coding 账户进行配额管理
+ *
+ * @property int $id 主键
+ * @property int|null $parent_id 父渠道 ID
+ * @property string $inherit_mode 继承模式：merge/override/extend
+ * @property string $name 渠道名称
+ * @property string|null $slug 渠道标识
+ * @property string $provider 提供商类型
+ * @property string|null $base_url API 基础 URL
+ * @property string|null $api_key 加密的 API Key
+ * @property string|null $api_key_hash API Key 指纹
+ * @property int $weight 负载均衡权重
+ * @property int $priority 优先级
  * @property ChannelStatus $status 运营状态
  * @property ChannelHealthStatus $status2 健康状态
  * @property string|null $status2_remark 健康状态备注
+ * @property int $failure_count 连续失败次数
+ * @property int $success_count 连续成功次数
+ * @property Carbon|null $last_check_at 最后健康检查时间
+ * @property Carbon|null $last_failure_at 最后失败时间
+ * @property Carbon|null $last_success_at 最后成功时间
+ * @property int $total_requests 总请求数
+ * @property int $total_tokens 总 Token 数
+ * @property string $total_cost 总成本
+ * @property int $avg_latency_ms 平均延迟
+ * @property string $success_rate 成功率
+ * @property array|null $config 额外配置
+ * @property array|null $forward_headers 转发请求头配置
+ * @property int|null $coding_account_id 关联 Coding 账户 ID
+ * @property string|null $description 渠道描述
+ * @property bool $has_user_agent_restriction 是否有 UA 限制
+ * @property Carbon|null $created_at 创建时间
+ * @property Carbon|null $updated_at 更新时间
+ * @property Carbon|null $deleted_at 软删除时间
+ * @property-read Channel|null $parent 父渠道
+ * @property-read Collection|Channel[] $children 子渠道
+ * @property-read Collection|ChannelGroup[] $groups 所属分组
+ * @property-read Collection|ChannelTag[] $tags 所属标签
+ * @property-read CodingAccount|null $codingAccount Coding 账户
+ * @property-read Collection|ChannelModel[] $channelModels 渠道模型列表
+ * @property-read Collection|UserAgent[] $allowedUserAgents 允许的 UA 规则
+ *
+ * @see ChannelRouterService 渠道路由服务
+ * @see ProviderManager 供应商管理器
  */
 class Channel extends Model
 {
@@ -78,7 +185,7 @@ class Channel extends Model
     }
 
     /**
-     * 父渠道
+     * 父渠道（继承关系）
      */
     public function parent(): BelongsTo
     {
@@ -86,7 +193,7 @@ class Channel extends Model
     }
 
     /**
-     * 子渠道
+     * 子渠道（被继承）
      */
     public function children(): HasMany
     {
@@ -94,7 +201,7 @@ class Channel extends Model
     }
 
     /**
-     * 所属分组
+     * 所属分组（多对多）
      */
     public function groups(): BelongsToMany
     {
@@ -104,7 +211,7 @@ class Channel extends Model
     }
 
     /**
-     * 所属标签
+     * 所属标签（多对多）
      */
     public function tags(): BelongsToMany
     {
@@ -113,6 +220,8 @@ class Channel extends Model
 
     /**
      * 获取 API Key 的脱敏显示
+     *
+     * 显示格式：sk-...{前8位hash}
      */
     public function getMaskedApiKey(): string
     {
@@ -124,7 +233,7 @@ class Channel extends Model
     }
 
     /**
-     * 检查渠道是否可用
+     * 检查渠道运营状态是否为启用
      */
     public function isActive(): bool
     {
@@ -142,7 +251,12 @@ class Channel extends Model
     /**
      * 检查渠道是否可以参与选择
      *
-     * 同时满足：运营状态为active 且 健康状态为normal
+     * 同时满足两个条件：
+     * 1. 运营状态为 active
+     * 2. 健康状态为 normal
+     *
+     *
+     * @see ChannelRouterService::selectChannel() 渠道选择时使用
      */
     public function isAvailableForSelection(): bool
     {
@@ -151,6 +265,8 @@ class Channel extends Model
 
     /**
      * 禁用渠道健康状态
+     *
+     * 将健康状态设置为 disabled，并记录禁用原因
      *
      * @param  string  $reason  禁用原因
      */
@@ -164,6 +280,8 @@ class Channel extends Model
 
     /**
      * 启用渠道健康状态
+     *
+     * 将健康状态恢复为 normal，清空备注
      */
     public function enableHealth(): void
     {
@@ -174,7 +292,7 @@ class Channel extends Model
     }
 
     /**
-     * Coding账户
+     * Coding 账户关联
      */
     public function codingAccount(): BelongsTo
     {
@@ -182,7 +300,7 @@ class Channel extends Model
     }
 
     /**
-     * 检查是否绑定Coding账户
+     * 检查是否绑定 Coding 账户
      */
     public function hasCodingAccount(): bool
     {
@@ -190,9 +308,11 @@ class Channel extends Model
     }
 
     /**
-     * 获取需要转发的header名称列表
+     * 获取需要转发的 header 名称列表
      *
-     * @return array header名称列表，支持通配符如 'x-*'
+     * 支持通配符匹配，如 'x-*' 匹配所有 x- 开头的请求头
+     *
+     * @return array header 名称列表
      */
     public function getForwardHeaderNames(): array
     {
@@ -202,7 +322,9 @@ class Channel extends Model
     /**
      * 获取配置项
      *
-     * @return mixed 配置值，如果不存在返回默认值
+     * @param  string  $key  配置键名
+     * @param  mixed  $default  默认值
+     * @return mixed 配置值
      */
     public function getConfig(string $key, mixed $default = null): mixed
     {
@@ -212,9 +334,9 @@ class Channel extends Model
     }
 
     /**
-     * 是否过滤 thinking 内容块
+     * 是否过滤 thinking 内容块（响应）
      *
-     * 默认返回 false，即不过滤 thinking 块（保留 thinking 内容）
+     * 默认 false = 保留 thinking 内容
      */
     public function shouldFilterThinking(): bool
     {
@@ -224,7 +346,7 @@ class Channel extends Model
     /**
      * 是否过滤请求中的 thinking 内容块
      *
-     * 默认返回 false，即不过滤请求中的 thinking 块（保留 thinking 内容）
+     * 默认 false = 保留请求中的 thinking 内容
      */
     public function shouldFilterRequestThinking(): bool
     {
@@ -235,7 +357,10 @@ class Channel extends Model
      * 是否透传请求体（body passthrough）
      *
      * 开启后，来自客户端的 body 将不进行任何处理直接发送给上游渠道
-     * 默认返回 false，即进行正常的协议转换处理
+     * 默认 false = 进行正常的协议转换处理
+     *
+     *
+     * @see ProxyServer 发送请求时检查
      */
     public function shouldPassthroughBody(): bool
     {
@@ -243,7 +368,7 @@ class Channel extends Model
     }
 
     /**
-     * 渠道支持的模型列表
+     * 渠道支持的模型列表（所有）
      */
     public function channelModels(): HasMany
     {
@@ -259,7 +384,7 @@ class Channel extends Model
     }
 
     /**
-     * 默认模型
+     * 默认模型（用于测试）
      */
     public function defaultModel(): ?ChannelModel
     {
@@ -268,6 +393,8 @@ class Channel extends Model
 
     /**
      * 获取模型列表（兼容旧数据）
+     *
+     * 返回格式：['model_name' => 'display_name']
      *
      * @return array<string, string>
      */
@@ -287,7 +414,10 @@ class Channel extends Model
     }
 
     /**
-     * 获取模型映射
+     * 获取模型映射配置
+     *
+     * 仅返回配置了 mapped_model 的模型
+     * 返回格式：['request_model' => 'actual_model']
      *
      * @return array<string, string>
      */
@@ -318,7 +448,7 @@ class Channel extends Model
     }
 
     /**
-     * 允许的User-Agent规则列表
+     * 允许的 User-Agent 规则列表
      */
     public function allowedUserAgents(): BelongsToMany
     {
@@ -328,7 +458,7 @@ class Channel extends Model
     }
 
     /**
-     * 检查是否有User-Agent限制
+     * 检查是否有 User-Agent 限制
      */
     public function hasUserAgentRestriction(): bool
     {
@@ -336,10 +466,18 @@ class Channel extends Model
     }
 
     /**
-     * 检查请求的User-Agent是否被允许
+     * 检查请求的 User-Agent 是否被允许
      *
-     * @param  string  $userAgent  请求的User-Agent
+     * 判断逻辑：
+     * 1. 如果没有限制（has_user_agent_restriction=false）→ 允许所有
+     * 2. 如果有限制但未配置任何规则 → 拒绝访问
+     * 3. 匹配任意一条规则 → 允许访问并记录命中
+     * 4. 未匹配任何规则 → 拒绝访问
+     *
+     * @param  string  $userAgent  请求的 User-Agent
      * @return bool true=允许, false=不允许
+     *
+     * @see ProxyServer::handle() 请求处理时检查
      */
     public function isUserAgentAllowed(string $userAgent): bool
     {

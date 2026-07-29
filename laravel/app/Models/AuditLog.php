@@ -7,6 +7,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
+/**
+ * 审计日志模型
+ *
+ * 字段说明：
+ * - model: 用户请求的原始模型名（未经 Key 映射，如 claude-sonnet-5）
+ * - actual_model: 实际使用的模型名（渠道响应返回的，如 deepseek-v4-flash）
+ * - apply_data: 模型流转过程数据，包含 matched_models（参与匹配的模型列表）和 channel_request_model（发送给渠道的模型名）
+ */
 class AuditLog extends Model
 {
     use HasFactory;

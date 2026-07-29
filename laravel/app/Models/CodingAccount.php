@@ -2,50 +2,163 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
+ * Coding 账户模型
+ *
+ * 管理各平台的 Coding 账户，包括凭证、状态、配额、暂停等。
+ * 通过 driver_class 关联到具体的 CodingStatus 驱动，实现不同平台的状态管理策略。
+ *
+ * 数据表结构 (coding_accounts):
+ * ┌──────────────────────────┬──────────────────────┬─────────────────────────────────────────┐
+ * │ 字段名                    │ 类型                  │ 说明                                     │
+ * ├──────────────────────────┼──────────────────────┼─────────────────────────────────────────┤
+ * │ id                       │ bigint unsigned       │ 主键，自增                                │
+ * │ name                     │ varchar(255)          │ 账户名称                                  │
+ * │ platform                 │ varchar(50)           │ 平台类型：aliyun/volcano/zhipu/           │
+ * │                          │                       │           github/cursor/infini/custom      │
+ * │ driver_class             │ varchar(255)          │ 驱动类名                                  │
+ * │ credentials              │ json                  │ 平台凭证：{api_key, api_secret, ...}      │
+ * │ status                   │ enum                  │ 状态：active/warning/critical/exhausted/  │
+ * │                          │                       │       expired/suspended/error            │
+ * │ config                   │ json                  │ 驱动特定配置                              │
+ * │ status_override          │ json                  │ 状态覆盖配置：auto_disable, auto_enable,  │
+ * │                          │                       │   disable_threshold, warning_threshold 等 │
+ * │ last_sync_at             │ timestamp             │ 最后同步时间                              │
+ * │ sync_error               │ text                  │ 同步错误信息                              │
+ * │ sync_error_count         │ int unsigned          │ 连续同步错误次数（默认0）                  │
+ * │ expires_at               │ timestamp             │ 账户过期时间                              │
+ * │ disabled_at              │ timestamp             │ 禁用时间                                  │
+ * │ pause_duration_minutes   │ int unsigned          │ 暂停时长（分钟）                          │
+ * │ pause_reason             │ varchar(255)          │ 暂停原因                                  │
+ * │ pause_rule_id            │ bigint unsigned       │ 触发暂停的规则 ID                         │
+ * │ last_check_at            │ timestamp             │ 最后检查时间                              │
+ * │ created_at               │ timestamp             │ 创建时间                                  │
+ * │ updated_at               │ timestamp             │ 更新时间                                  │
+ * └──────────────────────────┴──────────────────────┴─────────────────────────────────────────┘
+ *
+ * 索引：
+ * - INDEX (platform) - 按平台查询
+ * - INDEX (status) - 按状态查询
+ * - INDEX (driver_class) - 按驱动查询
+ * - INDEX (last_sync_at) - 按同步时间查询
+ * - INDEX (expires_at) - 按过期时间查询
+ *
+ * 迁移历史：
+ * - 2026_03_07_100000: 初始创建表（含 quota_config、quota_cached 字段）
+ * - 2026_03_09_185419: 新增 disabled_at 字段
+ * - 2026_03_13_000003: 移除 quota_config、quota_cached 字段（迁移到 coding_5zm_quotas）
+ * - 2026_04_06_140903: 新增 pause_duration_minutes、pause_reason、pause_rule_id 字段
+ *
+ * 核心功能：
+ * 1. 状态管理：7 种状态，支持自动/手动状态切换
+ * 2. 暂停机制：支持定时暂停和自动恢复
+ * 3. 错误规则暂停：通过 pause_rule_id 关联错误处理规则
+ * 4. 状态覆盖：status_override 允许精细控制自动禁用/启用行为
+ * 5. 多平台支持：7 种平台类型，通过 driver_class 映射到具体驱动
+ *
+ * @property int $id 主键
+ * @property string $name 账户名称
+ * @property string $platform 平台类型
+ * @property string $driver_class 驱动类名
+ * @property array $credentials 平台凭证
+ * @property string $status 账户状态
+ * @property array|null $config 驱动特定配置
  * @property array|null $status_override 状态覆盖配置
- * @property \Carbon\Carbon|null $last_check_at 最后检查时间
+ * @property Carbon|null $last_sync_at 最后同步时间
+ * @property string|null $sync_error 同步错误信息
+ * @property int $sync_error_count 连续同步错误次数
+ * @property Carbon|null $expires_at 账户过期时间
+ * @property Carbon|null $disabled_at 禁用时间
+ * @property int|null $pause_duration_minutes 暂停时长（分钟）
+ * @property string|null $pause_reason 暂停原因
+ * @property int|null $pause_rule_id 触发暂停的规则 ID
+ * @property Carbon|null $last_check_at 最后检查时间
+ * @property Carbon|null $created_at 创建时间
+ * @property Carbon|null $updated_at 更新时间
+ *
+ * @see Channel 使用此账户的渠道
+ * @see CodingUsageLog 使用日志
+ * @see CodingStatusLog 状态变更日志
+ * @see Coding5ZMQuota 5ZM 配额模型
+ * @see ChannelErrorRule 错误规则（暂停关联）
  */
 class CodingAccount extends Model
 {
     use HasFactory;
 
     /**
-     * 状态常量
+     * 状态常量：正常
      */
     public const STATUS_ACTIVE = 'active';
 
+    /**
+     * 状态常量：警告
+     */
     public const STATUS_WARNING = 'warning';
 
+    /**
+     * 状态常量：临界
+     */
     public const STATUS_CRITICAL = 'critical';
 
+    /**
+     * 状态常量：耗尽
+     */
     public const STATUS_EXHAUSTED = 'exhausted';
 
+    /**
+     * 状态常量：过期
+     */
     public const STATUS_EXPIRED = 'expired';
 
+    /**
+     * 状态常量：暂停
+     */
     public const STATUS_SUSPENDED = 'suspended';
 
+    /**
+     * 状态常量：错误
+     */
     public const STATUS_ERROR = 'error';
 
     /**
-     * 平台类型常量
+     * 平台类型常量：阿里云百炼
      */
     public const PLATFORM_ALIYUN = 'aliyun';
 
+    /**
+     * 平台类型常量：火山方舟
+     */
     public const PLATFORM_VOLCANO = 'volcano';
 
+    /**
+     * 平台类型常量：智谱GLM
+     */
     public const PLATFORM_ZHIPU = 'zhipu';
 
+    /**
+     * 平台类型常量：GitHub
+     */
     public const PLATFORM_GITHUB = 'github';
 
+    /**
+     * 平台类型常量：Cursor
+     */
     public const PLATFORM_CURSOR = 'cursor';
 
+    /**
+     * 平台类型常量：无问芯穹
+     */
     public const PLATFORM_INFINI = 'infini';
 
+    /**
+     * 平台类型常量：自定义
+     */
     public const PLATFORM_CUSTOM = 'custom';
 
     /**
@@ -92,6 +205,10 @@ class CodingAccount extends Model
 
     /**
      * 关联的渠道
+     *
+     * 一个账户可被多个渠道使用
+     *
+     * @see Channel
      */
     public function channels(): HasMany
     {
@@ -100,6 +217,8 @@ class CodingAccount extends Model
 
     /**
      * 使用记录
+     *
+     * @see CodingUsageLog
      */
     public function usageLogs(): HasMany
     {
@@ -108,6 +227,8 @@ class CodingAccount extends Model
 
     /**
      * 状态变更日志
+     *
+     * @see CodingStatusLog
      */
     public function statusLogs(): HasMany
     {
@@ -143,9 +264,10 @@ class CodingAccount extends Model
     }
 
     /**
-     * 获取配额配置 (已弃用 - 使用驱动特定表)
+     * 获取配额配置（已弃用 - 使用驱动特定表）
      *
-     * @deprecated 使用驱动特定的配额模型代替
+     * @deprecated 使用驱动特定的配额模型代替，如 Coding5ZMQuota
+     * @see Coding5ZMQuota
      */
     public function getQuotaConfig(): array
     {
@@ -216,6 +338,8 @@ class CodingAccount extends Model
 
     /**
      * 获取状态颜色
+     *
+     * 用于后台展示的标签颜色映射
      */
     public function getStatusColor(): string
     {
@@ -233,6 +357,8 @@ class CodingAccount extends Model
 
     /**
      * 获取平台图标
+     *
+     * 返回 Heroicon 图标名，用于后台展示
      */
     public function getPlatformIcon(): string
     {
@@ -258,6 +384,8 @@ class CodingAccount extends Model
 
     /**
      * 检查是否应该自动重新开启
+     *
+     * 条件：auto_reopen_hours > 0 且状态为耗尽/暂停 且已超过指定时间
      */
     public function shouldAutoReopen(): bool
     {
@@ -280,6 +408,8 @@ class CodingAccount extends Model
 
     /**
      * 标记为禁用状态
+     *
+     * 同时设置 status 和 disabled_at
      */
     public function markAsDisabled(string $status): void
     {
@@ -291,6 +421,8 @@ class CodingAccount extends Model
 
     /**
      * 重新开启账户
+     *
+     * 恢复为 active 状态，清除 disabled_at
      */
     public function reopen(): void
     {
@@ -302,6 +434,8 @@ class CodingAccount extends Model
 
     /**
      * 获取状态覆盖配置
+     *
+     * 控制自动禁用/启用行为、阈值、优先级和回退渠道
      *
      * @return array{
      *   auto_disable: bool,
@@ -374,6 +508,8 @@ class CodingAccount extends Model
 
     /**
      * 检查账户是否暂停中
+     *
+     * 需同时满足：状态为 suspended、有暂停时长、有禁用时间
      */
     public function isPaused(): bool
     {
@@ -384,6 +520,10 @@ class CodingAccount extends Model
 
     /**
      * 检查账户是否应该自动恢复（基于 pause_duration_minutes）
+     *
+     * 当 disabled_at + pause_duration_minutes 已过时，应自动恢复
+     *
+     * @see ChannelErrorRule 通过错误规则暂停的账户
      */
     public function shouldAutoRecoverFromPause(): bool
     {
@@ -398,8 +538,10 @@ class CodingAccount extends Model
 
     /**
      * 获取暂停恢复时间
+     *
+     * 返回 disabled_at + pause_duration_minutes 的计算结果
      */
-    public function getPauseRecoverAt(): ?\Carbon\Carbon
+    public function getPauseRecoverAt(): ?Carbon
     {
         if (! $this->isPaused()) {
             return null;
@@ -410,6 +552,8 @@ class CodingAccount extends Model
 
     /**
      * 检查是否因错误规则暂停
+     *
+     * @see ChannelErrorRule 错误处理规则
      */
     public function isPausedByErrorRule(): bool
     {
