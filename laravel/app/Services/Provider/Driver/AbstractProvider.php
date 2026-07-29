@@ -452,7 +452,8 @@ abstract class AbstractProvider implements ProviderInterface
             $totalChunks = 0;
 
             // 逐块读取流式响应
-            while (! $stream->eof()) {
+            $streamFinished = false; // 标记流是否已完成
+            while (! $stream->eof() && ! $streamFinished) {
                 // 检查读取超时
                 $elapsed = microtime(true) - $lastDataTime;
                 if ($elapsed > $streamReadTimeout) {
@@ -491,6 +492,13 @@ abstract class AbstractProvider implements ProviderInterface
                         $totalChunks++;
                         $lastDataTime = microtime(true); // 更新最后数据时间
                         yield $parsed;
+
+                        // 收到结束标记后主动退出循环，不等待 EOF
+                        // 某些上游在 finish_reason 之后不关闭连接，导致 eof() 一直阻塞
+                        if ($parsed->finishReason !== null) {
+                            $streamFinished = true;
+                            break;
+                        }
                     }
                 }
             }
