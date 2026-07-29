@@ -6,7 +6,7 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
+        "php": "^8.4",
         "anthropic-ai/sdk": "^0.6.0",
         "dongasai/dcat-admin2": "dev-laravel12",
         "laravel/ai": "^0.4.2",
