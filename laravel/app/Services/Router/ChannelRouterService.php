@@ -2,11 +2,21 @@
 
 namespace App\Services\Router;
 
+use App\Enums\ChannelHealthStatus;
+use App\Enums\ChannelStatus;
 use App\Models\ApiKey;
 use App\Models\Channel;
 use App\Models\ChannelGroup;
+use App\Models\ChannelModel;
+use App\Models\CodingAccount;
+use App\Services\ModelService;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 
 /**
  * 渠道路由服务
@@ -41,7 +51,7 @@ class ChannelRouterService
      * @param  array  $context  上下文信息（可包含负载均衡算法、API Key、源协议等）
      * @return Channel 选中的渠道
      *
-     * @throws \Symfony\Component\HttpKernel\Exception\HttpException 当没有可用渠道时
+     * @throws HttpException 当没有可用渠道时
      */
     public function selectChannel(string $model, array $context = []): Channel
     {
@@ -53,7 +63,7 @@ class ChannelRouterService
 
         // 模型不存在：没有配置支持该模型的渠道
         if ($channels->isEmpty()) {
-            throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException("Model '{$model}' is not available");
+            throw new NotFoundHttpException("Model '{$model}' is not available");
         }
 
         // 应用 API Key 的渠道限制
@@ -62,7 +72,7 @@ class ChannelRouterService
 
         // API Key 限制导致没有可用渠道
         if ($channelsAfterKeyRestriction->isEmpty()) {
-            throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException("No available channel for model '{$model}' with current API key restrictions");
+            throw new BadRequestHttpException("No available channel for model '{$model}' with current API key restrictions");
         }
 
         // 应用透传协议匹配过滤
@@ -71,7 +81,7 @@ class ChannelRouterService
 
         // 协议不匹配导致没有可用渠道
         if ($channelsAfterProtocol->isEmpty()) {
-            throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException("No available channel for model '{$model}' with protocol '{$sourceProtocol}'");
+            throw new BadRequestHttpException("No available channel for model '{$model}' with protocol '{$sourceProtocol}'");
         }
 
         // 应用User-Agent过滤
@@ -85,7 +95,7 @@ class ChannelRouterService
                 'user_agent' => $userAgent,
                 'candidate_count' => $channelsAfterProtocol->count(),
             ]);
-            throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException("No available channel for model '{$model}' with current User-Agent");
+            throw new BadRequestHttpException("No available channel for model '{$model}' with current User-Agent");
         }
 
         // 排除已失败的渠道
@@ -98,7 +108,7 @@ class ChannelRouterService
 
         // 所有渠道都失败了
         if ($channelsAfterUserAgent->isEmpty()) {
-            throw new \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException("All channels failed for model: {$model}");
+            throw new ServiceUnavailableHttpException("All channels failed for model: {$model}");
         }
 
         $channel = $this->applyLoadBalancing($channelsAfterUserAgent, $context);
@@ -121,9 +131,9 @@ class ChannelRouterService
      * 获取指定模型的可用渠道列表
      *
      * @param  string  $model  模型名称
-     * @return \Illuminate\Database\Eloquent\Collection 可用渠道集合
+     * @return Collection 可用渠道集合
      */
-    public function getAvailableChannels(string $model): \Illuminate\Database\Eloquent\Collection
+    public function getAvailableChannels(string $model): Collection
     {
         $cacheKey = "channels:available:{$model}";
 
@@ -131,12 +141,12 @@ class ChannelRouterService
             $channelIds = $this->getChannelIdsForModel($model);
 
             if (empty($channelIds)) {
-                return collect();
+                return new Collection;
             }
 
             return Channel::whereIn('id', $channelIds)
-                ->where('status', \App\Enums\ChannelStatus::ACTIVE)
-                ->where('status2', \App\Enums\ChannelHealthStatus::NORMAL) // 只选择健康状态正常的渠道
+                ->where('status', ChannelStatus::ACTIVE)
+                ->where('status2', ChannelHealthStatus::NORMAL) // 只选择健康状态正常的渠道
                 ->orderBy('priority', 'desc')
                 ->orderBy('weight', 'desc')
                 ->get();
@@ -151,19 +161,19 @@ class ChannelRouterService
      */
     public function getModelNamesWithAliases(string $model): array
     {
-        return \App\Services\ModelService::resolveModelWithAliases($model);
+        return ModelService::resolveModelWithAliases($model);
     }
 
     /**
      * 为多个模型名称获取可用渠道
      *
      * @param  array  $modelNames  模型名称数组
-     * @return \Illuminate\Database\Eloquent\Collection 可用渠道集合
+     * @return Collection 可用渠道集合
      */
-    protected function getAvailableChannelsForModels(array $modelNames): \Illuminate\Database\Eloquent\Collection
+    protected function getAvailableChannelsForModels(array $modelNames): Collection
     {
         if (empty($modelNames)) {
-            return collect();
+            return new Collection;
         }
 
         // 获取所有模型名称对应的渠道 ID
@@ -177,18 +187,18 @@ class ChannelRouterService
         $channelIds = array_unique($channelIds);
 
         if (empty($channelIds)) {
-            return collect();
+            return new Collection;
         }
 
         // 查询渠道，排除暂停账户的渠道
         return Channel::whereIn('id', $channelIds)
-            ->where('status', \App\Enums\ChannelStatus::ACTIVE)
-            ->where('status2', \App\Enums\ChannelHealthStatus::NORMAL)
+            ->where('status', ChannelStatus::ACTIVE)
+            ->where('status2', ChannelHealthStatus::NORMAL)
             ->where(function ($query) {
                 // 排除暂停账户的渠道
                 $query->whereNull('coding_account_id')
                     ->orWhereDoesntHave('codingAccount', function ($q) {
-                        $q->where('status', \App\Models\CodingAccount::STATUS_SUSPENDED)
+                        $q->where('status', CodingAccount::STATUS_SUSPENDED)
                             ->whereNotNull('pause_duration_minutes');
                     });
             })
@@ -200,11 +210,11 @@ class ChannelRouterService
     /**
      * 应用 API Key 的渠道限制
      *
-     * @param  \Illuminate\Database\Eloquent\Collection  $channels  渠道集合
+     * @param  Collection  $channels  渠道集合
      * @param  ApiKey|null  $apiKey  API Key 实例
-     * @return \Illuminate\Database\Eloquent\Collection 过滤后的渠道集合
+     * @return Collection 过滤后的渠道集合
      */
-    protected function applyApiKeyChannelRestrictions(\Illuminate\Database\Eloquent\Collection $channels, ?ApiKey $apiKey): \Illuminate\Database\Eloquent\Collection
+    protected function applyApiKeyChannelRestrictions(Collection $channels, ?ApiKey $apiKey): Collection
     {
         if (! $apiKey) {
             return $channels;
@@ -235,11 +245,11 @@ class ChannelRouterService
      * 当渠道开启 body 透传时，只选择与源请求协议一致的渠道
      * 例如：Anthropic 渠道开启透传后，只能处理 Anthropic 格式的请求
      *
-     * @param  \Illuminate\Database\Eloquent\Collection  $channels  渠道集合
+     * @param  Collection  $channels  渠道集合
      * @param  string  $sourceProtocol  源请求协议（openai/anthropic）
-     * @return \Illuminate\Database\Eloquent\Collection 过滤后的渠道集合
+     * @return Collection 过滤后的渠道集合
      */
-    protected function applyPassthroughProtocolFilter(\Illuminate\Database\Eloquent\Collection $channels, string $sourceProtocol): \Illuminate\Database\Eloquent\Collection
+    protected function applyPassthroughProtocolFilter(Collection $channels, string $sourceProtocol): Collection
     {
         return $channels->filter(function ($channel) use ($sourceProtocol) {
             // 如果渠道未开启透传，则允许选择（会进行协议转换）
@@ -270,11 +280,11 @@ class ChannelRouterService
      *
      * 根据渠道的User-Agent限制配置，过滤不匹配的渠道
      *
-     * @param  \Illuminate\Database\Eloquent\Collection  $channels  渠道集合
+     * @param  Collection  $channels  渠道集合
      * @param  string  $userAgent  请求的User-Agent
-     * @return \Illuminate\Database\Eloquent\Collection 过滤后的渠道集合
+     * @return Collection 过滤后的渠道集合
      */
-    protected function applyUserAgentFilter(\Illuminate\Database\Eloquent\Collection $channels, string $userAgent): \Illuminate\Database\Eloquent\Collection
+    protected function applyUserAgentFilter(Collection $channels, string $userAgent): Collection
     {
         // 如果User-Agent为空，不过滤
         if (empty($userAgent)) {
@@ -311,7 +321,7 @@ class ChannelRouterService
      */
     protected function getChannelIdsForModel(string $model): array
     {
-        return \App\Models\ChannelModel::where('model_name', $model)
+        return ChannelModel::where('model_name', $model)
             ->where('is_enabled', true)
             ->pluck('channel_id')
             ->toArray();
@@ -430,19 +440,19 @@ class ChannelRouterService
      * 根据分组获取渠道列表
      *
      * @param  string  $groupSlug  分组标识
-     * @return \Illuminate\Database\Eloquent\Collection 渠道集合
+     * @return Collection 渠道集合
      */
-    public function getChannelsByGroup(string $groupSlug): \Illuminate\Database\Eloquent\Collection
+    public function getChannelsByGroup(string $groupSlug): Collection
     {
         $group = ChannelGroup::where('slug', $groupSlug)->first();
 
         if (! $group) {
-            return collect();
+            return new Collection;
         }
 
         return $group->channels()
-            ->where('status', \App\Enums\ChannelStatus::ACTIVE)
-            ->where('status2', \App\Enums\ChannelHealthStatus::NORMAL) // 只选择健康状态正常的渠道
+            ->where('status', ChannelStatus::ACTIVE)
+            ->where('status2', ChannelHealthStatus::NORMAL) // 只选择健康状态正常的渠道
             ->orderByPivot('priority', 'desc')
             ->get();
     }
@@ -451,15 +461,15 @@ class ChannelRouterService
      * 根据标签获取渠道列表
      *
      * @param  string  $tagName  标签名称
-     * @return \Illuminate\Database\Eloquent\Collection 渠道集合
+     * @return Collection 渠道集合
      */
-    public function getChannelsByTag(string $tagName): \Illuminate\Database\Eloquent\Collection
+    public function getChannelsByTag(string $tagName): Collection
     {
         return Channel::whereHas('tags', function ($query) use ($tagName) {
             $query->where('name', $tagName);
         })
-            ->where('status', \App\Enums\ChannelStatus::ACTIVE)
-            ->where('status2', \App\Enums\ChannelHealthStatus::NORMAL) // 只选择健康状态正常的渠道
+            ->where('status', ChannelStatus::ACTIVE)
+            ->where('status2', ChannelHealthStatus::NORMAL) // 只选择健康状态正常的渠道
             ->get();
     }
 
@@ -476,10 +486,10 @@ class ChannelRouterService
     {
         if ($channel) {
             // 优先查找：通过别名匹配找到该渠道，则使用匹配别名对应的映射模型
-            $modelNames = \App\Services\ModelService::resolveModelWithAliases($model);
+            $modelNames = ModelService::resolveModelWithAliases($model);
             foreach ($modelNames as $modelName) {
                 // 检查该别名是否在该渠道的 channel_models 表中
-                $channelModel = \App\Models\ChannelModel::where('channel_id', $channel->id)
+                $channelModel = ChannelModel::where('channel_id', $channel->id)
                     ->where('model_name', $modelName)
                     ->where('is_enabled', true)
                     ->first();
@@ -500,7 +510,7 @@ class ChannelRouterService
             }
 
             // 其次：检查原模型的映射配置（这个逻辑其实已经被上面的循环覆盖了）
-            $channelModel = \App\Models\ChannelModel::where('channel_id', $channel->id)
+            $channelModel = ChannelModel::where('channel_id', $channel->id)
                 ->where('model_name', $model)
                 ->where('is_enabled', true)
                 ->first();
@@ -594,7 +604,7 @@ class ChannelRouterService
         if ($model) {
             Cache::forget("channels:available:{$model}");
         } else {
-            $models = \App\Models\ChannelModel::distinct()->pluck('model_name');
+            $models = ChannelModel::distinct()->pluck('model_name');
             foreach ($models as $model) {
                 Cache::forget("channels:available:{$model}");
             }
