@@ -371,6 +371,9 @@ php artisan list | grep cdapi
 php artisan config:clear
 php artisan route:clear
 php artisan view:clear
+
+# 通过审计ID重放: 
+php artisan cdapi:request:replay --audit-id=500
 ```
 
 ## 关键依赖
