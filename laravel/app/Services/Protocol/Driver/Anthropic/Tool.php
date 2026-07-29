@@ -2,6 +2,7 @@
 
 namespace App\Services\Protocol\Driver\Anthropic;
 
+use App\Helpers\JsonSchemaHelper;
 use App\Services\Protocol\Driver\Concerns\JsonSerializiable;
 use App\Services\Shared\DTO\Tool as SharedTool;
 
@@ -76,7 +77,10 @@ class Tool
 
         return new self(
             name: $data['name'] ?? '',
-            input_schema: $data['input_schema'] ?? [],
+            // 空数组不合法，统一填充最小合法 schema
+            input_schema: empty($data['input_schema'])
+                ? ['type' => 'object']
+                : $data['input_schema'],
             description: $data['description'] ?? null,
             type: $data['type'] ?? null,
             cache_control: $data['cache_control'] ?? null,
@@ -94,9 +98,14 @@ class Tool
      */
     public function toArray(): array
     {
+        $schema = empty($this->input_schema)
+            ? ['type' => 'object']
+            : JsonSchemaHelper::fixJsonSchema($this->input_schema);
+
         $result = [
             'name' => $this->name,
-            'input_schema' => $this->input_schema,
+            // Anthropic API 要求 input_schema 必须是 object，空数组 [] 不可接受
+            'input_schema' => $schema,
         ];
 
         if ($this->description !== null) {
@@ -142,7 +151,10 @@ class Tool
     {
         return new self(
             name: $dto->name,
-            input_schema: $dto->parameters,
+            // 空参数时填充最小合法 schema，避免上游 API 报错
+            input_schema: empty($dto->parameters)
+                ? ['type' => 'object']
+                : $dto->parameters,
             description: $dto->description,
         );
     }

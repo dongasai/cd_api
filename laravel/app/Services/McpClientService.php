@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Helpers\JsonSchemaHelper;
 use App\Models\McpClient;
 use Illuminate\Support\Facades\Log;
 use Mcp\Client;
@@ -168,56 +169,6 @@ class McpClientService
     }
 
     /**
-     * 递归修复 JSON Schema 中的无效字段
-     *
-     * MCP Server 可能返回空数组 []，但 JSON Schema 规范要求：
-     * - properties 必须是 object 类型（空时应为 {}）
-     * - additionalProperties 必须是 boolean 或 object（空数组应为 false）
-     *
-     * @param  array  $schema  JSON Schema 定义
-     * @return array 修复后的 Schema
-     */
-    private function fixJsonSchema(array $schema): array
-    {
-        // 修复空的 properties 字段：[] -> {}
-        if (isset($schema['properties']) && is_array($schema['properties']) && empty($schema['properties'])) {
-            $schema['properties'] = new \stdClass;
-        }
-
-        // 修复空的 additionalProperties 字段：[] -> false
-        if (isset($schema['additionalProperties']) && is_array($schema['additionalProperties']) && empty($schema['additionalProperties'])) {
-            $schema['additionalProperties'] = false;
-        }
-
-        // 递归处理嵌套的 properties
-        if (isset($schema['properties']) && is_array($schema['properties'])) {
-            foreach ($schema['properties'] as $key => $value) {
-                if (is_array($value)) {
-                    $schema['properties'][$key] = $this->fixJsonSchema($value);
-                }
-            }
-        }
-
-        // 递归处理 items（数组项定义）
-        if (isset($schema['items']) && is_array($schema['items'])) {
-            $schema['items'] = $this->fixJsonSchema($schema['items']);
-        }
-
-        // 递归处理其他可能嵌套 schema 的字段
-        foreach (['anyOf', 'allOf', 'oneOf', 'not'] as $keyword) {
-            if (isset($schema[$keyword]) && is_array($schema[$keyword])) {
-                foreach ($schema[$keyword] as $i => $value) {
-                    if (is_array($value)) {
-                        $schema[$keyword][$i] = $this->fixJsonSchema($value);
-                    }
-                }
-            }
-        }
-
-        return $schema;
-    }
-
-    /**
      * 获取服务器工具列表
      *
      * @param  McpClient  $client  MCP 客户端配置模型
@@ -235,7 +186,7 @@ class McpClientService
 
             foreach ($result->tools as $tool) {
                 // 递归修复 JSON Schema 中的所有无效字段
-                $inputSchema = $this->fixJsonSchema($tool->inputSchema);
+                $inputSchema = JsonSchemaHelper::fixJsonSchema($tool->inputSchema);
 
                 $tools[] = [
                     'name' => $tool->name,

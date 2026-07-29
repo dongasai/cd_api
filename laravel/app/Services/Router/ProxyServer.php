@@ -2,6 +2,7 @@
 
 namespace App\Services\Router;
 
+use App\Helpers\JsonSchemaHelper;
 use App\Models\Channel;
 use App\Models\ChannelRequestLog;
 use App\Models\RequestLog;
@@ -147,10 +148,10 @@ class ProxyServer
 
         // DEBUG: 记录原始请求中的 tools
         if (isset($rawRequest['tools'])) {
-            Log::debug('ProxyServer: Raw request tools', [
-                'tools_count' => count($rawRequest['tools']),
-                'tools_preview' => array_slice($rawRequest['tools'], 0, 2),
-            ]);
+            //            Log::debug('ProxyServer: Raw request tools', [
+            //                'tools_count' => count($rawRequest['tools']),
+            //                'tools_preview' => array_slice($rawRequest['tools'], 0, 2),
+            //            ]);
         }
 
         $isStream = $rawRequest['stream'] ?? false;
@@ -231,11 +232,11 @@ class ProxyServer
                 ];
 
                 // 更新审计日志渠道信息和实际模型
+                // model 字段保留用户请求的原始模型名，不使用映射后的 $modelName
                 $this->auditLogger->update($auditLog, [
                     'channel_id' => $this->selectedChannel?->id,
                     'channel_name' => $this->selectedChannel?->name,
-                    'model' => $modelName,
-                    'actual_model' => $actualModel,  // 添加实际模型
+                    'actual_model' => $actualModel,  // 渠道实际使用的模型名
                     'target_protocol' => $channelProtocol,  // 添加目标协议
                     'channel_affinity' => $this->affinityService->getAffinityInfo($request),  // 记录渠道亲和性信息
                     'metadata' => $rawRequest['metadata'] ?? null,  // 记录请求元数据
@@ -250,6 +251,8 @@ class ProxyServer
                 // 检查是否开启 body_passthrough（透传模式）
                 if ($this->selectedChannel->shouldPassthroughBody()) {
                     // 透传模式：直接使用原始请求体，跳过协议转换和过滤
+                    // 修复 JSON Schema 中空数组问题（PHP json_decode 将 {} 转为 []）
+                    $rawBodyString = $this->fixToolSchemaInRawBody($rawBodyString);
                     $protocolRequest->setRawBodyString($rawBodyString);
                 } else {
                     // 正常模式：进行协议转换和过滤
@@ -261,13 +264,13 @@ class ProxyServer
                         // DEBUG: 记录协议转换后的 tools
                         if (method_exists($protocolRequest, 'toArray')) {
                             $convertedArray = $protocolRequest->toArray();
-                            Log::debug('ProxyServer: After protocol conversion', [
-                                'source_protocol' => $protocol,
-                                'target_protocol' => $channelProtocol,
-                                'has_tools' => isset($convertedArray['tools']),
-                                'tools_count' => isset($convertedArray['tools']) ? count($convertedArray['tools']) : 0,
-                                'tool_choice' => $convertedArray['tool_choice'] ?? null,
-                            ]);
+                            //                            Log::debug('ProxyServer: After protocol conversion', [
+                            //                                'source_protocol' => $protocol,
+                            //                                'target_protocol' => $channelProtocol,
+                            //                                'has_tools' => isset($convertedArray['tools']),
+                            //                                'tools_count' => isset($convertedArray['tools']) ? count($convertedArray['tools']) : 0,
+                            //                                'tool_choice' => $convertedArray['tool_choice'] ?? null,
+                            //                            ]);
                         }
                     }
 
@@ -558,5 +561,41 @@ class ProxyServer
     public function getSelectedChannel(): ?Channel
     {
         return $this->selectedChannel;
+    }
+
+    /**
+     * 修复原始请求体中工具的 JSON Schema 空数组问题
+     *
+     * PHP 的 json_decode 将空对象 {} 转为空数组 []，
+     * 但 Anthropic API 要求 input_schema 必须是 object
+     */
+    private function fixToolSchemaInRawBody(string $rawBody): string
+    {
+        $data = json_decode($rawBody, true);
+        if (! is_array($data) || ! isset($data['tools']) || ! is_array($data['tools'])) {
+            return $rawBody;
+        }
+
+        $modified = false;
+        foreach ($data['tools'] as $i => $tool) {
+            // Anthropic 格式: input_schema
+            if (isset($tool['input_schema']) && is_array($tool['input_schema'])) {
+                $fixed = JsonSchemaHelper::fixJsonSchema($tool['input_schema'], true);
+                if ($fixed !== $tool['input_schema']) {
+                    $data['tools'][$i]['input_schema'] = $fixed;
+                    $modified = true;
+                }
+            }
+            // OpenAI 格式: function.parameters
+            if (isset($tool['function']['parameters']) && is_array($tool['function']['parameters'])) {
+                $fixed = JsonSchemaHelper::fixJsonSchema($tool['function']['parameters'], true);
+                if ($fixed !== $tool['function']['parameters']) {
+                    $data['tools'][$i]['function']['parameters'] = $fixed;
+                    $modified = true;
+                }
+            }
+        }
+
+        return $modified ? json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : $rawBody;
     }
 }
