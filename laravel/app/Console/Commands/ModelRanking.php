@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -172,7 +173,7 @@ class ModelRanking extends Command
     /**
      * 处理排行数据
      */
-    private function processData(array $data, string $sortBy, int $top): \Illuminate\Support\Collection
+    private function processData(array $data, string $sortBy, int $top): Collection
     {
         $models = collect($data['models'] ?? []);
 
@@ -197,7 +198,7 @@ class ModelRanking extends Command
     /**
      * 输出结果
      */
-    private function outputResult(\Illuminate\Support\Collection $models, string $format, string $lastUpdated, string $sortBy): void
+    private function outputResult(Collection $models, string $format, string $lastUpdated, string $sortBy): void
     {
         $sortLabel = match ($sortBy) {
             'score' => '综合评分',
@@ -285,7 +286,7 @@ class ModelRanking extends Command
     /**
      * 保存数据到文件
      */
-    private function saveDataToFile(\Illuminate\Support\Collection $models): void
+    private function saveDataToFile(Collection $models): void
     {
         $dataPath = database_path('data/model_ranking.php');
 

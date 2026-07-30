@@ -91,6 +91,7 @@ class ModelSync extends Command
                 }
             } catch (\Exception $e) {
                 $this->warn("来源失败 {$url}: {$e->getMessage()}");
+
                 continue;
             }
         }
