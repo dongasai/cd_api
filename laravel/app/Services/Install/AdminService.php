@@ -21,13 +21,7 @@ class AdminService
     public function initialize(array $data): array
     {
         try {
-            // 先执行数据初始化 Seeder
-            $migrationService = new MigrationService;
-            $seedResult = $migrationService->seed();
-
-            if (! $seedResult['success']) {
-                return $seedResult;
-            }
+            // 数据初始化已通过迁移文件完成，无需再执行 Seeder
 
             // 创建管理员账号
             $admin = Administrator::create([

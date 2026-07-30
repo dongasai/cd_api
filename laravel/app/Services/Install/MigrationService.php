@@ -138,54 +138,14 @@ class MigrationService
     }
 
     /**
-     * 执行数据初始化 Seeder
+     * 执行数据初始化（已迁移至迁移文件）
      *
-     * 按顺序执行各 Seeder
+     * 数据填充已通过迁移文件实现，此方法保留兼容性但仅执行 migrate
      *
      * @return array 执行结果
      */
     public function seed(): array
     {
-        $seeders = [
-            'AdminTablesSeeder',    // 后台菜单、权限、角色（必须先执行）
-            'SystemSettingSeeder',  // 系统配置
-            'PresetPromptSeeder',   // 预设提示词
-            'ChannelAffinityRuleSeeder', // 渠道亲和性规则
-        ];
-
-        $results = [];
-
-        foreach ($seeders as $seeder) {
-            try {
-                Artisan::call('db:seed', ['--class' => $seeder, '--force' => true]);
-                $results[$seeder] = [
-                    'success' => true,
-                    'output' => Artisan::output(),
-                ];
-            } catch (\Exception $e) {
-                $results[$seeder] = [
-                    'success' => false,
-                    'output' => Artisan::output(),
-                    'message' => $e->getMessage(),
-                ];
-
-                // 如果 AdminTablesSeeder 失败，后续无法继续
-                if ($seeder === 'AdminTablesSeeder') {
-                    return [
-                        'success' => false,
-                        'results' => $results,
-                        'message' => 'AdminTablesSeeder 执行失败，无法继续安装',
-                    ];
-                }
-            }
-        }
-
-        $allSuccess = collect($results)->every(fn ($r) => $r['success']);
-
-        return [
-            'success' => $allSuccess,
-            'results' => $results,
-            'message' => $allSuccess ? '数据初始化成功' : '部分 Seeder 执行失败',
-        ];
+        return $this->migrate();
     }
 }
