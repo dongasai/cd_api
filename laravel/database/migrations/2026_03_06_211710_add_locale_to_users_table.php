@@ -11,9 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('locale', 10)->default('zh_CN')->after('email');
-        });
+        // 先检查列是否存在，避免重复添加
+        if (! Schema::hasColumn('users', 'locale')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('locale', 10)->default('zh_CN')->after('email');
+            });
+        }
     }
 
     /**
@@ -22,7 +25,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('locale');
+            if (Schema::hasColumn('users', 'locale')) {
+                $table->dropColumn('locale');
+            }
         });
     }
 };
