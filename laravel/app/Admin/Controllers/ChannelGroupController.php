@@ -95,7 +95,7 @@ class ChannelGroupController extends AdminController
                 ->help('唯一标识符，只能包含小写字母、数字、下划线和连字符，如：production、test-env');
 
             $form->textarea('description', '描述')
-                ->maxLength(500)
+                ->attribute('maxlength', 500)
                 ->rows(3)
                 ->help('分组描述信息');
 

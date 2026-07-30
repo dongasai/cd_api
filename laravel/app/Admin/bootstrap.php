@@ -31,27 +31,6 @@ Column::extend('multiFields', MultiFields::class);
 Field::mixin(new ShowFieldMacro);
 
 /**
- * 自定义CSS样式 - 增强菜单激活项可见性
+ * 引入自定义 CSS 样式
  */
-Admin::style(<<<'CSS'
-/* 菜单激活项增强样式 - 激活类在 .nav-link 上 */
-.nav-pills .nav-link.active,
-.nav-sidebar .nav-link.active {
-    background-color: rgba(255, 255, 255, 0.2) !important;
-    font-weight: 600 !important;
-    box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.8) !important;
-}
-
-/* 子菜单激活项 */
-.nav-treeview .nav-link.active {
-    background-color: rgba(255, 255, 255, 0.15) !important;
-    font-weight: 500 !important;
-    box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.6) !important;
-}
-
-/* 菜单悬停效果增强 */
-.nav-pills .nav-link:hover,
-.nav-sidebar .nav-link:hover {
-    background-color: rgba(255, 255, 255, 0.1) !important;
-}
-CSS);
+Admin::css('css/admin.css');
