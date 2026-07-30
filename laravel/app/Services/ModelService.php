@@ -216,7 +216,9 @@ class ModelService
      */
     public static function getAvailableChannelModels(ApiKey $apiKey): array
     {
-        $cacheKey = self::getCacheKey('channel_models', $apiKey->id);
+        // 缓存 key 包含分组/标签配置的 hash，确保配置变更后缓存自动失效
+        $filterHash = self::getFilterConfigHash($apiKey);
+        $cacheKey = self::getCacheKey('channel_models', $apiKey->id) . ":filter:{$filterHash}";
 
         return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($apiKey) {
             // 获取允许的渠道ID
@@ -242,6 +244,30 @@ class ModelService
             // 如果有允许的渠道，只查询这些渠道
             if (! empty($allowedChannels) && is_array($allowedChannels)) {
                 $query->whereIn('id', array_map('intval', $allowedChannels));
+            }
+
+            // 分组黑名单
+            if ($apiKey->hasGroupBlacklist()) {
+                $notAllowedGroupSlugs = $apiKey->getNotAllowedGroupSlugs();
+                $query->whereDoesntHave('groups', fn($q) => $q->whereIn('slug', $notAllowedGroupSlugs));
+            }
+
+            // 分组白名单
+            if ($apiKey->hasGroupWhitelist()) {
+                $allowedGroupSlugs = $apiKey->getAllowedGroupSlugs();
+                $query->whereHas('groups', fn($q) => $q->whereIn('slug', $allowedGroupSlugs));
+            }
+
+            // 标签黑名单
+            if ($apiKey->hasTagBlacklist()) {
+                $notAllowedTagNames = $apiKey->getNotAllowedTagNames();
+                $query->whereDoesntHave('tags', fn($q) => $q->whereIn('name', $notAllowedTagNames));
+            }
+
+            // 标签白名单
+            if ($apiKey->hasTagWhitelist()) {
+                $allowedTagNames = $apiKey->getAllowedTagNames();
+                $query->whereHas('tags', fn($q) => $q->whereIn('name', $allowedTagNames));
             }
 
             $channels = $query->get();
@@ -326,5 +352,25 @@ class ModelService
         }
 
         return $key;
+    }
+
+    /**
+     * 生成 API Key 分组/标签过滤配置的哈希值
+     *
+     * 用于缓存 key，确保分组/标签配置变更后缓存自动失效
+     *
+     * @param  ApiKey  $apiKey  API密钥
+     * @return string 配置哈希（8位）
+     */
+    private static function getFilterConfigHash(ApiKey $apiKey): string
+    {
+        $config = [
+            'allowed_groups' => $apiKey->allowed_groups ?? [],
+            'not_allowed_groups' => $apiKey->not_allowed_groups ?? [],
+            'allowed_tags' => $apiKey->allowed_tags ?? [],
+            'not_allowed_tags' => $apiKey->not_allowed_tags ?? [],
+        ];
+
+        return substr(md5(json_encode($config)), 0, 8);
     }
 }

@@ -4,9 +4,13 @@ namespace App\Admin\Controllers;
 
 use App\Admin\Actions\ApiKey\ResetApiKey;
 use App\Admin\Actions\Cache\RefreshModelCache;
+use App\Admin\Grids\ChannelGroupSelectGrid;
 use App\Admin\Grids\ChannelSelectGrid;
+use App\Admin\Grids\ChannelTagSelectGrid;
 use App\Models\ApiKey;
 use App\Models\Channel;
+use App\Models\ChannelGroup;
+use App\Models\ChannelTag;
 use App\Services\ModelService;
 use App\Services\SettingService;
 use Dcat\Admin\Form;
@@ -75,6 +79,72 @@ class ApiKeyController extends AdminController
                     return empty($channels) ? admin_trans_label('no_limit') : implode(', ', $channels);
                 });
 
+            // 允许的分组列
+            $grid->column('allowed_groups', admin_trans_field('allowed_groups'))
+                ->display(function ($value) {
+                    if (empty($value)) {
+                        return admin_trans_label('no_limit');
+                    }
+                    $slugs = is_array($value) ? $value : json_decode($value, true);
+                    if (empty($slugs)) {
+                        return admin_trans_label('no_limit');
+                    }
+                    $names = ChannelGroup::whereIn('slug', $slugs)->pluck('name')->toArray();
+
+                    return collect($names)->map(function ($name) {
+                        return "<span class='label bg-info'>{$name}</span>";
+                    })->implode(' ');
+                });
+
+            // 允许的标签列
+            $grid->column('allowed_tags', admin_trans_field('allowed_tags'))
+                ->display(function ($value) {
+                    if (empty($value)) {
+                        return admin_trans_label('no_limit');
+                    }
+                    $names = is_array($value) ? $value : json_decode($value, true);
+                    if (empty($names)) {
+                        return admin_trans_label('no_limit');
+                    }
+
+                    return collect($names)->map(function ($name) {
+                        return "<span class='label bg-warning'>{$name}</span>";
+                    })->implode(' ');
+                });
+
+            // 速率限制列
+            $grid->column('rate_limit', admin_trans_field('rate_limit'))
+                ->display(function ($value) {
+                    if (is_string($value)) {
+                        $value = json_decode($value, true);
+                    }
+                    if (empty($value) || ! is_array($value)) {
+                        return admin_trans_label('no_limit');
+                    }
+                    $fmt = function ($v) {
+                        if ($v >= 1_000_000) {
+                            return rtrim(rtrim(number_format($v / 1_000_000, 2), '0'), '.').'M';
+                        }
+                        if ($v >= 1_000) {
+                            return rtrim(rtrim(number_format($v / 1_000, 1), '0'), '.').'K';
+                        }
+
+                        return (string) $v;
+                    };
+                    $parts = [];
+                    if (! empty($value['requests_per_minute'])) {
+                        $parts[] = $value['requests_per_minute'].admin_trans_label('times_per_minute');
+                    }
+                    if (! empty($value['requests_per_day'])) {
+                        $parts[] = $fmt($value['requests_per_day']).admin_trans_label('times_per_day');
+                    }
+                    if (! empty($value['tokens_per_day'])) {
+                        $parts[] = $fmt($value['tokens_per_day']).admin_trans_label('tokens_per_day');
+                    }
+
+                    return $parts ? implode(' ', $parts) : admin_trans_label('no_limit');
+                });
+
             $grid->column('expires_at', admin_trans_field('expires_at'));
             $grid->column('last_used_at', admin_trans_field('last_used_at'));
             $grid->column('created_at', admin_trans_field('created_at'))->sortable();
@@ -117,7 +187,7 @@ class ApiKeyController extends AdminController
         return Show::make($id, new ApiKey, function (Show $show) {
             $show->field('id', admin_trans_field('id'));
             $show->field('name', admin_trans_field('name'));
-            $show->field('key', admin_trans_field('key'))->display(function ($value) {
+            $show->field('key', admin_trans_field('key'))->as(function ($value) {
                 return substr($value, 0, 10).'...';
             });
             $show->field('status', admin_trans_field('status'))->using([
@@ -177,6 +247,68 @@ class ApiKeyController extends AdminController
                     })->implode(' ');
                 });
 
+            // 允许的分组
+            $show->field('allowed_groups', admin_trans_field('allowed_groups'))
+                ->unescape()
+                ->as(function ($value) {
+                    /** @var ApiKey $this */
+                    $slugs = $this->getAllowedGroupSlugs();
+                    if (empty($slugs)) {
+                        return '<span class="text-muted">'.admin_trans_label('no_limit').'</span>';
+                    }
+                    $names = ChannelGroup::whereIn('slug', $slugs)->pluck('name')->toArray();
+
+                    return collect($names)->map(function ($name) {
+                        return "<span class='label bg-info'>$name</span>";
+                    })->implode(' ');
+                });
+
+            // 禁止的分组
+            $show->field('not_allowed_groups', admin_trans_field('not_allowed_groups'))
+                ->unescape()
+                ->as(function ($value) {
+                    /** @var ApiKey $this */
+                    $slugs = $this->getNotAllowedGroupSlugs();
+                    if (empty($slugs)) {
+                        return '<span class="text-muted">'.admin_trans_label('none').'</span>';
+                    }
+                    $names = ChannelGroup::whereIn('slug', $slugs)->pluck('name')->toArray();
+
+                    return collect($names)->map(function ($name) {
+                        return "<span class='label bg-danger'>$name</span>";
+                    })->implode(' ');
+                });
+
+            // 允许的标签
+            $show->field('allowed_tags', admin_trans_field('allowed_tags'))
+                ->unescape()
+                ->as(function ($value) {
+                    /** @var ApiKey $this */
+                    $names = $this->getAllowedTagNames();
+                    if (empty($names)) {
+                        return '<span class="text-muted">'.admin_trans_label('no_limit').'</span>';
+                    }
+
+                    return collect($names)->map(function ($name) {
+                        return "<span class='label bg-warning'>$name</span>";
+                    })->implode(' ');
+                });
+
+            // 禁止的标签
+            $show->field('not_allowed_tags', admin_trans_field('not_allowed_tags'))
+                ->unescape()
+                ->as(function ($value) {
+                    /** @var ApiKey $this */
+                    $names = $this->getNotAllowedTagNames();
+                    if (empty($names)) {
+                        return '<span class="text-muted">'.admin_trans_label('none').'</span>';
+                    }
+
+                    return collect($names)->map(function ($name) {
+                        return "<span class='label bg-danger'>$name</span>";
+                    })->implode(' ');
+                });
+
             // 可用模型列表 - 从允许的渠道中获取启用的模型
             $show->field('available_models', admin_trans_field('available_models'))
                 ->unescape()
@@ -215,26 +347,35 @@ class ApiKeyController extends AdminController
                     return implode('', $modelsHtml);
                 });
 
-            // 速率限制 - 友好显示
+            // 速率限制 - 友好显示（大数字以M为单位）
             $show->field('rate_limit', admin_trans_field('rate_limit'))
                 ->unescape()
                 ->as(function ($value) {
-                    // 确保是数组
                     if (is_string($value)) {
                         $value = json_decode($value, true);
                     }
                     if (empty($value) || ! is_array($value)) {
                         return '<span class="text-muted">'.admin_trans_label('no_limit').'</span>';
                     }
+                    $fmt = function ($v) {
+                        if ($v >= 1_000_000) {
+                            return rtrim(rtrim(number_format($v / 1_000_000, 2), '0'), '.').'M';
+                        }
+                        if ($v >= 1_000) {
+                            return rtrim(rtrim(number_format($v / 1_000, 1), '0'), '.').'K';
+                        }
+
+                        return (string) $v;
+                    };
                     $parts = [];
                     if (! empty($value['requests_per_minute'])) {
                         $parts[] = "<span class='label bg-info'>{$value['requests_per_minute']} ".admin_trans_label('times_per_minute').'</span>';
                     }
                     if (! empty($value['requests_per_day'])) {
-                        $parts[] = "<span class='label bg-info'>{$value['requests_per_day']} ".admin_trans_label('times_per_day').'</span>';
+                        $parts[] = "<span class='label bg-info'>".$fmt($value['requests_per_day']).' '.admin_trans_label('times_per_day').'</span>';
                     }
                     if (! empty($value['tokens_per_day'])) {
-                        $parts[] = "<span class='label bg-info'>{$value['tokens_per_day']} ".admin_trans_label('tokens_per_day').'</span>';
+                        $parts[] = "<span class='label bg-info'>".$fmt($value['tokens_per_day']).' '.admin_trans_label('tokens_per_day').'</span>';
                     }
 
                     return $parts ? implode(' ', $parts) : '<span class="text-muted">'.admin_trans_label('no_limit').'</span>';
@@ -301,6 +442,38 @@ class ApiKeyController extends AdminController
                 ->from(new ChannelSelectGrid)
                 ->model(Channel::class, 'id', 'name')
                 ->help(admin_trans_label('not_allowed_channels_help'));
+
+            // 分组限制
+            $form->multipleSelectTable('allowed_groups', admin_trans_field('allowed_groups'))
+                ->from(new ChannelGroupSelectGrid())
+                ->model(ChannelGroup::class, 'slug', 'name')
+                ->help(admin_trans_label('allowed_groups_help'));
+
+            $form->multipleSelectTable('not_allowed_groups', admin_trans_field('not_allowed_groups'))
+                ->from(new ChannelGroupSelectGrid())
+                ->model(ChannelGroup::class, 'slug', 'name')
+                ->help(admin_trans_label('not_allowed_groups_help'));
+
+            // 标签限制
+            $form->multipleSelectTable('allowed_tags', admin_trans_field('allowed_tags'))
+                ->from(new ChannelTagSelectGrid())
+                ->model(ChannelTag::class, 'name', 'name')
+                ->help(admin_trans_label('allowed_tags_help'));
+
+            $form->multipleSelectTable('not_allowed_tags', admin_trans_field('not_allowed_tags'))
+                ->from(new ChannelTagSelectGrid())
+                ->model(ChannelTag::class, 'name', 'name')
+                ->help(admin_trans_label('not_allowed_tags_help'));
+
+            // 防御 Dcat Admin multipleSelect Bug
+            $form->saving(function (Form $form) {
+                foreach (['allowed_groups', 'not_allowed_groups', 'allowed_tags', 'not_allowed_tags'] as $field) {
+                    $value = $form->input($field);
+                    if (is_array($value)) {
+                        $form->input($field, array_values($value));
+                    }
+                }
+            });
 
             // 速率限制
             $form->embeds('rate_limit', admin_trans_field('rate_limit'), function ($form) {

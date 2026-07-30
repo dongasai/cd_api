@@ -147,6 +147,7 @@ class ChannelRouterService
             return Channel::whereIn('id', $channelIds)
                 ->where('status', ChannelStatus::ACTIVE)
                 ->where('status2', ChannelHealthStatus::NORMAL) // 只选择健康状态正常的渠道
+                ->with(['groups', 'tags'])
                 ->orderBy('priority', 'desc')
                 ->orderBy('weight', 'desc')
                 ->get();
@@ -194,6 +195,7 @@ class ChannelRouterService
         return Channel::whereIn('id', $channelIds)
             ->where('status', ChannelStatus::ACTIVE)
             ->where('status2', ChannelHealthStatus::NORMAL)
+            ->with(['groups', 'tags'])
             ->where(function ($query) {
                 // 排除暂停账户的渠道
                 $query->whereNull('coding_account_id')
@@ -235,6 +237,50 @@ class ChannelRouterService
                 return in_array($channel->id, $allowedChannels, true);
             });
         }
+
+        // 应用分组黑名单
+        if ($apiKey->hasGroupBlacklist()) {
+            $notAllowedGroupSlugs = $apiKey->getNotAllowedGroupSlugs();
+            $channels = $channels->reject(function ($channel) use ($notAllowedGroupSlugs) {
+                $channelGroupSlugs = $channel->groups->pluck('slug')->toArray();
+                return ! empty(array_intersect($channelGroupSlugs, $notAllowedGroupSlugs));
+            });
+        }
+
+        // 应用分组白名单
+        if ($apiKey->hasGroupWhitelist()) {
+            $allowedGroupSlugs = $apiKey->getAllowedGroupSlugs();
+            $channels = $channels->filter(function ($channel) use ($allowedGroupSlugs) {
+                $channelGroupSlugs = $channel->groups->pluck('slug')->toArray();
+                return ! empty(array_intersect($channelGroupSlugs, $allowedGroupSlugs));
+            });
+        }
+
+        // 应用标签黑名单
+        if ($apiKey->hasTagBlacklist()) {
+            $notAllowedTagNames = $apiKey->getNotAllowedTagNames();
+            $channels = $channels->reject(function ($channel) use ($notAllowedTagNames) {
+                $channelTagNames = $channel->tags->pluck('name')->toArray();
+                return ! empty(array_intersect($channelTagNames, $notAllowedTagNames));
+            });
+        }
+
+        // 应用标签白名单
+        if ($apiKey->hasTagWhitelist()) {
+            $allowedTagNames = $apiKey->getAllowedTagNames();
+            $channels = $channels->filter(function ($channel) use ($allowedTagNames) {
+                $channelTagNames = $channel->tags->pluck('name')->toArray();
+                return ! empty(array_intersect($channelTagNames, $allowedTagNames));
+            });
+        }
+
+        Log::debug('API Key分组/标签过滤', [
+            'after' => $channels->count(),
+            'groups_whitelist' => $apiKey->getAllowedGroupSlugs(),
+            'groups_blacklist' => $apiKey->getNotAllowedGroupSlugs(),
+            'tags_whitelist' => $apiKey->getAllowedTagNames(),
+            'tags_blacklist' => $apiKey->getNotAllowedTagNames(),
+        ]);
 
         return $channels;
     }

@@ -69,7 +69,7 @@ class ChannelAffinityService
             return $this->lastResult;
         }
 
-        $channel = Channel::find($cachedData['channel_id']);
+        $channel = Channel::with(['groups', 'tags'])->find($cachedData['channel_id']);
 
         if ($channel === null || ! $channel->isActive()) {
             $this->cache->forget($rule->id, $keyHash);
@@ -78,15 +78,19 @@ class ChannelAffinityService
             return $this->lastResult;
         }
 
-        // 检查 API Key 是否允许访问该渠道
+        // 检查 API Key 是否允许访问该渠道（综合检查渠道ID+分组+标签）
         $apiKey = $request->attributes->get('api_key');
-        if ($apiKey && ! $apiKey->isChannelAllowed($channel->id)) {
+        if ($apiKey && ! $apiKey->isChannelAllowedWithGroupsAndTags($channel)) {
             Log::warning('Channel affinity blocked by API Key channel restriction', [
                 'rule_id' => $rule->id,
                 'channel_id' => $channel->id,
                 'api_key_id' => $apiKey->id,
                 'allowed_channels' => $apiKey->getAllowedChannelIds(),
                 'not_allowed_channels' => $apiKey->getNotAllowedChannelIds(),
+                'allowed_groups' => $apiKey->getAllowedGroupSlugs(),
+                'not_allowed_groups' => $apiKey->getNotAllowedGroupSlugs(),
+                'allowed_tags' => $apiKey->getAllowedTagNames(),
+                'not_allowed_tags' => $apiKey->getNotAllowedTagNames(),
             ]);
             // 清除缓存，让请求重新选择渠道
             $this->cache->forget($rule->id, $keyHash);
@@ -122,14 +126,18 @@ class ChannelAffinityService
             return;
         }
 
-        // 检查 API Key 是否允许访问该渠道
+        // 检查 API Key 是否允许访问该渠道（综合检查渠道ID+分组+标签）
         $apiKey = $request->attributes->get('api_key');
-        if ($apiKey && ! $apiKey->isChannelAllowed($channel->id)) {
+        if ($apiKey && ! $apiKey->isChannelAllowedWithGroupsAndTags($channel)) {
             Log::warning('Skipping affinity recording: channel not allowed by API Key', [
                 'channel_id' => $channel->id,
                 'api_key_id' => $apiKey->id,
                 'allowed_channels' => $apiKey->getAllowedChannelIds(),
                 'not_allowed_channels' => $apiKey->getNotAllowedChannelIds(),
+                'allowed_groups' => $apiKey->getAllowedGroupSlugs(),
+                'not_allowed_groups' => $apiKey->getNotAllowedGroupSlugs(),
+                'allowed_tags' => $apiKey->getAllowedTagNames(),
+                'not_allowed_tags' => $apiKey->getNotAllowedTagNames(),
             ]);
 
             return;

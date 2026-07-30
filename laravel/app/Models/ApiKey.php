@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ChannelHealthStatus;
 use App\Enums\ChannelStatus;
 use App\Http\Middleware\AuthenticateApiKey;
 use App\Services\Router\ChannelRouterService;
@@ -29,6 +30,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * │ model_mappings           │ json        │ 模型映射配置（Key级别别名映射）                      │
  * │ allowed_channels         │ json        │ 允许的渠道ID列表（白名单）                          │
  * │ not_allowed_channels     │ json        │ 禁止的渠道ID列表（黑名单）                          │
+ * │ allowed_groups           │ json        │ 允许的分组标识列表（白名单）                         │
+ * │ not_allowed_groups       │ json        │ 禁止的分组标识列表（黑名单）                         │
+ * │ allowed_tags             │ json        │ 允许的标签名称列表（白名单）                         │
+ * │ not_allowed_tags         │ json        │ 禁止的标签名称列表（黑名单）                         │
  * │ rate_limit               │ json        │ 速率限制配置                                      │
  * │ expires_at               │ timestamp   │ 过期时间                                          │
  * │ last_used_at             │ timestamp   │ 最后使用时间                                       │
@@ -45,6 +50,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * - 2026_03_09_100001: 添加模型映射字段
  * - 2026_03_16_000001: 移除 key_hash 字段
  * - 2026_03_16_000002: 移除 key_prefix 字段
+ * - 2026_07_29_000001: 添加分组/标签访问控制字段
  *
  * 核心功能：
  * 1. 模型映射：将请求的模型名称映射到实际模型（resolveModel）
@@ -59,6 +65,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property array|null $model_mappings 模型映射配置
  * @property array|null $allowed_channels 允许的渠道ID列表（白名单）
  * @property array|null $not_allowed_channels 禁止的渠道ID列表（黑名单）
+ * @property array|null $allowed_groups 允许的分组标识列表（白名单）
+ * @property array|null $not_allowed_groups 禁止的分组标识列表（黑名单）
+ * @property array|null $allowed_tags 允许的标签名称列表（白名单）
+ * @property array|null $not_allowed_tags 禁止的标签名称列表（黑名单）
  * @property array|null $rate_limit 速率限制配置
  * @property Carbon|null $expires_at 过期时间
  * @property Carbon|null $last_used_at 最后使用时间
@@ -83,6 +93,10 @@ class ApiKey extends Model
         'model_mappings',
         'allowed_channels',
         'not_allowed_channels',
+        'allowed_groups',
+        'not_allowed_groups',
+        'allowed_tags',
+        'not_allowed_tags',
         'rate_limit',
         'expires_at',
         'last_used_at',
@@ -96,6 +110,10 @@ class ApiKey extends Model
             'model_mappings' => 'array',
             'allowed_channels' => 'array',
             'not_allowed_channels' => 'array',
+            'allowed_groups' => 'array',
+            'not_allowed_groups' => 'array',
+            'allowed_tags' => 'array',
+            'not_allowed_tags' => 'array',
             'rate_limit' => 'array',
             'expires_at' => 'datetime',
             'last_used_at' => 'datetime',
@@ -280,13 +298,18 @@ class ApiKey extends Model
      * 1. 仅返回状态为 active 的渠道
      * 2. 应用黑名单过滤（排除黑名单中的渠道）
      * 3. 应用白名单过滤（仅保留白名单中的渠道）
+     * 4. 应用分组过滤
+     * 5. 应用标签过滤
      *
      * @return Collection
      */
     public function getAllowedChannels()
     {
-        $query = Channel::where('status', ChannelStatus::ACTIVE);
+        $query = Channel::query()
+            ->where('status', ChannelStatus::ACTIVE)
+            ->where('status2', ChannelHealthStatus::NORMAL);
 
+        // 渠道 ID 过滤
         if ($this->hasChannelBlacklist()) {
             $query->whereNotIn('id', $this->getNotAllowedChannelIds());
         }
@@ -295,6 +318,261 @@ class ApiKey extends Model
             $query->whereIn('id', $this->getAllowedChannelIds());
         }
 
+        // 分组过滤
+        if ($this->hasGroupBlacklist()) {
+            $query->whereDoesntHave('groups', fn($q) => $q->whereIn('slug', $this->getNotAllowedGroupSlugs()));
+        }
+
+        if ($this->hasGroupWhitelist()) {
+            $query->whereHas('groups', fn($q) => $q->whereIn('slug', $this->getAllowedGroupSlugs()));
+        }
+
+        // 标签过滤
+        if ($this->hasTagBlacklist()) {
+            $query->whereDoesntHave('tags', fn($q) => $q->whereIn('name', $this->getNotAllowedTagNames()));
+        }
+
+        if ($this->hasTagWhitelist()) {
+            $query->whereHas('tags', fn($q) => $q->whereIn('name', $this->getAllowedTagNames()));
+        }
+
         return $query->get();
+    }
+
+    // ─── 分组访问控制 ────────────────────────────────────────────────
+
+    /**
+     * 获取允许的分组标识列表（白名单）
+     *
+     * @return string[]
+     */
+    public function getAllowedGroupSlugs(): array
+    {
+        $slugs = $this->allowed_groups ?? [];
+
+        return array_map('strval', $slugs);
+    }
+
+    /**
+     * 获取禁止的分组标识列表（黑名单）
+     *
+     * @return string[]
+     */
+    public function getNotAllowedGroupSlugs(): array
+    {
+        $slugs = $this->not_allowed_groups ?? [];
+
+        return array_map('strval', $slugs);
+    }
+
+    /**
+     * 检查是否配置了分组白名单
+     */
+    public function hasGroupWhitelist(): bool
+    {
+        return ! empty($this->allowed_groups);
+    }
+
+    /**
+     * 检查是否配置了分组黑名单
+     */
+    public function hasGroupBlacklist(): bool
+    {
+        return ! empty($this->not_allowed_groups);
+    }
+
+    /**
+     * 检查是否配置了分组访问限制
+     */
+    public function hasGroupRestriction(): bool
+    {
+        return $this->hasGroupWhitelist() || $this->hasGroupBlacklist();
+    }
+
+    /**
+     * 检查指定分组是否允许访问
+     *
+     * 判断逻辑：
+     * 1. 如果配置了黑名单且分组在黑名单中 → 禁止访问
+     * 2. 如果配置了白名单且分组在白名单中 → 允许访问
+     * 3. 如果配置了白名单但分组不在白名单中 → 禁止访问
+     * 4. 如果没有任何限制 → 允许访问
+     *
+     * @param  string  $slug  分组标识
+     */
+    public function isGroupAllowed(string $slug): bool
+    {
+        if ($this->hasGroupBlacklist()) {
+            if (in_array($slug, $this->getNotAllowedGroupSlugs(), true)) {
+                return false;
+            }
+        }
+
+        if ($this->hasGroupWhitelist()) {
+            return in_array($slug, $this->getAllowedGroupSlugs(), true);
+        }
+
+        return true;
+    }
+
+    // ─── 标签访问控制 ────────────────────────────────────────────────
+
+    /**
+     * 获取允许的标签名称列表（白名单）
+     *
+     * @return string[]
+     */
+    public function getAllowedTagNames(): array
+    {
+        $names = $this->allowed_tags ?? [];
+
+        return array_map('strval', $names);
+    }
+
+    /**
+     * 获取禁止的标签名称列表（黑名单）
+     *
+     * @return string[]
+     */
+    public function getNotAllowedTagNames(): array
+    {
+        $names = $this->not_allowed_tags ?? [];
+
+        return array_map('strval', $names);
+    }
+
+    /**
+     * 检查是否配置了标签白名单
+     */
+    public function hasTagWhitelist(): bool
+    {
+        return ! empty($this->allowed_tags);
+    }
+
+    /**
+     * 检查是否配置了标签黑名单
+     */
+    public function hasTagBlacklist(): bool
+    {
+        return ! empty($this->not_allowed_tags);
+    }
+
+    /**
+     * 检查是否配置了标签访问限制
+     */
+    public function hasTagRestriction(): bool
+    {
+        return $this->hasTagWhitelist() || $this->hasTagBlacklist();
+    }
+
+    /**
+     * 检查指定标签是否允许访问
+     *
+     * 判断逻辑同分组：黑名单优先，白名单次之，无限制则放行
+     *
+     * @param  string  $name  标签名称
+     */
+    public function isTagAllowed(string $name): bool
+    {
+        if ($this->hasTagBlacklist()) {
+            if (in_array($name, $this->getNotAllowedTagNames(), true)) {
+                return false;
+            }
+        }
+
+        if ($this->hasTagWhitelist()) {
+            return in_array($name, $this->getAllowedTagNames(), true);
+        }
+
+        return true;
+    }
+
+    // ─── 综合限制检查 ────────────────────────────────────────────────
+
+    /**
+     * 综合检查渠道 ID + 分组 + 标签是否允许
+     *
+     * 用于 ChannelAffinityService 等需要完整检查的场景
+     */
+    public function isChannelAllowedWithGroupsAndTags(Channel $channel): bool
+    {
+        // 1. 渠道 ID 检查
+        if (! $this->isChannelAllowed($channel->id)) {
+            return false;
+        }
+
+        // 2. 分组检查
+        if (! $this->isGroupAllowedForChannel($channel)) {
+            return false;
+        }
+
+        // 3. 标签检查
+        if (! $this->isTagAllowedForChannel($channel)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * 检查渠道的分组是否允许
+     */
+    protected function isGroupAllowedForChannel(Channel $channel): bool
+    {
+        // 黑名单优先
+        if ($this->hasGroupBlacklist()) {
+            $notAllowedSlugs = $this->getNotAllowedGroupSlugs();
+            $channelSlugs = $channel->groups->pluck('slug')->toArray();
+            if (! empty(array_intersect($channelSlugs, $notAllowedSlugs))) {
+                return false;
+            }
+        }
+
+        // 白名单检查
+        if ($this->hasGroupWhitelist()) {
+            $allowedSlugs = $this->getAllowedGroupSlugs();
+            $channelSlugs = $channel->groups->pluck('slug')->toArray();
+            if (empty(array_intersect($channelSlugs, $allowedSlugs))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 检查渠道的标签是否允许
+     */
+    protected function isTagAllowedForChannel(Channel $channel): bool
+    {
+        // 黑名单优先
+        if ($this->hasTagBlacklist()) {
+            $notAllowedNames = $this->getNotAllowedTagNames();
+            $channelNames = $channel->tags->pluck('name')->toArray();
+            if (! empty(array_intersect($channelNames, $notAllowedNames))) {
+                return false;
+            }
+        }
+
+        // 白名单检查
+        if ($this->hasTagWhitelist()) {
+            $allowedNames = $this->getAllowedTagNames();
+            $channelNames = $channel->tags->pluck('name')->toArray();
+            if (empty(array_intersect($channelNames, $allowedNames))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 检查是否配置了任意访问限制（渠道+分组+标签）
+     */
+    public function hasAnyRestriction(): bool
+    {
+        return $this->hasChannelRestriction()
+            || $this->hasGroupRestriction()
+            || $this->hasTagRestriction();
     }
 }
