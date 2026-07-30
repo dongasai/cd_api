@@ -54,10 +54,12 @@ class AnthropicProvider extends AbstractProvider
 
     /**
      * 获取 API 端点
+     *
+     * Anthropic Messages API 标准路径为 /v1/messages
      */
     public function getEndpoint(ProtocolRequest $request): string
     {
-        return '/messages';
+        return '/v1/messages';
     }
 
     /**

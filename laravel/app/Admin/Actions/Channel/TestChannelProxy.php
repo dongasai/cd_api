@@ -4,6 +4,7 @@ namespace App\Admin\Actions\Channel;
 
 use App\Models\Channel;
 use App\Models\ChannelRequestLog;
+use App\Services\Protocol\Driver\Anthropic\MessagesRequest;
 use App\Services\Protocol\Driver\OpenAI\ChatCompletionRequest;
 use App\Services\Provider\ProviderManager;
 use App\Services\Shared\DTO\Message;
@@ -38,10 +39,14 @@ class TestChannelProxy extends RowAction
         }
 
         // 获取测试模型（必须配置默认模型）
-        $model = $channel->getDefaultModelName();
-        if (! $model) {
+        $defaultChannelModel = $channel->defaultModel();
+        if (! $defaultChannelModel) {
             return $this->response()->error(admin_trans_action('channel_no_default_model'));
         }
+
+        // 使用映射后的模型名（上游实际模型标识）
+        $modelName = $defaultChannelModel->model_name;
+        $model = $defaultChannelModel->getMappedModel();
 
         $startTime = microtime(true);
 
@@ -58,8 +63,11 @@ class TestChannelProxy extends RowAction
                 maxTokens: 10240,
             );
 
-            // 转换为 ProtocolRequest
-            $protocolRequest = ChatCompletionRequest::fromSharedDTO($sharedRequest);
+            // 根据渠道 provider 类型选择协议请求
+            $protocolRequest = match ($channel->provider) {
+                'anthropic' => MessagesRequest::fromSharedDTO($sharedRequest),
+                default => ChatCompletionRequest::fromSharedDTO($sharedRequest),
+            };
 
             // 通过 ProviderManager 获取渠道驱动并发送请求
             $provider = app(ProviderManager::class)->getForChannel($channel);
@@ -74,7 +82,7 @@ class TestChannelProxy extends RowAction
             $usage = $response->getUsage();
 
             // 记录渠道请求日志
-            $this->logChannelRequest($channel, $protocolRequest, $response, $latency, true);
+            $this->logChannelRequest($channel, $protocolRequest, $response, $latency, true, null, $modelName);
 
             // 更新渠道统计
             $this->updateChannelStats($channel, true, $latency);
@@ -86,7 +94,7 @@ class TestChannelProxy extends RowAction
                 ->refresh();
         } catch (\Throwable $e) {
             $latency = (int) ((microtime(true) - $startTime) * 1000);
-            $this->logChannelRequest($channel, null, null, $latency, false, $e->getMessage());
+            $this->logChannelRequest($channel, null, null, $latency, false, $e->getMessage(), $modelName);
             $this->updateChannelStats($channel, false, $latency);
 
             return $this->response()->error(admin_trans_action('test_channel_proxy_failed').': '.$e->getMessage());
@@ -133,18 +141,18 @@ class TestChannelProxy extends RowAction
             }
 
             if ($tokenParts) {
-                $parts[] = '(' . implode(', ', $tokenParts) . ')';
+                $parts[] = '('.implode(', ', $tokenParts).')';
             }
         }
 
         // 思考内容
         if (! empty($reasoning)) {
-            $parts[] = "\n[思考]\n" . mb_substr($reasoning, 0, 300);
+            $parts[] = "\n[思考]\n".mb_substr($reasoning, 0, 300);
         }
 
         // 正文内容
         if (! empty($content)) {
-            $parts[] = "\n[内容]\n" . mb_substr($content, 0, 500);
+            $parts[] = "\n[内容]\n".mb_substr($content, 0, 500);
         }
 
         return implode(' ', $parts);
@@ -152,18 +160,32 @@ class TestChannelProxy extends RowAction
 
     /**
      * 记录渠道请求日志
+     *
+     * 字段映射遵循 ProxyServer 的规范：
+     * - path: 端点路径（如 /v1/messages），而非模型名
+     * - full_url: base_url + path 拼接的完整 URL
+     * - model_name 和 mapped_model 存入 metadata，避免污染 path 字段
      */
-    protected function logChannelRequest(Channel $channel, $protocolRequest, $response, int $latency, bool $success, ?string $error = null): void
+    protected function logChannelRequest(Channel $channel, $protocolRequest, $response, int $latency, bool $success, ?string $error = null, ?string $modelName = null): void
     {
+        // 构建端点路径
+        $path = match ($channel->provider) {
+            'anthropic' => '/v1/messages',
+            default => '/v1/chat/completions',
+        };
+
+        $baseUrl = rtrim($channel->base_url ?? '', '/');
+        $fullUrl = $baseUrl.$path;
+
         ChannelRequestLog::create([
             'request_id' => 'proxy-'.uniqid(date('YmdHis')),
             'channel_id' => $channel->id,
             'channel_name' => $channel->name,
             'provider' => $channel->provider,
             'method' => 'POST',
-            'path' => $protocolRequest ? $protocolRequest->getModel() : '',
+            'path' => $path,
             'base_url' => $channel->base_url,
-            'full_url' => $channel->base_url,
+            'full_url' => $fullUrl,
             'request_headers' => [],
             'request_body' => $protocolRequest ? $protocolRequest->toArray() : [],
             'request_size' => $protocolRequest ? strlen(json_encode($protocolRequest->toArray())) : 0,
@@ -174,7 +196,12 @@ class TestChannelProxy extends RowAction
             'is_success' => $success,
             'error_message' => $error,
             'usage' => $response ? ($response->getUsage() ? (array) $response->getUsage() : null) : null,
-            'metadata' => ['test_type' => 'proxy', 'test_message' => $this->testMessage],
+            'metadata' => [
+                'test_type' => 'proxy',
+                'test_message' => $this->testMessage,
+                'model_name' => $modelName,      // 原始模型名
+                'mapped_model' => $protocolRequest ? $protocolRequest->getModel() : null,  // 上游实际模型标识
+            ],
             'sent_at' => now(),
         ]);
     }

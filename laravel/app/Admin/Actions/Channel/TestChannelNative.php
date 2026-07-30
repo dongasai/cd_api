@@ -19,6 +19,13 @@ class TestChannelNative extends RowAction
      */
     protected string $testMessage = '你好，请介绍一下你自己';
 
+    /**
+     * 当前测试的请求上下文（用于失败时也能完整记录日志）
+     *
+     * 在 testVia* 方法构建请求时填充，确保 catch 分支可获取请求信息
+     */
+    protected array $requestContext = [];
+
     public function title()
     {
         return '<i class="fa fa-flask"></i> '.admin_trans_action('test_channel_native');
@@ -39,17 +46,21 @@ class TestChannelNative extends RowAction
         }
 
         // 获取测试模型（必须配置默认模型）
-        $model = $channel->getDefaultModelName();
-        if (! $model) {
+        $defaultChannelModel = $channel->defaultModel();
+        if (! $defaultChannelModel) {
             return $this->response()->error(admin_trans_action('channel_no_default_model'));
         }
+
+        // 模型映射信息：原始名 -> 上游实际标识
+        $modelName = $defaultChannelModel->model_name;      // 原始模型名（如 qwen3.6-lite）
+        $model = $defaultChannelModel->getMappedModel();    // 上游模型标识（如 xopqwen36v35b）
 
         $startTime = microtime(true);
 
         try {
             $result = match ($channel->provider) {
-                'anthropic' => $this->testViaAnthropic($channel, $model),
-                default => $this->testViaOpenAI($channel, $model),
+                'anthropic' => $this->testViaAnthropic($channel, $model, $modelName),
+                default => $this->testViaOpenAI($channel, $model, $modelName),
             };
 
             $latency = (int) ((microtime(true) - $startTime) * 1000);
@@ -91,9 +102,11 @@ class TestChannelNative extends RowAction
     /**
      * 通过 OpenAI 兼容接口测试
      *
+     * @param  string  $model  上游实际模型标识（mapped_model）
+     * @param  string  $modelName  原始模型名（用于日志追踪）
      * @return array{content: string, request_headers: array, request_body: array, response_status: int, response_body: array, usage: array|null}
      */
-    protected function testViaOpenAI(Channel $channel, string $model): array
+    protected function testViaOpenAI(Channel $channel, string $model, string $modelName): array
     {
         $baseUrl = $channel->base_url ?: 'https://api.openai.com/v1';
         $endpoint = rtrim($baseUrl, '/').'/chat/completions';
@@ -109,6 +122,16 @@ class TestChannelNative extends RowAction
         $requestHeaders = [
             'Authorization' => 'Bearer '.substr($channel->api_key, 0, 8).'...',
             'Content-Type' => 'application/json',
+        ];
+
+        // 记录请求上下文（用于日志记录，确保失败时也能完整记录）
+        $this->requestContext = [
+            'path' => '/chat/completions',
+            'full_url' => $endpoint,
+            'request_headers' => $requestHeaders,
+            'request_body' => $requestBody,
+            'model_name' => $modelName,      // 原始模型名
+            'mapped_model' => $model,        // 上游实际模型标识
         ];
 
         $response = Http::withHeaders([
@@ -140,9 +163,11 @@ class TestChannelNative extends RowAction
     /**
      * 通过 Anthropic 接口测试
      *
+     * @param  string  $model  上游实际模型标识（mapped_model）
+     * @param  string  $modelName  原始模型名（用于日志追踪）
      * @return array{content: string, request_headers: array, request_body: array, response_status: int, response_body: array, usage: array|null}
      */
-    protected function testViaAnthropic(Channel $channel, string $model): array
+    protected function testViaAnthropic(Channel $channel, string $model, string $modelName): array
     {
         $baseUrl = $channel->base_url ?: 'https://api.anthropic.com';
         $endpoint = rtrim($baseUrl, '/').'/v1/messages';
@@ -159,6 +184,16 @@ class TestChannelNative extends RowAction
             'x-api-key' => substr($channel->api_key, 0, 8).'...',
             'Content-Type' => 'application/json',
             'anthropic-version' => '2023-06-01',
+        ];
+
+        // 记录请求上下文（用于日志记录，确保失败时也能完整记录）
+        $this->requestContext = [
+            'path' => '/v1/messages',
+            'full_url' => $endpoint,
+            'request_headers' => $requestHeaders,
+            'request_body' => $requestBody,
+            'model_name' => $modelName,      // 原始模型名
+            'mapped_model' => $model,        // 上游实际模型标识
         ];
 
         $response = Http::withHeaders([
@@ -262,20 +297,20 @@ class TestChannelNative extends RowAction
             }
 
             if ($tokenParts) {
-                $parts[] = '(' . implode(', ', $tokenParts) . ')';
+                $parts[] = '('.implode(', ', $tokenParts).')';
             }
         }
 
         // 思考内容
         $reasoning = $result['reasoning'] ?? null;
         if (! empty($reasoning)) {
-            $parts[] = "\n[思考]\n" . mb_substr($reasoning, 0, 300);
+            $parts[] = "\n[思考]\n".mb_substr($reasoning, 0, 300);
         }
 
         // 正文内容
         $content = $result['content'] ?? '';
         if (! empty($content)) {
-            $parts[] = "\n[内容]\n" . mb_substr($content, 0, 500);
+            $parts[] = "\n[内容]\n".mb_substr($content, 0, 500);
         }
 
         return implode(' ', $parts);
@@ -283,29 +318,45 @@ class TestChannelNative extends RowAction
 
     /**
      * 记录渠道请求日志
+     *
+     * 字段映射遵循 ProxyServer 的规范：
+     * - path: 端点路径（如 /v1/chat/completions），而非模型名
+     * - full_url: base_url + path 拼接的完整 URL
+     * - request_model 存入 metadata，避免污染 path 字段
      */
     protected function logChannelRequest(Channel $channel, array $result, int $latency, bool $success): void
     {
+        // 合并请求上下文：成功时 result 已含请求信息，失败时从 requestContext 补全
+        $ctx = array_merge($this->requestContext, $result);
+
+        $requestBody = $ctx['request_body'] ?? [];
+        $responseBody = $result['response_body'] ?? ['error' => $result['error'] ?? ''];
+
         ChannelRequestLog::create([
             'request_id' => 'test-'.uniqid(date('YmdHis')),
             'channel_id' => $channel->id,
             'channel_name' => $channel->name,
             'provider' => $channel->provider,
             'method' => 'POST',
-            'path' => $success ? ($result['request_body']['model'] ?? '') : '',
+            'path' => $ctx['path'] ?? '',
             'base_url' => $channel->base_url,
-            'full_url' => $channel->base_url,
-            'request_headers' => $result['request_headers'] ?? [],
-            'request_body' => $result['request_body'] ?? [],
-            'request_size' => strlen(json_encode($result['request_body'] ?? [])),
+            'full_url' => $ctx['full_url'] ?? $channel->base_url,
+            'request_headers' => $ctx['request_headers'] ?? [],
+            'request_body' => $requestBody,
+            'request_size' => strlen(json_encode($requestBody)),
             'response_status' => $result['response_status'] ?? 0,
-            'response_body' => $result['response_body'] ?? ['error' => $result['error'] ?? ''],
-            'response_size' => strlen(json_encode($result['response_body'] ?? [])),
+            'response_body' => $responseBody,
+            'response_size' => strlen(json_encode($responseBody)),
             'latency_ms' => $latency,
             'is_success' => $success,
             'error_message' => $success ? null : ($result['error'] ?? ''),
             'usage' => $result['usage'] ?? null,
-            'metadata' => ['test_type' => 'native', 'test_message' => $this->testMessage],
+            'metadata' => [
+                'test_type' => 'native',
+                'test_message' => $this->testMessage,
+                'model_name' => $ctx['model_name'] ?? null,      // 原始模型名（如 qwen3.6-lite）
+                'mapped_model' => $ctx['mapped_model'] ?? null,  // 上游实际模型标识（如 xopqwen36v35b）
+            ],
             'sent_at' => now(),
         ]);
     }
