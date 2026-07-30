@@ -124,11 +124,17 @@ COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 # 创建 supervisor 日志目录
 RUN mkdir -p /var/log/supervisor
 
-# 接收构建参数（仅在 LABEL 中使用，不影响前面步骤的缓存）
+# 接收构建参数
 ARG BUILD_TIME
 ARG BUILD_BRANCH
 ARG BUILD_COMMIT
 ARG BUILD_RUNNER
+
+# 设置环境变量（容器运行时可访问）
+ENV DOCKER_BUILD_TIME=${BUILD_TIME} \
+    DOCKER_BUILD_BRANCH=${BUILD_BRANCH} \
+    DOCKER_BUILD_COMMIT=${BUILD_COMMIT} \
+    DOCKER_BUILD_RUNNER=${BUILD_RUNNER}
 
 # 存储构建信息到镜像标签（可用 docker inspect 查看）
 LABEL build.time="${BUILD_TIME}" \
