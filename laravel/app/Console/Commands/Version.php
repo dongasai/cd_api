@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
  * 输出版本信息命令
  *
  * 输出构建信息、框架版本和系统基本信息
+ * php artisan version
  */
 class Version extends Command
 {
@@ -37,12 +38,14 @@ class Version extends Command
 
         // 构建信息（从环境变量读取）
         $this->info('【构建信息】');
-        $buildTime = $this->formatBuildTime(env('DOCKER_BUILD_TIME'));
+        $buildTimeRaw = env('DOCKER_BUILD_TIME', 'N/A');
+        $buildTimeLocal = $this->formatBuildTime($buildTimeRaw);
         $buildBranch = env('DOCKER_BUILD_BRANCH', 'N/A');
         $buildCommit = env('DOCKER_BUILD_COMMIT', 'N/A');
         $buildRunner = env('DOCKER_BUILD_RUNNER', 'N/A');
 
-        $this->line(sprintf('  构建时间: <comment>%s</comment>', $buildTime));
+        $this->line(sprintf('  构建时间(UTC): <comment>%s</comment>', $buildTimeRaw));
+        $this->line(sprintf('  构建时间(本地): <comment>%s</comment>', $buildTimeLocal));
         $this->line(sprintf('  构建分支: <comment>%s</comment>', $buildBranch));
         $this->line(sprintf('  构建 Commit: <comment>%s</comment>', $buildCommit));
         $this->line(sprintf('  构建执行者: <comment>%s</comment>', $buildRunner));
@@ -53,11 +56,18 @@ class Version extends Command
         $this->line(sprintf('  Laravel 版本: <comment>%s</comment>', app()->version()));
         $this->line(sprintf('  PHP 版本: <comment>%s</comment>', PHP_VERSION));
         $this->line(sprintf('  应用名称: <comment>%s</comment>', config('app.name')));
-        $this->line(sprintf('  运行环境: <comment>%s</comment>', config('app.env')));
         $this->newLine();
 
-        // 系统信息
-        $this->info('【系统信息】');
+        // 运行环境
+        $this->info('【运行环境】');
+        $this->line(sprintf('  运行环境: <comment>%s</comment>', config('app.env')));
+        $this->line(sprintf('  服务器时区: <comment>%s</comment>', date_default_timezone_get()));
+        $this->line(sprintf('  操作系统: <comment>%s</comment>', PHP_OS_FAMILY));
+        $this->line(sprintf('  运行方式: <comment>%s</comment>', php_sapi_name()));
+        $this->newLine();
+
+        // 数据库信息
+        $this->info('【数据库信息】');
         $dbConnection = config('database.default');
         $this->line(sprintf('  数据库连接: <comment>%s</comment>', $dbConnection));
 
@@ -95,8 +105,9 @@ class Version extends Command
         }
 
         try {
-            // 支持 "2026-07-30 16:32:50 UTC" 等格式
+            // 自动解析时间字符串中的时区（如 "2026-07-30 16:32:50 UTC"）
             $dt = new \DateTime($time);
+            $dt->setTimezone(new \DateTimeZone(date_default_timezone_get()));
 
             return $dt->format('Y-m-d H:i:s');
         } catch (\Exception $e) {
