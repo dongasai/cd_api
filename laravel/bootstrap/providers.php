@@ -1,9 +1,17 @@
 <?php
 
+use App\Providers\AppServiceProvider;
+use App\Providers\ProtocolServiceProvider;
+use App\Providers\ProviderServiceProvider;
+use App\Providers\RateLimitServiceProvider;
+use App\Providers\RouterServiceProvider;
+use App\Providers\SearchServiceProvider;
+
 return [
-    App\Providers\AppServiceProvider::class,
-    App\Providers\ProtocolServiceProvider::class,
-    App\Providers\ProviderServiceProvider::class,
-    App\Providers\RouterServiceProvider::class,
-    App\Providers\SearchServiceProvider::class,
+    AppServiceProvider::class,
+    ProtocolServiceProvider::class,
+    ProviderServiceProvider::class,
+    RouterServiceProvider::class,
+    SearchServiceProvider::class,
+    RateLimitServiceProvider::class,
 ];

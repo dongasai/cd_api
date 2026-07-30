@@ -3,6 +3,7 @@
 namespace App\Services\Router;
 
 use App\Helpers\JsonSchemaHelper;
+use App\Models\ApiKey;
 use App\Models\Channel;
 use App\Models\ChannelRequestLog;
 use App\Models\RequestLog;
@@ -14,6 +15,9 @@ use App\Services\Protocol\Contracts\ProtocolRequest;
 use App\Services\Protocol\ProtocolConverter;
 use App\Services\Provider\Exceptions\ProviderException;
 use App\Services\Provider\ProviderManager;
+use App\Services\RateLimit\DTO\RateLimitContext;
+use App\Services\RateLimit\Exceptions\RateLimitExceededException;
+use App\Services\RateLimit\RateLimitManager;
 use App\Services\Router\Handler\NonStreamHandler;
 use App\Services\Router\Handler\StreamHandler;
 use App\Services\Router\Logger\AuditLogger;
@@ -215,6 +219,9 @@ class ProxyServer
                 if ($this->selectedChannel === null) {
                     throw new ServiceUnavailableHttpException('No available channel for model: '.$modelName);
                 }
+
+                // 限流检查
+                $this->checkRateLimit($request, $this->selectedChannel, $modelName, $apiKey);
 
                 // 解析实际模型名称
                 $actualModel = $this->channelRouter->resolveModel($modelName, $this->selectedChannel);
@@ -544,6 +551,63 @@ class ProxyServer
             }
 
             throw new NotFoundHttpException("Model '{$model}' is not available");
+        }
+    }
+
+    /**
+     * 限流检查
+     *
+     * 在渠道选择后、执行请求前进行多层限流检查
+     * 检查优先级：API Key → 渠道 → 系统
+     *
+     * @throws RateLimitExceededException
+     */
+    protected function checkRateLimit(Request $request, Channel $channel, string $model, ?ApiKey $apiKey): void
+    {
+        $rateLimitManager = app(RateLimitManager::class);
+
+        // 注册系统级限流
+        $rateLimitManager->registerSystemLimiter();
+
+        // 注册渠道级限流
+        $rateLimitManager->registerChannelLimiters($channel, $model);
+
+        // 注册 API Key 级限流
+        if ($apiKey) {
+            $rateLimitManager->registerApiKeyLimiters($apiKey);
+        }
+
+        // 构建限流上下文
+        $context = new RateLimitContext(
+            apiKeyId: $apiKey?->id,
+            channelId: $channel->id,
+            model: $model,
+            metadata: [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ],
+        );
+
+        // 执行检查（被拒绝时抛出 RateLimitExceededException）
+        $rateLimitManager->check($context);
+
+        // 保存管理器实例，用于请求完成后记录使用量
+        $request->attributes->set('rate_limit_manager', $rateLimitManager);
+        $request->attributes->set('rate_limit_context', $context);
+    }
+
+    /**
+     * 记录限流使用量
+     *
+     * 在请求完成后异步调用，记录实际 Token 使用量（TPD 维度）
+     */
+    public function recordRateLimitUsage(Request $request, array $usage): void
+    {
+        $rateLimitManager = $request->attributes->get('rate_limit_manager');
+        $context = $request->attributes->get('rate_limit_context');
+
+        if ($rateLimitManager && $context) {
+            $rateLimitManager->recordUsage($context, $usage);
         }
     }
 
