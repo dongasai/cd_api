@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\MockController;
 use App\Http\Controllers\Api\ProxyController;
 use App\Http\Middleware\AuthenticateApiKey;
 use Illuminate\Support\Facades\Route;
@@ -21,4 +22,17 @@ Route::middleware([AuthenticateApiKey::class])->group(function () {
     // Anthropic models endpoint
     Route::get('/anthropic/models', [ProxyController::class, 'anthropicModels']);
     Route::get('/anthropic/v1/models', [ProxyController::class, 'anthropicModels']);
+});
+
+// 伪 LLM Mock 端点（无需认证，返回固定内容）
+Route::prefix('llm')->group(function () {
+    // OpenAI 兼容
+    Route::post('/openai/v1/chat/completions', [MockController::class, 'openaiChatCompletions']);
+    Route::get('/openai/v1/models', [MockController::class, 'openaiModels']);
+
+    // Anthropic 兼容
+    Route::post('/anthropic/messages', [MockController::class, 'anthropicMessages']);
+    Route::post('/anthropic/v1/messages', [MockController::class, 'anthropicMessages']);
+    Route::get('/anthropic/models', [MockController::class, 'anthropicModels']);
+    Route::get('/anthropic/v1/models', [MockController::class, 'anthropicModels']);
 });
