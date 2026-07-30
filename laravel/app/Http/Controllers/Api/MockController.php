@@ -151,6 +151,15 @@ class MockController extends Controller
             $parts[] = 'tools_types='.implode(',', $toolNames);
         }
 
+        // 提取请求头信息
+        $headers = ['x-claude-code-session-id', 'user-agent', 'x-request-id', 'x-api-key'];
+        foreach ($headers as $header) {
+            $value = $request->headers->get($header);
+            if ($value !== null && $value !== '') {
+                $parts[] = $header.'='.$value;
+            }
+        }
+
         return implode(', ', $parts);
     }
 
