@@ -131,8 +131,35 @@ class MockController extends Controller
         $msgCount = is_array($messages) ? count($messages) : 0;
         $parts[] = 'messages_count='.$msgCount;
 
-        // 提取第一条和最后一条消息摘要
+        // 统计对话轮次和各角色消息数
         if (is_array($messages) && $msgCount > 0) {
+            $userCount = 0;
+            $assistantCount = 0;
+            $systemCount = 0;
+
+            foreach ($messages as $msg) {
+                $role = $msg['role'] ?? '';
+                if ($role === 'user') {
+                    $userCount++;
+                } elseif ($role === 'assistant') {
+                    $assistantCount++;
+                } elseif ($role === 'system') {
+                    $systemCount++;
+                }
+            }
+
+            // 对话轮次 = user 发言次数
+            $rounds = $userCount;
+            $parts[] = 'rounds='.$rounds;
+            $parts[] = 'user_count='.$userCount;
+            if ($assistantCount > 0) {
+                $parts[] = 'assistant_count='.$assistantCount;
+            }
+            if ($systemCount > 0) {
+                $parts[] = 'system_count='.$systemCount;
+            }
+
+            // 提取第一条和最后一条消息摘要
             $firstMsg = $messages[0];
             $lastMsg = $messages[$msgCount - 1];
             $parts[] = 'first_msg='.$this->formatMessage($firstMsg);
