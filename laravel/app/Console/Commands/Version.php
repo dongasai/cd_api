@@ -58,7 +58,12 @@ class Version extends Command
 
         // 系统信息
         $this->info('【系统信息】');
-        $this->line(sprintf('  数据库连接: <comment>%s</comment>', config('database.default')));
+        $dbConnection = config('database.default');
+        $this->line(sprintf('  数据库连接: <comment>%s</comment>', $dbConnection));
+
+        // 获取数据库名称
+        $dbName = config("database.connections.{$dbConnection}.database", 'N/A');
+        $this->line(sprintf('  数据库名称: <comment>%s</comment>', $dbName));
 
         // 获取数据库版本
         try {
