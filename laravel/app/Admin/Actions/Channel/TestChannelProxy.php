@@ -175,6 +175,7 @@ class TestChannelProxy extends RowAction
         };
 
         $baseUrl = rtrim($channel->base_url ?? '', '/');
+
         $fullUrl = $baseUrl.$path;
 
         ChannelRequestLog::create([

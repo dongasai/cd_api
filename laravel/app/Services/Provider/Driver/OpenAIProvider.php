@@ -34,10 +34,12 @@ class OpenAIProvider extends AbstractProvider
 
     /**
      * 获取默认 API 基础 URL
+     *
+     * base_url 不含版本前缀，版本路径由 getEndpoint() 提供
      */
     public function getDefaultBaseUrl(): string
     {
-        return 'https://api.openai.com/v1';
+        return 'https://api.openai.com';
     }
 
     /**
@@ -45,7 +47,7 @@ class OpenAIProvider extends AbstractProvider
      */
     public function getEndpoint(ProtocolRequest $request): string
     {
-        return '/chat/completions';
+        return '/v1/chat/completions';
     }
 
     /**

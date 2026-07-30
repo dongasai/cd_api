@@ -26,7 +26,7 @@ return [
 
         // 帮助文本
         'slug_help' => '唯一标识符，用于API调用时的渠道识别',
-        'base_url_help' => '上游API的基础URL地址',
+        'base_url_help' => '上游API的基础URL地址,不带 v1',
         'api_key_help' => '上游API的密钥，将安全存储',
         'health_status_help' => '健康状态为禁用时，该渠道不参与渠道选择',
         'health_status_remark_help' => '记录健康状态变更原因，如：CodingStatus禁用',

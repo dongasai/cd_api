@@ -108,8 +108,8 @@ class TestChannelNative extends RowAction
      */
     protected function testViaOpenAI(Channel $channel, string $model, string $modelName): array
     {
-        $baseUrl = $channel->base_url ?: 'https://api.openai.com/v1';
-        $endpoint = rtrim($baseUrl, '/').'/chat/completions';
+        $baseUrl = rtrim($channel->base_url ?: 'https://api.openai.com', '/');
+        $endpoint = $baseUrl.'/v1/chat/completions';
 
         $requestBody = [
             'model' => $model,
@@ -126,7 +126,7 @@ class TestChannelNative extends RowAction
 
         // 记录请求上下文（用于日志记录，确保失败时也能完整记录）
         $this->requestContext = [
-            'path' => '/chat/completions',
+            'path' => '/v1/chat/completions',
             'full_url' => $endpoint,
             'request_headers' => $requestHeaders,
             'request_body' => $requestBody,
@@ -169,8 +169,8 @@ class TestChannelNative extends RowAction
      */
     protected function testViaAnthropic(Channel $channel, string $model, string $modelName): array
     {
-        $baseUrl = $channel->base_url ?: 'https://api.anthropic.com';
-        $endpoint = rtrim($baseUrl, '/').'/v1/messages';
+        $baseUrl = rtrim($channel->base_url ?: 'https://api.anthropic.com', '/');
+        $endpoint = $baseUrl.'/v1/messages';
 
         $requestBody = [
             'model' => $model,

@@ -46,10 +46,12 @@ class AnthropicProvider extends AbstractProvider
 
     /**
      * 获取默认 API 基础 URL
+     *
+     * base_url 不含版本前缀，版本路径由 getEndpoint() 提供
      */
     public function getDefaultBaseUrl(): string
     {
-        return 'https://api.anthropic.com/v1';
+        return 'https://api.anthropic.com';
     }
 
     /**

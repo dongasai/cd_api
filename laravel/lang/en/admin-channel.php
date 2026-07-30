@@ -26,7 +26,7 @@ return [
 
         // Help texts
         'slug_help' => 'Unique identifier for channel recognition during API calls',
-        'base_url_help' => 'Base URL of the upstream API',
+        'base_url_help' => 'Base URL of the upstream API, no v1',
         'api_key_help' => 'Upstream API key, will be stored securely',
         'health_status_help' => 'When disabled, this channel will not participate in channel selection',
         'health_status_remark_help' => 'Record the reason for health status change, e.g.: CodingStatus disabled',
