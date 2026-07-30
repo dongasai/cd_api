@@ -81,6 +81,8 @@ RUN echo '<VirtualHost *:80>\n\
         AllowOverride All\n\
         Require all granted\n\
     </Directory>\n\
+    ErrorLog /var/log/apache2/error.log\n\
+    CustomLog /var/log/apache2/access.log combined\n\
 </VirtualHost>' > /etc/apache2/sites-available/000-default.conf && \
     sed -i 's/\${APACHE_RUN_USER:=www-data}/\${APACHE_RUN_USER:=php}/g' /etc/apache2/envvars && \
     sed -i 's/\${APACHE_RUN_GROUP:=www-data}/\${APACHE_RUN_GROUP:=php}/g' /etc/apache2/envvars
