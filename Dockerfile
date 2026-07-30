@@ -142,5 +142,9 @@ LABEL build.time="${BUILD_TIME}" \
       build.commit="${BUILD_COMMIT}" \
       build.runner="${BUILD_RUNNER}"
 
-# 启动 supervisor
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# 容器启动脚本
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# 启动
+ENTRYPOINT ["/entrypoint.sh"]
