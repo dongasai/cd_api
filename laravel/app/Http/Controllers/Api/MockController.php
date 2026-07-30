@@ -95,19 +95,96 @@ class MockController extends Controller
      */
     private function extractParams(Request $request): string
     {
-        $fields = ['model', 'temperature', 'max_tokens', 'top_p', 'stream', 'system'];
+        // OpenAI 标准参数
+        $openaiFields = ['model', 'temperature', 'max_tokens', 'top_p', 'stream', 'system',
+            'frequency_penalty', 'presence_penalty', 'n', 'user', 'response_format'];
+
+        // Anthropic 标准参数
+        $anthropicFields = ['top_k', 'stop_sequences', 'metadata'];
+
         $parts = [];
-        foreach ($fields as $field) {
+
+        // 提取 OpenAI 参数
+        foreach ($openaiFields as $field) {
             if ($request->has($field)) {
                 $value = $request->json($field);
-                $parts[] = $field.'='.(is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : $value);
+                $parts[] = $field.'='.$this->formatParam($value);
             }
         }
+
+        // 提取 Anthropic 参数
+        foreach ($anthropicFields as $field) {
+            if ($request->has($field)) {
+                $value = $request->json($field);
+                $parts[] = $field.'='.$this->formatParam($value);
+            }
+        }
+
+        // 提取 stop 参数（可能是字符串或数组）
+        if ($request->has('stop')) {
+            $stop = $request->json('stop');
+            $parts[] = 'stop='.$this->formatParam($stop);
+        }
+
+        // 提取 messages 摘要
         $messages = $request->json('messages', []);
         $msgCount = is_array($messages) ? count($messages) : 0;
         $parts[] = 'messages_count='.$msgCount;
 
+        // 提取第一条和最后一条消息摘要
+        if (is_array($messages) && $msgCount > 0) {
+            $firstMsg = $messages[0];
+            $lastMsg = $messages[$msgCount - 1];
+            $parts[] = 'first_msg='.$this->formatMessage($firstMsg);
+            if ($msgCount > 1) {
+                $parts[] = 'last_msg='.$this->formatMessage($lastMsg);
+            }
+        }
+
+        // 提取 tools 信息
+        $tools = $request->json('tools', []);
+        if (is_array($tools) && count($tools) > 0) {
+            $parts[] = 'tools_count='.count($tools);
+            $toolNames = array_map(function ($tool) {
+                return $tool['type'] ?? 'unknown';
+            }, $tools);
+            $parts[] = 'tools_types='.implode(',', $toolNames);
+        }
+
         return implode(', ', $parts);
+    }
+
+    /**
+     * 格式化参数值。
+     */
+    private function formatParam(mixed $value): string
+    {
+        if (is_array($value)) {
+            return json_encode($value, JSON_UNESCAPED_UNICODE);
+        }
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+        return (string) $value;
+    }
+
+    /**
+     * 格式化消息摘要（角色+内容前50字符）。
+     */
+    private function formatMessage(array $msg): string
+    {
+        $role = $msg['role'] ?? 'unknown';
+        $content = $msg['content'] ?? '';
+
+        if (is_array($content)) {
+            // 处理多模态内容
+            $content = '[multimodal]';
+        } else {
+            // 截取前50字符
+            $content = mb_substr((string) $content, 0, 50);
+        }
+
+        return $role.':'.$content;
     }
 
     /**
