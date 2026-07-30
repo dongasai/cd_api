@@ -37,7 +37,7 @@ class Version extends Command
 
         // 构建信息（从环境变量读取）
         $this->info('【构建信息】');
-        $buildTime = env('DOCKER_BUILD_TIME', 'N/A');
+        $buildTime = $this->formatBuildTime(env('DOCKER_BUILD_TIME'));
         $buildBranch = env('DOCKER_BUILD_BRANCH', 'N/A');
         $buildCommit = env('DOCKER_BUILD_COMMIT', 'N/A');
         $buildRunner = env('DOCKER_BUILD_RUNNER', 'N/A');
@@ -78,6 +78,25 @@ class Version extends Command
         $this->info('╚════════════════════════════════════════╝');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * 格式化构建时间为 Y-m-d H:i:s
+     */
+    private function formatBuildTime(?string $time): string
+    {
+        if (! $time || $time === 'N/A') {
+            return 'N/A';
+        }
+
+        try {
+            // 支持 "2026-07-30 16:32:50 UTC" 等格式
+            $dt = new \DateTime($time);
+
+            return $dt->format('Y-m-d H:i:s');
+        } catch (\Exception $e) {
+            return $time;
+        }
     }
 
     /**
