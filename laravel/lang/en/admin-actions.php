@@ -32,6 +32,13 @@ return [
     'channel_copy_confirm' => 'Confirm to copy this channel?',
     'channel_copy_confirm_desc' => 'A new channel copy will be created, and statistics will be reset to zero.',
 
+    // CopyAsChildChannel
+    'copy_as_child_channel' => 'Copy as Child',
+    'copy_as_child_channel_confirm' => 'Confirm to copy as child channel?',
+    'copy_as_child_channel_desc' => 'A child channel will be created with parent ID set automatically, inheritance mode defaults to merge, and statistics will be reset to zero.',
+    'child_channel' => 'Child Channel',
+    'child_channel_copy_success' => 'Child channel created successfully! Parent: :parent, Child: :child',
+
     // CopyChannelAffinityRule
     'copy_channel_affinity_rule' => 'Copy',
     'rule_not_found' => 'Rule not found',

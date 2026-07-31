@@ -2,7 +2,7 @@
 
 namespace App\Admin\Controllers;
 
-use App\Admin\Controllers\Actions\SetDefaultSearchDriver;
+use App\Admin\Actions\Search\SetDefaultSearchDriver;
 use App\Models\SearchDriver;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;

@@ -32,6 +32,13 @@ return [
     'channel_copy_confirm' => '确认复制此渠道?',
     'channel_copy_confirm_desc' => '将创建一个新的渠道副本，统计信息将重置为零。',
 
+    // CopyAsChildChannel
+    'copy_as_child_channel' => '复制为子渠道',
+    'copy_as_child_channel_confirm' => '确认复制为子渠道?',
+    'copy_as_child_channel_desc' => '将创建一个子渠道副本，自动设置父渠道ID，继承模式默认为merge（合并继承），统计信息将重置为零。',
+    'child_channel' => '子渠道',
+    'child_channel_copy_success' => '子渠道创建成功！父渠道：:parent，子渠道：:child',
+
     // CopyChannelAffinityRule
     'copy_channel_affinity_rule' => '复制',
     'rule_not_found' => '规则不存在',
