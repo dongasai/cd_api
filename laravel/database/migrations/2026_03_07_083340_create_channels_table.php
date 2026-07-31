@@ -19,7 +19,7 @@ return new class extends Migration
 
             // 继承关系
             $table->unsignedBigInteger('parent_id')->nullable()->comment('父渠道 ID');
-            $table->enum('inherit_mode', ['merge', 'override', 'extend'])->default('merge')->comment('继承模式');
+            $table->enum('inherit_mode', ['merge', 'override'])->default('merge')->comment('继承模式');
 
             // 基础信息
             $table->string('name')->comment('渠道名称');

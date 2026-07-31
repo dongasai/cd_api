@@ -92,25 +92,47 @@ class ProviderManager
     /**
      * 根据渠道配置获取供应商实例
      *
+     * 支持渠道继承功能：当渠道有父渠道时，使用继承便捷方法获取最终生效的配置。
+     * 无父渠道时保持原有行为，确保向后兼容。
+     *
+     * 性能优化：只调用一次 getResolvedConfig() 获取完整解析配置，避免多次构建继承链。
+     *
      * @param  Channel  $channel  渠道模型
      * @param  array  $clientHeaders  客户端请求头（用于转发）
      * @return ProviderInterface 供应商实例
      */
     public function getForChannel(Channel $channel, array $clientHeaders = []): ProviderInterface
     {
-        $providerName = $channel->provider ?? $channel->provider_type ?? 'openai';
+        // 根据是否有父渠道选择配置获取方式
+        if ($channel->hasParent()) {
+            // 有父渠道：使用 getResolvedConfig() 一次性获取完整解析配置
+            // 避免多次调用便捷方法导致重复构建继承链（性能优化）
+            $resolved = $channel->getResolvedConfig();
+            $providerName = $resolved['provider'] ?? $channel->provider ?? 'openai';
+            $baseUrl = $resolved['base_url'] ?? null;
+            $apiKey = $resolved['api_key'] ?? null;
+            $forwardHeaders = $resolved['forward_headers'] ?? [];
+            $channelConfig = $resolved['config'] ?? [];
+        } else {
+            // 无父渠道：向后兼容，直接使用字段值
+            $providerName = $channel->provider ?? 'openai';
+            $baseUrl = $channel->base_url;
+            $apiKey = $channel->api_key;
+            $forwardHeaders = $channel->getForwardHeaderNames();
+            $channelConfig = $channel->config ?? [];
+        }
 
         $config = [
-            'base_url' => $channel->base_url,
-            'api_key' => $channel->api_key,
+            'base_url' => $baseUrl,
+            'api_key' => $apiKey,
             'name' => $providerName,
-            'forward_headers' => $channel->getForwardHeaderNames(),
+            'forward_headers' => $forwardHeaders,
             'client_headers' => $clientHeaders,
         ];
 
         // 合并渠道的高级配置
-        if (! empty($channel->config) && is_array($channel->config)) {
-            $config = array_merge($config, $channel->config);
+        if (! empty($channelConfig) && is_array($channelConfig)) {
+            $config = array_merge($config, $channelConfig);
         }
 
         return match ($providerName) {

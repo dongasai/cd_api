@@ -2,6 +2,7 @@
 
 namespace App\Admin\Controllers;
 
+use App\Admin\Actions\Channel\CopyAsChildChannel;
 use App\Admin\Actions\Channel\CopyChannel;
 use App\Admin\Actions\Channel\TestChannelNative;
 use App\Admin\Actions\Channel\TestChannelProxy;
@@ -11,6 +12,7 @@ use App\Models\Channel;
 use App\Models\ChannelModel;
 use App\Models\CodingAccount;
 use App\Models\UserAgent;
+use App\Services\ChannelInheritance\ChannelInheritanceResolver;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
 use Dcat\Admin\Http\Controllers\AdminController;
@@ -65,7 +67,7 @@ class ChannelController extends AdminController
 
                     $url = admin_url('coding-accounts/'.$this->codingAccount->id);
 
-                    return "<a href='{$url}'><span class='badge bg-{$color}'>{$this->codingAccount->name} ({$statusLabel})</span></a>";
+                    return "<a href='".e($url)."'><span class='badge bg-".e($color)."'>".e($this->codingAccount->name).' ('.e($statusLabel).')</span></a>';
                 }
 
                 return '<span class="text-muted">-</span>';
@@ -120,6 +122,7 @@ class ChannelController extends AdminController
             $grid->actions(function (Grid\Displayers\Actions $actions) {
                 $actions->append('<a href="'.admin_url('channels/'.$this->id).'" class="btn btn-primary btn-sm mr-1"><i class="fa fa-eye"></i> '.admin_trans_label('view').'</a>');
                 $actions->append(new CopyChannel);
+                $actions->append(new CopyAsChildChannel);
                 $actions->append(new TestChannelNative);
                 $actions->append(new TestChannelProxy);
             });
@@ -169,7 +172,7 @@ class ChannelController extends AdminController
 
                     $url = admin_url('coding-accounts/'.$this->codingAccount->id);
 
-                    return "<a href='{$url}'><span class='badge bg-{$color}'>{$this->codingAccount->name} ({$statusLabel})</span></a>";
+                    return "<a href='".e($url)."'><span class='badge bg-".e($color)."'>".e($this->codingAccount->name).' ('.e($statusLabel).')</span></a>';
                 }
 
                 return '<span class="text-muted">'.admin_trans_label('not_related').'</span>';
@@ -203,11 +206,167 @@ class ChannelController extends AdminController
 
             $show->field('priority')->width(3);
             $show->field('inherit_mode')->using(admin_trans_options('inherit_mode'))->width(3);
-            $show->field('parent_id')->width(3);
+            $show->field('parent_id')->as(function ($value) {
+                if (! $value) {
+                    return '<span class="text-muted">-</span>';
+                }
+                $parent = Channel::find($value);
+                if (! $parent) {
+                    return '<span class="text-danger">父渠道不存在 (ID: '.$value.')</span>';
+                }
+                $url = admin_url('channels/'.$parent->id);
+
+                return "<a href='".e($url)."'>".e($parent->name).' (ID: '.e($parent->id).')</a>';
+            })->unescape()->width(3);
+
+            // 继承配置预览
+            $show->divider(admin_trans_label('inheritance_info'));
+
+            // 继承链可视化
+            $show->field('inheritance_chain', admin_trans_field('inheritance_chain'))->as(function () {
+                $chain = $this->getInheritanceChain();
+                if (empty($chain)) {
+                    return '<span class="text-muted">'.admin_trans_label('no_inheritance').'</span>';
+                }
+
+                $html = '<div class="inheritance-chain">';
+                $isFirst = true;
+                foreach ($chain as $channel) {
+                    if (! $isFirst) {
+                        $html .= ' <span class="text-muted">→</span> ';
+                    }
+                    $isFirst = false;
+                    $modeLabel = $channel->inherit_mode ? $channel->inherit_mode->label() : '-';
+                    $url = admin_url('channels/'.$channel->id);
+                    $badgeClass = $channel->id === $this->id ? 'bg-primary' : 'bg-secondary';
+                    $html .= "<a href='".e($url)."'><span class='badge ".e($badgeClass)."'>".e($channel->name).' ('.e($modeLabel).')</span></a>';
+                }
+                $html .= '</div>';
+
+                return $html;
+            })->unescape();
+
+            // 继承深度
+            $show->field('inheritance_depth', admin_trans_field('inheritance_depth'))->as(function () {
+                $depth = $this->getInheritanceDepth();
+                $badgeClass = $depth === 0 ? 'secondary' : 'info';
+
+                return '<span class="badge bg-'.$badgeClass.'">'.$depth.'</span>';
+            })->unescape()->width(3);
+
+            // 生效配置预览
+            $show->field('effective_config', admin_trans_field('effective_config'))->as(function () {
+                if (! $this->hasParent()) {
+                    return '<span class="text-muted">'.admin_trans_label('no_inheritance').'</span>';
+                }
+
+                $html = '<table class="table table-sm table-bordered">';
+                $html .= '<thead><tr><th>'.admin_trans_field('field_name').'</th><th>'.admin_trans_field('original_value').'</th><th>'.admin_trans_field('effective_value').'</th><th>'.admin_trans_field('inherited_from').'</th></tr></thead>';
+                $html .= '<tbody>';
+
+                // 标量字段对比
+                $scalarFields = [
+                    'provider' => admin_trans_field('provider'),
+                    'base_url' => admin_trans_field('base_url'),
+                    'api_key' => admin_trans_field('api_key'),
+                ];
+
+                foreach ($scalarFields as $field => $label) {
+                    $originalValue = $this->$field;
+                    $effectiveValue = match ($field) {
+                        'provider' => $this->getEffectiveProvider(),
+                        'base_url' => $this->getEffectiveBaseUrl(),
+                        'api_key' => $this->getEffectiveApiKey(),
+                        default => $originalValue,
+                    };
+
+                    $originalDisplay = $originalValue !== null && $originalValue !== '' ? e($originalValue) : '<span class="text-muted">-</span>';
+                    $effectiveDisplay = $effectiveValue !== null && $effectiveValue !== '' ? e($effectiveValue) : '<span class="text-muted">-</span>';
+                    $isInherited = $originalValue !== $effectiveValue && ! empty($effectiveValue);
+                    $valueClass = $isInherited ? 'text-info' : '';
+
+                    // 查找继承来源
+                    $inheritedFrom = '-';
+                    if ($isInherited) {
+                        $chain = $this->getInheritanceChain();
+                        foreach ($chain as $ancestor) {
+                            if ($ancestor->id === $this->id) {
+                                continue;
+                            }
+                            $ancestorValue = $ancestor->$field;
+                            if ($ancestorValue === $effectiveValue) {
+                                $inheritedFrom = "<a href='".e(admin_url('channels/'.$ancestor->id))."'>".e($ancestor->name).'</a>';
+                                break;
+                            }
+                        }
+                    }
+
+                    $html .= '<tr><td>'.e($label).'</td><td>'.$originalDisplay.'</td><td class="'.e($valueClass).'">'.$effectiveDisplay.'</td><td>'.$inheritedFrom.'</td></tr>';
+                }
+
+                // 数组字段对比
+                $originalConfig = $this->config ?? [];
+                $effectiveConfig = $this->getResolvedConfig()['config'] ?? [];
+                $configChanged = $originalConfig !== $effectiveConfig;
+
+                if ($configChanged || ! empty($effectiveConfig)) {
+                    $originalJson = json_encode($originalConfig, JSON_UNESCAPED_UNICODE);
+                    $effectiveJson = json_encode($effectiveConfig, JSON_UNESCAPED_UNICODE);
+                    $valueClass = $configChanged ? 'text-info' : '';
+                    $html .= "<tr><td>config</td><td><code class=\"small\">{$originalJson}</code></td><td class=\"{$valueClass}\"><code class=\"small\">{$effectiveJson}</code></td><td>".($configChanged ? admin_trans_label('inherited_from') : '-').'</td></tr>';
+                }
+
+                // forward_headers 对比
+                $originalHeaders = $this->forward_headers ?? [];
+                $effectiveHeaders = $this->getEffectiveForwardHeaders();
+                $headersChanged = $originalHeaders !== $effectiveHeaders;
+
+                if ($headersChanged || ! empty($effectiveHeaders)) {
+                    $originalJson = json_encode($originalHeaders, JSON_UNESCAPED_UNICODE);
+                    $effectiveJson = json_encode($effectiveHeaders, JSON_UNESCAPED_UNICODE);
+                    $valueClass = $headersChanged ? 'text-info' : '';
+                    $html .= "<tr><td>forward_headers</td><td><code class=\"small\">{$originalJson}</code></td><td class=\"{$valueClass}\"><code class=\"small\">{$effectiveJson}</code></td><td>".($headersChanged ? admin_trans_label('inherited_from') : '-').'</td></tr>';
+                }
+
+                $html .= '</tbody></table>';
+
+                return $html;
+            })->unescape();
             $show->field('api_key_hash', admin_trans_label('api_key_fingerprint'))->as(function ($value) {
                 return $value ? '<code>'.substr($value, 0, 8).'...</code>' : '-';
             })->width(3);
             $show->field('description');
+
+            // 继承模型列表
+            $show->field('channel_models_inherited', admin_trans_field('channel_models_inherited'))->as(function () {
+                if (! $this->hasParent()) {
+                    return '<span class="text-muted">'.admin_trans_label('no_inheritance').'</span>';
+                }
+
+                $models = $this->getEffectiveChannelModels();
+                if (empty($models)) {
+                    return '<span class="text-muted">无模型配置</span>';
+                }
+
+                $html = '<div class="inherited-models">';
+                $html .= '<p class="text-muted small">'.admin_trans_label('channel_models_inherited_desc').'</p>';
+                $html .= '<ul class="list-group list-group-flush">';
+                foreach ($models as $model) {
+                    $enabledBadge = $model['is_enabled'] ? '<span class="badge bg-success">启用</span>' : '<span class="badge bg-secondary">禁用</span>';
+                    $defaultBadge = $model['is_default'] ? '<span class="badge bg-primary">默认</span>' : '';
+                    $html .= '<li class="list-group-item d-flex justify-content-between align-items-center">';
+                    $html .= '<span><strong>'.e($model['model_name']).'</strong>';
+                    if ($model['display_name']) {
+                        $html .= ' <span class="text-muted">('.e($model['display_name']).')</span>';
+                    }
+                    $html .= '</span>';
+                    $html .= '<span>'.$enabledBadge.' '.$defaultBadge.'</span>';
+                    $html .= '</li>';
+                }
+                $html .= '</ul></div>';
+
+                return $html;
+            })->unescape();
 
             $show->divider(admin_trans_label('runtime_stats'));
 
@@ -294,7 +453,7 @@ class ChannelController extends AdminController
 
             // API配置
             $form->tab(admin_trans_label('api_config'), function (Form $form) {
-                $form->url('base_url')->required()
+                $form->url('base_url')
                     ->help(admin_trans_label('base_url_help'));
                 $form->password('api_key')
                     ->help(admin_trans_label('api_key_help'));
@@ -415,6 +574,29 @@ class ChannelController extends AdminController
 
                 if (empty($form->inherit_mode)) {
                     $form->inherit_mode = 'merge';
+                }
+
+                // 检测循环继承和深度限制
+                $parentId = $form->parent_id;
+                if ($parentId) {
+                    // 校验 parent_id 是否指向有效渠道
+                    if (! Channel::where('id', $parentId)->exists()) {
+                        return $form->response()->error('父渠道不存在');
+                    }
+
+                    // 使用 clone 创建临时模型进行校验，避免污染原始模型
+                    $tempChannel = clone $form->model();
+                    $tempChannel->parent_id = $parentId;
+
+                    // 循环检测
+                    if ($tempChannel->hasCircularInheritance()) {
+                        return $form->response()->error('检测到循环继承，无法保存');
+                    }
+
+                    // 深度检测（使用常量确保一致性）
+                    if ($tempChannel->getInheritanceDepth() >= ChannelInheritanceResolver::MAX_DEPTH) {
+                        return $form->response()->error('继承深度超过'.ChannelInheritanceResolver::MAX_DEPTH.'级限制，无法保存');
+                    }
                 }
             });
 

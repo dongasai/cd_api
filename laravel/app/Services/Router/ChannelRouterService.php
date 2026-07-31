@@ -243,6 +243,7 @@ class ChannelRouterService
             $notAllowedGroupSlugs = $apiKey->getNotAllowedGroupSlugs();
             $channels = $channels->reject(function ($channel) use ($notAllowedGroupSlugs) {
                 $channelGroupSlugs = $channel->groups->pluck('slug')->toArray();
+
                 return ! empty(array_intersect($channelGroupSlugs, $notAllowedGroupSlugs));
             });
         }
@@ -252,6 +253,7 @@ class ChannelRouterService
             $allowedGroupSlugs = $apiKey->getAllowedGroupSlugs();
             $channels = $channels->filter(function ($channel) use ($allowedGroupSlugs) {
                 $channelGroupSlugs = $channel->groups->pluck('slug')->toArray();
+
                 return ! empty(array_intersect($channelGroupSlugs, $allowedGroupSlugs));
             });
         }
@@ -261,6 +263,7 @@ class ChannelRouterService
             $notAllowedTagNames = $apiKey->getNotAllowedTagNames();
             $channels = $channels->reject(function ($channel) use ($notAllowedTagNames) {
                 $channelTagNames = $channel->tags->pluck('name')->toArray();
+
                 return ! empty(array_intersect($channelTagNames, $notAllowedTagNames));
             });
         }
@@ -270,6 +273,7 @@ class ChannelRouterService
             $allowedTagNames = $apiKey->getAllowedTagNames();
             $channels = $channels->filter(function ($channel) use ($allowedTagNames) {
                 $channelTagNames = $channel->tags->pluck('name')->toArray();
+
                 return ! empty(array_intersect($channelTagNames, $allowedTagNames));
             });
         }
@@ -367,10 +371,30 @@ class ChannelRouterService
      */
     protected function getChannelIdsForModel(string $model): array
     {
-        return ChannelModel::where('model_name', $model)
+        // 直接拥有该模型的渠道
+        $directChannelIds = ChannelModel::where('model_name', $model)
             ->where('is_enabled', true)
             ->pluck('channel_id')
             ->toArray();
+
+        // 通过继承获取该模型的渠道（子渠道没有自己的 channel_models 时，从父渠道继承）
+        $inheritedChannelIds = [];
+        $childChannels = Channel::whereNotNull('parent_id')
+            ->where('parent_id', '!=', 0)
+            ->whereNotIn('id', $directChannelIds)
+            ->get();
+
+        foreach ($childChannels as $channel) {
+            $effectiveModels = $channel->getEffectiveChannelModels();
+            foreach ($effectiveModels as $effectiveModel) {
+                if ($effectiveModel['model_name'] === $model && $effectiveModel['is_enabled']) {
+                    $inheritedChannelIds[] = $channel->id;
+                    break;
+                }
+            }
+        }
+
+        return array_unique(array_merge($directChannelIds, $inheritedChannelIds));
     }
 
     /**
@@ -555,7 +579,28 @@ class ChannelRouterService
                 }
             }
 
-            // 其次：检查原模型的映射配置（这个逻辑其实已经被上面的循环覆盖了）
+            // 其次：如果渠道有父渠道，从继承的模型列表中查找映射
+            if ($channel->hasParent()) {
+                $effectiveModels = $channel->getEffectiveChannelModels();
+                foreach ($modelNames as $modelName) {
+                    foreach ($effectiveModels as $effectiveModel) {
+                        if ($effectiveModel['model_name'] === $modelName && $effectiveModel['is_enabled']) {
+                            $resolvedModel = $effectiveModel['mapped_model'] ?? $modelName;
+                            Log::debug('Model resolved via inherited model', [
+                                'original_model' => $model,
+                                'matched_alias' => $modelName,
+                                'resolved_model' => $resolvedModel,
+                                'channel_id' => $channel->id,
+                                'inherited' => true,
+                            ]);
+
+                            return $resolvedModel;
+                        }
+                    }
+                }
+            }
+
+            // 再次：检查原模型的映射配置（兼容无父渠道场景）
             $channelModel = ChannelModel::where('channel_id', $channel->id)
                 ->where('model_name', $model)
                 ->where('is_enabled', true)

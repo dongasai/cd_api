@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\ChannelHealthStatus;
 use App\Enums\ChannelStatus;
+use App\Enums\InheritMode;
+use App\Services\ChannelInheritance\ChannelInheritanceResolver;
 use App\Services\Provider\ProviderManager;
 use App\Services\Router\ChannelRouterService;
 use App\Services\Router\ProxyServer;
@@ -26,7 +28,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * ├──────────────────────────┼──────────────────┼─────────────────────────────────────────────┤
  * │ id                       │ bigint unsigned   │ 主键，自增                                    │
  * │ parent_id                │ bigint unsigned   │ 父渠道 ID（继承关系）                          │
- * │ inherit_mode             │ enum              │ 继承模式：merge/override/extend               │
+ * │ inherit_mode             │ enum              │ 继承模式：merge/override                      │
  * │ name                     │ varchar(255)      │ 渠道名称                                      │
  * │ slug                     │ varchar(100)      │ 渠道标识                                      │
  * │ provider                 │ varchar(50)       │ 提供商类型（openai/anthropic/azure等）         │
@@ -68,11 +70,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * - 2026_03_09_160238: 移除 health_status 字段
  * - 2026_03_15_174851: 在 config 中添加 body_passthrough 配置
  * - 2026_03_17_150000: 添加 has_user_agent_restriction 标志
+ * - 2026_07_31_083024: 移除 models、default_model 字段（已迁移到 channel_models 表）
  * - 2026_03_17_234843: 添加 status2 和 status2_remark（健康状态）
  * - 2026_03_24_013632: 将 status 从 enum 改为 tinyint
  *
  * 核心功能：
- * 1. 渠道继承：支持父子渠道继承配置（merge/override/extend）
+ * 1. 渠道继承：支持父子渠道继承配置（merge/override）
  * 2. 负载均衡：基于权重和优先级的智能路由
  * 3. 健康监控：失败/成功计数、自动禁用、状态管理
  * 4. 模型管理：通过 channel_models 表管理支持的模型列表
@@ -82,7 +85,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * @property int $id 主键
  * @property int|null $parent_id 父渠道 ID
- * @property string $inherit_mode 继承模式：merge/override/extend
+ * @property string $inherit_mode 继承模式：merge/override
  * @property string $name 渠道名称
  * @property string|null $slug 渠道标识
  * @property string $provider 提供商类型
@@ -161,6 +164,7 @@ class Channel extends Model
         'coding_account_id',
         'description',
         'has_user_agent_restriction',
+        'period_disabled_at',
     ];
 
     /**
@@ -173,6 +177,7 @@ class Channel extends Model
         return [
             'status' => ChannelStatus::class,
             'status2' => ChannelHealthStatus::class,
+            'inherit_mode' => InheritMode::class,
             'config' => 'array',
             'forward_headers' => 'array',
             'last_check_at' => 'datetime',
@@ -181,6 +186,7 @@ class Channel extends Model
             'total_cost' => 'decimal:6',
             'success_rate' => 'decimal:4',
             'has_user_agent_restriction' => 'boolean',
+            'period_disabled_at' => 'datetime',
         ];
     }
 
@@ -305,6 +311,14 @@ class Channel extends Model
     public function hasCodingAccount(): bool
     {
         return $this->coding_account_id !== null;
+    }
+
+    /**
+     * 检查是否因时段控制被禁用
+     */
+    public function isDisabledByPeriodControl(): bool
+    {
+        return $this->period_disabled_at !== null;
     }
 
     /**
@@ -504,5 +518,189 @@ class Channel extends Model
         }
 
         return false; // 没有任何规则匹配
+    }
+
+    /* ==================== 继承便捷方法 ==================== */
+
+    /**
+     * 获取继承链
+     *
+     * 从当前渠道开始，逐级向上遍历父渠道，返回从根到当前的完整继承链。
+     *
+     * @return array<Channel> 继承链数组（从根到当前）
+     *
+     * @see ChannelInheritanceResolver::getInheritanceChain()
+     */
+    public function getInheritanceChain(): array
+    {
+        /** @var ChannelInheritanceResolver $resolver */
+        $resolver = app(ChannelInheritanceResolver::class);
+
+        return $resolver->getInheritanceChain($this);
+    }
+
+    /**
+     * 获取解析后的完整配置
+     *
+     * 根据继承关系合并所有父渠道配置，返回最终生效的配置数组。
+     *
+     * @return array 最终配置数组，包含 base_url, api_key, provider, config, forward_headers, channel_models
+     *
+     * @see ChannelInheritanceResolver::resolveConfig()
+     */
+    public function getResolvedConfig(): array
+    {
+        /** @var ChannelInheritanceResolver $resolver */
+        $resolver = app(ChannelInheritanceResolver::class);
+
+        return $resolver->resolveConfig($this);
+    }
+
+    /**
+     * 获取解析后的 base_url
+     *
+     * 子渠道值为空时继承父渠道值。
+     *
+     * @return string|null 最终生效的 base_url
+     */
+    public function getEffectiveBaseUrl(): ?string
+    {
+        /** @var ChannelInheritanceResolver $resolver */
+        $resolver = app(ChannelInheritanceResolver::class);
+
+        return $resolver->resolveScalar($this, 'base_url');
+    }
+
+    /**
+     * 获取解析后的 api_key
+     *
+     * 子渠道值为空时继承父渠道值。
+     *
+     * @return string|null 最终生效的 api_key
+     */
+    public function getEffectiveApiKey(): ?string
+    {
+        /** @var ChannelInheritanceResolver $resolver */
+        $resolver = app(ChannelInheritanceResolver::class);
+
+        return $resolver->resolveScalar($this, 'api_key');
+    }
+
+    /**
+     * 获取解析后的 provider
+     *
+     * 子渠道值为空时继承父渠道值。
+     *
+     * @return string|null 最终生效的 provider
+     */
+    public function getEffectiveProvider(): ?string
+    {
+        /** @var ChannelInheritanceResolver $resolver */
+        $resolver = app(ChannelInheritanceResolver::class);
+
+        return $resolver->resolveScalar($this, 'provider');
+    }
+
+    /**
+     * 获取解析后的 forward_headers
+     *
+     * 根据继承模式合并父渠道和子渠道的转发请求头配置。
+     *
+     * @return array 最终生效的 forward_headers
+     */
+    public function getEffectiveForwardHeaders(): array
+    {
+        /** @var ChannelInheritanceResolver $resolver */
+        $resolver = app(ChannelInheritanceResolver::class);
+
+        return $resolver->resolveArray($this, 'forward_headers');
+    }
+
+    /**
+     * 获取解析后的 config 中的指定键值
+     *
+     * 从合并后的 config 数组中读取指定键的值。
+     *
+     * @param  string  $key  配置键名
+     * @param  mixed  $default  默认值
+     * @return mixed 最终生效的配置值
+     */
+    public function getEffectiveConfig(string $key, mixed $default = null): mixed
+    {
+        $config = $this->getEffectiveResolvedConfig();
+
+        return $config[$key] ?? $default;
+    }
+
+    /**
+     * 获取解析后的完整 config 数组
+     *
+     * @return array 最终生效的 config 数组
+     */
+    protected function getEffectiveResolvedConfig(): array
+    {
+        /** @var ChannelInheritanceResolver $resolver */
+        $resolver = app(ChannelInheritanceResolver::class);
+
+        return $resolver->resolveArray($this, 'config');
+    }
+
+    /**
+     * 获取解析后的模型列表
+     *
+     * 根据继承模式合并父子渠道的模型列表。
+     *
+     * @return array<array{model_name: string, display_name: string|null, is_enabled: bool, is_default: bool, mapped_model: string|null}> 模型列表
+     */
+    public function getEffectiveChannelModels(): array
+    {
+        /** @var ChannelInheritanceResolver $resolver */
+        $resolver = app(ChannelInheritanceResolver::class);
+
+        return $resolver->resolveChannelModels($this);
+    }
+
+    /**
+     * 检查是否有父渠道
+     *
+     * @return bool 是否存在父渠道
+     */
+    public function hasParent(): bool
+    {
+        return $this->parent_id !== null && $this->parent_id !== 0;
+    }
+
+    /**
+     * 检查是否存在循环继承
+     *
+     * 用于表单验证和调试场景，不抛出异常。
+     *
+     * @return bool 是否存在循环继承
+     *
+     * @see ChannelInheritanceResolver::hasCircularInheritance()
+     */
+    public function hasCircularInheritance(): bool
+    {
+        /** @var ChannelInheritanceResolver $resolver */
+        $resolver = app(ChannelInheritanceResolver::class);
+
+        return $resolver->hasCircularInheritance($this);
+    }
+
+    /**
+     * 获取继承深度
+     *
+     * 返回渠道在继承树中的深度（根渠道深度为 0）。
+     *
+     * @return int 继承深度
+     *
+     * @see ChannelInheritanceResolver::getInheritanceDepth()
+     */
+    public function getInheritanceDepth(): int
+    {
+        /** @var ChannelInheritanceResolver $resolver */
+        $resolver = app(ChannelInheritanceResolver::class);
+
+        return $resolver->getInheritanceDepth($this);
     }
 }

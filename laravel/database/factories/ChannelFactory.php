@@ -6,7 +6,7 @@ use App\Models\Channel;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Channel>
+ * @extends Factory<Channel>
  */
 class ChannelFactory extends Factory
 {
@@ -37,6 +37,32 @@ class ChannelFactory extends Factory
             'avg_latency_ms' => 0,
             'success_rate' => '1.0000',
             'has_user_agent_restriction' => false,
+            'inherit_mode' => InheritMode::MERGE->value,
+            'parent_id' => null,
         ];
+    }
+
+    /**
+     * 设置父渠道状态
+     *
+     * @param  Channel  $parent  父渠道
+     */
+    public function withParent(Channel $parent): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'parent_id' => $parent->id,
+        ]);
+    }
+
+    /**
+     * 设置继承模式
+     *
+     * @param  \App\Enums\InheritMode  $mode  继承模式
+     */
+    public function withInheritMode(InheritMode $mode): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'inherit_mode' => $mode->value,
+        ]);
     }
 }
