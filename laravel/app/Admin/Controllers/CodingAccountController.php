@@ -3,6 +3,7 @@
 namespace App\Admin\Controllers;
 
 use App\Models\CodingAccount;
+use App\Models\CodingAvailablePeriod;
 use App\Services\CodingStatus\CodingStatusDriverManager;
 use Dcat\Admin\Form;
 use Dcat\Admin\Grid;
@@ -56,6 +57,10 @@ class CodingAccountController extends AdminController
                     ],
                     'default' // 默认颜色
                 );
+
+            // 时段控制状态列
+            $grid->column('period_control_enabled', '时段控制')->using([1 => '启用', 0 => '关闭'])
+                ->dot(['success' => 'success', 'default' => 'gray']);
 
             // 数值列 - 显示驱动处理后的配额数值
             $grid->column('quota_display', '数值')->unescape()->display(function () {
@@ -128,6 +133,27 @@ class CodingAccountController extends AdminController
             $show->field('driver_class', '驱动类');
             $show->field('status', '状态')->as(function ($status) {
                 return CodingAccount::getStatuses()[$status] ?? $status;
+            });
+
+            // 时段控制状态
+            $show->field('period_control_enabled', '时段控制')->as(function ($value) {
+                return $value ? '启用' : '关闭';
+            });
+
+            // 可用时段展示
+            $show->field('available_periods_display', '可用时段')->unescape()->as(function () {
+                $periods = $this->availablePeriods;
+                if ($periods->isEmpty()) {
+                    return '<span class="text-muted">未设置</span>';
+                }
+                $html = '<div>';
+                foreach ($periods as $period) {
+                    $badge = $period->is_enabled ? 'success' : 'secondary';
+                    $html .= "<span class='badge bg-{$badge}' style='margin:2px;'>{$period->getPeriodDisplay()}</span> ";
+                }
+                $html .= '</div>';
+
+                return $html;
             });
 
             // 当前配额消耗 - 可读性展示
@@ -263,6 +289,34 @@ class CodingAccountController extends AdminController
 
                     return json_last_error() === JSON_ERROR_NONE ? $decoded : null;
                 });
+
+            // 可用时段控制
+            $form->divider('可用时段控制');
+
+            $form->switch('period_control_enabled', '启用时段控制')
+                ->default(false)
+                ->help('开启后，仅在设定的可用时段内关联渠道才会自动启用；时段外自动禁用');
+
+            $form->hasMany('availablePeriods', '可用时段', function (Form\NestedForm $form) {
+                $form->time('start_time', '开始时间')
+                    ->format('HH:mm:ss')
+                    ->default('09:00:00')
+                    ->required();
+
+                $form->time('end_time', '结束时间')
+                    ->format('HH:mm:ss')
+                    ->default('12:00:00')
+                    ->required()
+                    ->help('支持跨午夜设置，如 22:00:00-06:00:00');
+
+                $form->multipleSelect('weekdays', '适用星期')
+                    ->options(CodingAvailablePeriod::getWeekdayOptions())
+                    ->help('留空表示每天适用');
+
+                $form->switch('is_enabled', '启用')->default(true);
+
+                $form->number('sort_order', '排序')->default(0)->min(0);
+            })->help('设置账户的可用时段，可添加多个时段');
 
             // 时间字段
             $form->datetime('last_sync_at', '最后同步时间');

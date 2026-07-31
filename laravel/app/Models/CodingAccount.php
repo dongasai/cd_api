@@ -182,6 +182,8 @@ class CodingAccount extends Model
         'pause_duration_minutes',
         'pause_reason',
         'pause_rule_id',
+        'period_control_enabled',
+        'period_disabled_reason',
         'last_check_at',
     ];
 
@@ -196,6 +198,7 @@ class CodingAccount extends Model
             'credentials' => 'array',
             'config' => 'array',
             'status_override' => 'array',
+            'period_control_enabled' => 'boolean',
             'last_sync_at' => 'datetime',
             'last_check_at' => 'datetime',
             'expires_at' => 'datetime',
@@ -558,5 +561,58 @@ class CodingAccount extends Model
     public function isPausedByErrorRule(): bool
     {
         return $this->isPaused() && $this->pause_rule_id !== null;
+    }
+
+    /**
+     * 可用时段关联
+     */
+    public function availablePeriods(): HasMany
+    {
+        return $this->hasMany(CodingAvailablePeriod::class, 'coding_account_id');
+    }
+
+    /**
+     * 启用的可用时段
+     */
+    public function enabledPeriods(): HasMany
+    {
+        return $this->availablePeriods()->where('is_enabled', true)->orderBy('sort_order');
+    }
+
+    /**
+     * 检查是否启用了时段控制
+     */
+    public function isPeriodControlEnabled(): bool
+    {
+        return (bool) $this->period_control_enabled;
+    }
+
+    /**
+     * 检查当前时间是否在任一可用时段内
+     *
+     * 未启用时段控制或无时段配置时，始终返回 true
+     *
+     * @param  Carbon|null  $at  检查的时间点，默认为当前时间
+     */
+    public function isWithinAvailablePeriod(?Carbon $at = null): bool
+    {
+        if (! $this->isPeriodControlEnabled()) {
+            return true;
+        }
+
+        $periods = $this->enabledPeriods;
+        if ($periods->isEmpty()) {
+            return true;
+        }
+
+        return $periods->contains(fn (CodingAvailablePeriod $period) => $period->isCurrentlyActive($at));
+    }
+
+    /**
+     * 检查是否因时段外被禁用
+     */
+    public function isDisabledByPeriodControl(): bool
+    {
+        return ($this->period_disabled_reason ?? '') === 'outside_period';
     }
 }

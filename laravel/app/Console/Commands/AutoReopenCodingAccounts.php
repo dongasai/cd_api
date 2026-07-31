@@ -40,6 +40,7 @@ class AutoReopenCodingAccounts extends Command
             CodingAccount::STATUS_SUSPENDED,
         ])
             ->whereNotNull('disabled_at')
+            ->where('period_disabled_reason', '!=', 'outside_period')
             ->get();
 
         foreach ($accounts as $account) {

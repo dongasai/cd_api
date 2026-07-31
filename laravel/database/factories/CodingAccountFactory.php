@@ -7,7 +7,7 @@ use App\Services\CodingStatus\Drivers\SlidingRequestCodingStatusDriver;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\CodingAccount>
+ * @extends Factory<CodingAccount>
  */
 class CodingAccountFactory extends Factory
 {
@@ -26,17 +26,8 @@ class CodingAccountFactory extends Factory
             'driver_class' => SlidingRequestCodingStatusDriver::class,
             'credentials' => [],
             'status' => CodingAccount::STATUS_ACTIVE,
-            'quota_config' => [
-                'limits' => ['requests' => 1200],
-                'window_type' => '5h',
-                'thresholds' => [
-                    'warning' => 0.80,
-                    'critical' => 0.90,
-                    'disable' => 0.95,
-                ],
-            ],
-            'quota_cached' => null,
             'config' => [],
+            'period_control_enabled' => false,
             'last_sync_at' => null,
             'sync_error' => null,
             'sync_error_count' => 0,

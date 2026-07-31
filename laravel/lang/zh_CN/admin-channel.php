@@ -26,8 +26,8 @@ return [
 
         // 帮助文本
         'slug_help' => '唯一标识符，用于API调用时的渠道识别',
-        'base_url_help' => '上游API的基础URL地址,不带 v1',
-        'api_key_help' => '上游API的密钥，将安全存储',
+        'base_url_help' => '上游API的基础URL地址，不带 v1（可选，留空时使用驱动默认地址）',
+        'api_key_help' => '上游API的密钥，将安全存储（可选，但启用渠道时建议配置）',
         'health_status_help' => '健康状态为禁用时，该渠道不参与渠道选择',
         'health_status_remark_help' => '记录健康状态变更原因，如：CodingStatus禁用',
         'coding_account_help' => '关联后，渠道将根据 Coding 账户的配额状态自动调整可用性',
@@ -41,6 +41,19 @@ return [
         'parent_channel_id_help' => '继承配置的父渠道ID',
         'allowed_user_agents_help' => '选择允许访问此渠道的User-Agent规则，留空表示允许所有',
         'provider_help' => '选择渠道驱动类型',
+
+        // 继承配置
+        'inheritance_info' => '继承配置',
+        'inheritance_chain' => '继承链',
+        'inheritance_depth' => '继承深度',
+        'effective_config' => '生效配置',
+        'field_name' => '字段',
+        'original_value' => '原始值',
+        'effective_value' => '生效值',
+        'inherited_from' => '继承自',
+        'no_inheritance' => '无继承关系',
+        'channel_models_inherited' => '继承的模型列表',
+        'channel_models_inherited_desc' => '合并父渠道和当前渠道的模型配置（去重后）',
 
         // 其他标签
         'api_address' => 'API地址',
@@ -97,7 +110,15 @@ return [
         'api_key' => 'API Key',
         'status2_remark' => '健康状态备注',
 
-        // 渠道模型字段
+        // 继承配置字段
+        'inheritance_chain' => '继承链',
+        'inheritance_depth' => '继承深度',
+        'effective_config' => '生效配置',
+        'field_name' => '字段',
+        'original_value' => '原始值',
+        'effective_value' => '生效值',
+        'inherited_from' => '继承自',
+        'channel_models_inherited' => '继承的模型列表',
         'model_name' => '模型名称',
         'display_name' => '显示名称',
         'mapped_model' => '映射模型',
@@ -126,7 +147,6 @@ return [
         'inherit_mode' => [
             'merge' => '合并继承',
             'override' => '覆盖继承',
-            'extend' => '扩展继承',
         ],
     ],
 ];

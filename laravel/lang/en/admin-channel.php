@@ -26,8 +26,8 @@ return [
 
         // Help texts
         'slug_help' => 'Unique identifier for channel recognition during API calls',
-        'base_url_help' => 'Base URL of the upstream API, no v1',
-        'api_key_help' => 'Upstream API key, will be stored securely',
+        'base_url_help' => 'Base URL of the upstream API, no v1 (optional, driver default will be used if empty)',
+        'api_key_help' => 'Upstream API key, will be stored securely (optional but recommended for active channels)',
         'health_status_help' => 'When disabled, this channel will not participate in channel selection',
         'health_status_remark_help' => 'Record the reason for health status change, e.g.: CodingStatus disabled',
         'coding_account_help' => 'After linking, the channel will automatically adjust availability based on Coding account quota status',
@@ -41,6 +41,19 @@ return [
         'parent_channel_id_help' => 'Parent channel ID for inheriting configuration',
         'allowed_user_agents_help' => 'Select User-Agent rules allowed to access this channel, leave empty to allow all',
         'provider_help' => 'Select channel driver type',
+
+        // 继承配置
+        'inheritance_info' => 'Inheritance Config',
+        'inheritance_chain' => 'Inheritance Chain',
+        'inheritance_depth' => 'Inheritance Depth',
+        'effective_config' => 'Effective Config',
+        'field_name' => 'Field',
+        'original_value' => 'Original Value',
+        'effective_value' => 'Effective Value',
+        'inherited_from' => 'Inherited From',
+        'no_inheritance' => 'No Inheritance',
+        'channel_models_inherited' => 'Inherited Model List',
+        'channel_models_inherited_desc' => 'Merged model configurations from parent and current channels (deduplicated)',
 
         // Other labels
         'api_address' => 'API Address',
@@ -97,6 +110,16 @@ return [
         'api_key' => 'API Key',
         'status2_remark' => 'Health Status Remark',
 
+        // Inheritance config fields
+        'inheritance_chain' => 'Inheritance Chain',
+        'inheritance_depth' => 'Inheritance Depth',
+        'effective_config' => 'Effective Config',
+        'field_name' => 'Field',
+        'original_value' => 'Original Value',
+        'effective_value' => 'Effective Value',
+        'inherited_from' => 'Inherited From',
+        'channel_models_inherited' => 'Inherited Model List',
+
         // Channel model fields
         'model_name' => 'Model Name',
         'display_name' => 'Display Name',
@@ -126,7 +149,6 @@ return [
         'inherit_mode' => [
             'merge' => 'Merge',
             'override' => 'Override',
-            'extend' => 'Extend',
         ],
     ],
 ];
