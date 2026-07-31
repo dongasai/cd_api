@@ -16,7 +16,7 @@ Route::group([
     $router->get('auth/setting', 'AuthController@getSetting')->name('setting');
     $router->put('auth/setting', 'AuthController@putSetting');
 
-    $router->get('/', 'HomeController@index');
+    $router->get('/', [\App\Admin\Controllers\HomeController::class,'index']);
 
     // API密钥管理
     $router->resource('api-keys', 'ApiKeyController');
@@ -107,5 +107,8 @@ Route::group([
 
     // 测试图表
     $router->get('test-chart', 'TestChartController@index')->name('test-chart');
+
+    // 系统信息
+    $router->get('system-info', 'SystemInfoController@index')->name('system-info');
 
 });

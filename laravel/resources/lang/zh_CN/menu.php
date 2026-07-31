@@ -53,6 +53,7 @@ return [
         'permissions' => '权限',
         'menu' => '菜单',
         'database_migrations' => '数据库迁移',
+        'system_info' => '系统信息',
 
         // 模型测试子菜单
         'model_test_old' => '旧版测试',
