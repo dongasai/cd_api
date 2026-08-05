@@ -1,5 +1,7 @@
 <?php
 
+use App\Admin\Controllers\HomeController;
+use App\Admin\Controllers\HomeOldController;
 use Dcat\Admin\Admin;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Route;
@@ -16,7 +18,10 @@ Route::group([
     $router->get('auth/setting', 'AuthController@getSetting')->name('setting');
     $router->put('auth/setting', 'AuthController@putSetting');
 
-    $router->get('/', [\App\Admin\Controllers\HomeController::class,'index']);
+    $router->get('/', [HomeController::class, 'index']);
+
+    // 原始 Demo 仪表盘
+    $router->get('home_old', [HomeOldController::class, 'index']);
 
     // API密钥管理
     $router->resource('api-keys', 'ApiKeyController');
