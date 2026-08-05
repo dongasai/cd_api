@@ -2,35 +2,28 @@
 
 namespace App\Services\Search\Driver;
 
-use App\Models\McpClient;
-use App\Services\McpClientService;
 use App\Services\Search\Contracts\SearchRequest;
 use App\Services\Search\Contracts\SearchResult;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
  * 百炼搜索驱动
  *
- * 通过阿里云百炼 MCP 服务执行网络搜索
- * 工具：bailian_web_search
+ * 通过阿里云百炼 DashScope API 执行网络搜索
+ * API 文档: https://help.aliyun.com/document_detail/2774953.html
  */
 class BailianSearchDriver extends AbstractSearchDriver
 {
     /**
-     * MCP 客户端服务
+     * DashScope API 端点
      */
-    protected McpClientService $mcpService;
-
-    /**
-     * MCP 客户端实例
-     */
-    protected ?McpClient $mcpClient = null;
+    protected const API_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1/services/aigc/text-generation/generation';
 
     public function __construct(array $config = [])
     {
         parent::__construct($config);
-
-        $this->mcpService = app(McpClientService::class);
     }
 
     /**
@@ -46,25 +39,43 @@ class BailianSearchDriver extends AbstractSearchDriver
      */
     public function search(SearchRequest $request): SearchResult
     {
-        $client = $this->getMcpClient();
+        $apiKey = $this->getConfig('api_key');
+        $baseUrl = $this->getConfig('base_url', 'https://dashscope.aliyuncs.com');
 
-        if (! $client) {
-            Log::warning('BailianSearchDriver: MCP 客户端未配置');
+        if (empty($apiKey)) {
+            Log::warning('BailianSearchDriver: API Key 未配置');
 
             return SearchResult::empty($request->query, $this->getName(), [
-                'error' => 'MCP client not configured',
+                'error' => 'Bailian API key not configured',
             ]);
         }
 
         try {
-            // 构建 MCP 工具参数
             $arguments = $this->buildToolArguments($request);
 
-            // 调用 bailian_web_search 工具
-            $result = $this->mcpService->callTool($client, 'bailian_web_search', $arguments);
+            // 调用百炼 Web Search API
+            $url = rtrim($baseUrl, '/').'/compatible-mode/v1/services/aigc/text-generation/generation';
 
-            // 解析结果
-            $items = $this->parseToolResult($result);
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer '.$apiKey,
+                'Content-Type' => 'application/json',
+            ])
+                ->timeout($this->getConfig('timeout', 30))
+                ->post($url, $this->buildRequestBody($arguments));
+
+            if (! $response->successful()) {
+                Log::error('BailianSearchDriver: API 请求失败', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return SearchResult::empty($request->query, $this->getName(), [
+                    'error' => "API request failed: {$response->status()}",
+                ]);
+            }
+
+            $result = $response->json();
+            $items = $this->parseApiResponse($result);
             $total = count($items);
 
             Log::info('BailianSearchDriver: 搜索完成', [
@@ -73,6 +84,15 @@ class BailianSearchDriver extends AbstractSearchDriver
             ]);
 
             return $this->buildResult($request, $items, $total);
+        } catch (ConnectionException $e) {
+            Log::error('BailianSearchDriver: 连接超时', [
+                'query' => $request->query,
+                'error' => $e->getMessage(),
+            ]);
+
+            return SearchResult::empty($request->query, $this->getName(), [
+                'error' => 'Connection timeout',
+            ]);
         } catch (\Exception $e) {
             Log::error('BailianSearchDriver: 搜索失败', [
                 'query' => $request->query,
@@ -86,26 +106,23 @@ class BailianSearchDriver extends AbstractSearchDriver
     }
 
     /**
-     * 构建 MCP 工具参数
+     * 构建搜索参数
      */
     protected function buildToolArguments(SearchRequest $request): array
     {
         $arguments = [
             'query' => $request->query,
-            'count' => min($request->count, 50), // 百炼限制最多50条
+            'count' => min($request->count, 50),
         ];
 
-        // 域名过滤
         if ($request->domainFilter) {
             $arguments['search_domain_filter'] = $request->domainFilter;
         }
 
-        // 时间过滤
         if ($request->recencyFilter !== 'noLimit') {
             $arguments['search_recency_filter'] = $request->recencyFilter;
         }
 
-        // 内容长度
         if ($request->contentSize) {
             $arguments['content_size'] = $request->contentSize;
         }
@@ -114,31 +131,66 @@ class BailianSearchDriver extends AbstractSearchDriver
     }
 
     /**
-     * 解析 MCP 工具返回结果
+     * 构建 DashScope API 请求体
      */
-    protected function parseToolResult(array $result): array
+    protected function buildRequestBody(array $searchArgs): array
+    {
+        return [
+            'model' => $this->getConfig('model', 'qwen-plus'),
+            'input' => [
+                'messages' => [
+                    [
+                        'role' => 'user',
+                        'content' => $searchArgs['query'],
+                    ],
+                ],
+            ],
+            'parameters' => [
+                'result_format' => 'message',
+                'enable_search' => true,
+                'search_info' => [
+                    'search_args' => $searchArgs,
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * 解析 DashScope API 响应
+     */
+    protected function parseApiResponse(array $result): array
     {
         $items = [];
 
-        // 结果格式: { content: [{ type: 'text', text: '...' }], is_error: false }
-        $content = $result['content'] ?? [];
+        // DashScope 响应格式
+        $output = $result['output'] ?? [];
+        $choices = $output['choices'] ?? [];
 
-        foreach ($content as $item) {
-            if ($item['type'] === 'text') {
-                $text = $item['text'] ?? '';
+        foreach ($choices as $choice) {
+            $message = $choice['message'] ?? [];
 
-                // 解析 JSON 格式的搜索结果
+            // 尝试从搜索信息中提取结果
+            $searchInfo = $choice['search_info'] ?? $result['search_info'] ?? [];
+            $pages = $searchInfo['search_results'] ?? [];
+
+            foreach ($pages as $index => $data) {
+                $items[] = $this->parseSearchItem($data, $index + 1);
+            }
+        }
+
+        // 如果没有结构化搜索结果，尝试从文本内容解析
+        if (empty($items)) {
+            $text = $output['text'] ?? $output['choices'][0]['message']['content'][0]['text'] ?? '';
+            if ($text) {
                 $parsed = json_decode($text, true);
-
                 if (json_last_error() === JSON_ERROR_NONE && is_array($parsed)) {
-                    // 百炼返回格式: { pages: [...], request_id: "...", status: 0 }
                     $pages = $parsed['pages'] ?? $parsed['results'] ?? $parsed;
-
-                    foreach ($pages as $index => $data) {
-                        $items[] = $this->parseSearchItem($data, $index + 1);
+                    if (is_array($pages)) {
+                        foreach ($pages as $index => $data) {
+                            $items[] = $this->parseSearchItem($data, $index + 1);
+                        }
                     }
                 } else {
-                    // 非 JSON 格式，作为文本结果返回
                     $items[] = [
                         'title' => '搜索结果',
                         'url' => '',
@@ -173,37 +225,11 @@ class BailianSearchDriver extends AbstractSearchDriver
     }
 
     /**
-     * 获取 MCP 客户端
-     */
-    protected function getMcpClient(): ?McpClient
-    {
-        if ($this->mcpClient) {
-            return $this->mcpClient;
-        }
-
-        // 从配置获取客户端 ID 或 slug
-        $clientId = $this->getConfig('mcp_client_id');
-        $clientSlug = $this->getConfig('mcp_client_slug', 'BailianSearch');
-
-        if ($clientId) {
-            $this->mcpClient = McpClient::find($clientId);
-        } else {
-            $this->mcpClient = McpClient::where('slug', $clientSlug)
-                ->where('status', McpClient::STATUS_ACTIVE)
-                ->first();
-        }
-
-        return $this->mcpClient;
-    }
-
-    /**
      * 验证配置
      */
     public function validateConfig(): bool
     {
-        $client = $this->getMcpClient();
-
-        return $client !== null && $client->isActive();
+        return ! empty($this->getConfig('api_key'));
     }
 
     /**
@@ -212,8 +238,9 @@ class BailianSearchDriver extends AbstractSearchDriver
     public function getConfigRequirements(): array
     {
         return [
-            'mcp_client_id' => 'MCP 客户端 ID（可选，优先使用）',
-            'mcp_client_slug' => 'MCP 客户端标识（可选，默认 BailianSearch）',
+            'api_key' => '百炼 API Key（必填）',
+            'base_url' => 'API 基础 URL（可选，默认 https://dashscope.aliyuncs.com）',
+            'model' => '搜索模型（可选，默认 qwen-plus）',
             'timeout' => '请求超时时间（秒，默认30）',
         ];
     }

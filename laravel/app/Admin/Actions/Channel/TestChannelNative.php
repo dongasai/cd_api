@@ -4,6 +4,7 @@ namespace App\Admin\Actions\Channel;
 
 use App\Models\Channel;
 use App\Models\ChannelRequestLog;
+use App\Services\ChannelInheritance\ChannelInheritanceResolver;
 use Dcat\Admin\Grid\RowAction;
 use Illuminate\Support\Facades\Http;
 
@@ -40,25 +41,26 @@ class TestChannelNative extends RowAction
             return $this->response()->error(admin_trans_action('channel_not_found'));
         }
 
-        // 校验 API Key
-        if (empty($channel->api_key)) {
+        // 校验 API Key（通过继承解析获取有效值）
+        $effectiveApiKey = $channel->getEffectiveApiKey();
+        if (empty($effectiveApiKey)) {
             return $this->response()->error(admin_trans_action('channel_no_api_key'));
         }
 
-        // 获取测试模型（必须配置默认模型）
-        $defaultChannelModel = $channel->defaultModel();
-        if (! $defaultChannelModel) {
+        // 获取测试模型（通过继承解析，子渠道无默认模型时继承父渠道）
+        $defaultModel = app(ChannelInheritanceResolver::class)->resolveDefaultModel($channel);
+        if (! $defaultModel) {
             return $this->response()->error(admin_trans_action('channel_no_default_model'));
         }
 
         // 模型映射信息：原始名 -> 上游实际标识
-        $modelName = $defaultChannelModel->model_name;      // 原始模型名（如 qwen3.6-lite）
-        $model = $defaultChannelModel->getMappedModel();    // 上游模型标识（如 xopqwen36v35b）
+        $modelName = $defaultModel['model_name'];      // 原始模型名（如 qwen3.6-lite）
+        $model = $defaultModel['mapped_model'];        // 上游模型标识（如 xopqwen36v35b）
 
         $startTime = microtime(true);
 
         try {
-            $result = match ($channel->provider) {
+            $result = match ($channel->getEffectiveProvider() ?? $channel->provider) {
                 'anthropic' => $this->testViaAnthropic($channel, $model, $modelName),
                 default => $this->testViaOpenAI($channel, $model, $modelName),
             };
@@ -108,7 +110,8 @@ class TestChannelNative extends RowAction
      */
     protected function testViaOpenAI(Channel $channel, string $model, string $modelName): array
     {
-        $baseUrl = rtrim($channel->base_url ?: 'https://api.openai.com', '/');
+        $effectiveApiKey = $channel->getEffectiveApiKey();
+        $baseUrl = rtrim($channel->getEffectiveBaseUrl() ?: 'https://api.openai.com', '/');
         $endpoint = $baseUrl.'/v1/chat/completions';
 
         $requestBody = [
@@ -120,7 +123,7 @@ class TestChannelNative extends RowAction
         ];
 
         $requestHeaders = [
-            'Authorization' => 'Bearer '.substr($channel->api_key, 0, 8).'...',
+            'Authorization' => 'Bearer '.substr($effectiveApiKey, 0, 8).'...',
             'Content-Type' => 'application/json',
         ];
 
@@ -135,7 +138,7 @@ class TestChannelNative extends RowAction
         ];
 
         $response = Http::withHeaders([
-            'Authorization' => 'Bearer '.$channel->api_key,
+            'Authorization' => 'Bearer '.$effectiveApiKey,
             'Content-Type' => 'application/json',
         ])->timeout(30)->post($endpoint, $requestBody);
 
@@ -169,7 +172,8 @@ class TestChannelNative extends RowAction
      */
     protected function testViaAnthropic(Channel $channel, string $model, string $modelName): array
     {
-        $baseUrl = rtrim($channel->base_url ?: 'https://api.anthropic.com', '/');
+        $effectiveApiKey = $channel->getEffectiveApiKey();
+        $baseUrl = rtrim($channel->getEffectiveBaseUrl() ?: 'https://api.anthropic.com', '/');
         $endpoint = $baseUrl.'/v1/messages';
 
         $requestBody = [
@@ -181,7 +185,7 @@ class TestChannelNative extends RowAction
         ];
 
         $requestHeaders = [
-            'x-api-key' => substr($channel->api_key, 0, 8).'...',
+            'x-api-key' => substr($effectiveApiKey, 0, 8).'...',
             'Content-Type' => 'application/json',
             'anthropic-version' => '2023-06-01',
         ];
@@ -197,7 +201,7 @@ class TestChannelNative extends RowAction
         ];
 
         $response = Http::withHeaders([
-            'x-api-key' => $channel->api_key,
+            'x-api-key' => $effectiveApiKey,
             'Content-Type' => 'application/json',
             'anthropic-version' => '2023-06-01',
         ])->timeout(30)->post($endpoint, $requestBody);
@@ -339,7 +343,7 @@ class TestChannelNative extends RowAction
             'provider' => $channel->provider,
             'method' => 'POST',
             'path' => $ctx['path'] ?? '',
-            'base_url' => $channel->base_url,
+            'base_url' => $channel->getEffectiveBaseUrl() ?? $channel->base_url,
             'full_url' => $ctx['full_url'] ?? $channel->base_url,
             'request_headers' => $ctx['request_headers'] ?? [],
             'request_body' => $requestBody,

@@ -12,7 +12,6 @@ Laravel 应用是 CdApi 的核心实现层，包含所有业务逻辑、API 端�
 graph TB
     subgraph 入口层
         API[API 路由] --> PC[ProxyController]
-        MCP[MCP 路由] --> MC[CdApiServer]
         WEB[Web 路由] --> INST[InstallController]
         ADMIN[Admin 路由] --> AC[Admin Controllers]
     end
@@ -78,10 +77,7 @@ laravel/
 │   │   │   └── UpgradeController #   升级向导
 │   │   └── Middleware/           #   中间件（4个）
 │   ├── Livewire/                 # Livewire 组件
-│   ├── Mcp/                      # MCP 服务
-│   │   ├── Servers/              #   MCP Server（CdApiServer）
-│   │   └── Tools/                #   MCP Tool（Search、WebParser）
-│   ├── Models/                   # Eloquent 模型（34个）
+│   ├── Models/                   # Eloquent 模型（33个）
 │   ├── Policies/                 # 授权策略
 │   ├── Providers/                # 服务提供者（5个）
 │   └── Services/                 # 核心业务服务
@@ -123,7 +119,6 @@ laravel/
 ├── database/migrations/          # 数据库迁移（79个）
 ├── routes/                       # 路由定义
 │   ├── api.php                   #   API 代理路由
-│   ├── ai.php                    #   MCP 服务路由
 │   ├── web.php                   #   Web 路由
 │   ├── console.php               #   定时任务调度
 │   └── install.php               #   安装/升级路由
@@ -220,12 +215,6 @@ OpenAI Request → OpenAI DTO → Shared DTO → Anthropic DTO → Anthropic Req
 | GET | `/api/anthropic/models` | 模型列表 |
 | GET | `/api/anthropic/v1/models` | 模型列表（v1 前缀） |
 
-### MCP 端点
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/mcp/cdapi` | CdApi MCP Server |
-
 所有 API 端点需通过 `AuthenticateApiKey` 中间件认证。
 
 ## 核心数据模型
@@ -273,7 +262,6 @@ OpenAI Request → OpenAI DTO → Shared DTO → Anthropic DTO → Anthropic Req
 |------|------|------|
 | ChannelAffinityCache | channel_affinity_caches | 渠道亲和性缓存 |
 | ChannelAffinityRule | channel_affinity_rules | 渠道亲和性规则 |
-| McpClient | mcp_clients | MCP 客户端配置 |
 | SearchDriver | search_drivers | 搜索驱动配置 |
 | SearchLog | search_logs | 搜索日志 |
 | UserAgent | user_agents | User-Agent 管理 |
@@ -385,9 +373,7 @@ php artisan cdapi:request:replay --audit-id=500
 | anthropic-ai/sdk | ^0.6.0 | Anthropic PHP SDK |
 | openai-php/laravel | ^0.19.0 | OpenAI Laravel 集成 |
 | openai-php/client | ^0.19.1 | OpenAI PHP 客户端 |
-| laravel/mcp | ^0.6.4 | Laravel MCP 支持 |
 | laravel/ai | ^0.4.2 | Laravel AI 支持 |
-| mcp/sdk | dev-main | MCP SDK |
 | opis/json-schema | ^2.6 | JSON Schema 验证 |
 | symfony/panther | ^2.4 | 无头浏览器测试 |
 | phiki/phiki | ^2.0 | 代码高亮 |

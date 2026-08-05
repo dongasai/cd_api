@@ -16,7 +16,6 @@ return [
         'results' => '结果摘要',
         'client_ip' => '客户端IP',
         'api_key_id' => 'API Key',
-        'mcp_client_id' => 'MCP客户端',
         'searched_at' => '搜索时间',
     ],
 

@@ -47,12 +47,6 @@ class MockSearchDriver extends AbstractSearchDriver
             'date' => '2026-02-20',
         ],
         [
-            'title' => 'MCP 服务介绍',
-            'url' => 'https://docs.cdapi.local/docs/mcp',
-            'snippet' => 'CdApi 提供 MCP Server 功能，外部客户端可通过 MCP 协议调用工具获取服务器信息。支持搜索和网页解析等工具。',
-            'date' => '2026-04-05',
-        ],
-        [
             'title' => '最新天气预报',
             'url' => 'https://news.example.com/news/weather',
             'snippet' => '今日天气晴朗，气温 18-25℃，适合户外活动。未来一周预计维持晴好天气。',

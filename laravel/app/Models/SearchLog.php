@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Mcp\Tools\SearchTool;
 use App\Services\Search\Contracts\SearchDriverContract;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * 搜索记录模型
  *
- * 记录 MCP 搜索服务的查询记录，包括搜索内容、驱动信息、结果统计和性能指标
+ * 记录搜索服务的查询记录，包括搜索内容、驱动信息、结果统计和性能指标
  *
  * ## 字段说明
  *
@@ -31,7 +30,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * | results           | json           | 是     | null          | 搜索结果摘要(前3条)    |
  * | client_ip         | varchar(45)    | 是     | null          | 客户端IP               |
  * | api_key_id        | varchar(255)   | 是     | null          | API Key ID             |
- * | mcp_client_id     | varchar(255)   | 是     | null          | MCP客户端ID            |
  * | searched_at       | timestamp      | 否     | CURRENT_TIMESTAMP | 搜索时间            |
  *
  * ## 索引说明
@@ -69,13 +67,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property array|null $results 搜索结果摘要
  * @property string|null $client_ip 客户端IP
  * @property string|null $api_key_id API Key ID
- * @property string|null $mcp_client_id MCP客户端ID
  * @property Carbon $searched_at 搜索时间
  * @property-read SearchDriver|null $searchDriver 关联的搜索驱动
  *
  * @see SearchDriver 搜索驱动模型
  * @see SearchDriverContract 搜索驱动契约
- * @see SearchTool MCP搜索工具
  */
 class SearchLog extends Model
 {
@@ -107,7 +103,6 @@ class SearchLog extends Model
         'results',
         'client_ip',
         'api_key_id',
-        'mcp_client_id',
         'searched_at',
     ];
 
@@ -155,7 +150,6 @@ class SearchLog extends Model
      * @param  array|null  $results  搜索结果摘要
      * @param  string|null  $clientIp  客户端IP
      * @param  string|null  $apiKeyId  API Key ID
-     * @param  string|null  $mcpClientId  MCP客户端ID
      * @return self 新创建的搜索记录实例
      *
      * @see self::recordFailure() 记录失败的搜索
@@ -170,8 +164,7 @@ class SearchLog extends Model
         ?array $filters = null,
         ?array $results = null,
         ?string $clientIp = null,
-        ?string $apiKeyId = null,
-        ?string $mcpClientId = null
+        ?string $apiKeyId = null
     ): self {
         return static::create([
             'query' => $query,
@@ -185,7 +178,6 @@ class SearchLog extends Model
             'results' => $results,
             'client_ip' => $clientIp,
             'api_key_id' => $apiKeyId,
-            'mcp_client_id' => $mcpClientId,
             'searched_at' => now(),
         ]);
     }
@@ -203,7 +195,6 @@ class SearchLog extends Model
      * @param  array|null  $filters  过滤条件
      * @param  string|null  $clientIp  客户端IP
      * @param  string|null  $apiKeyId  API Key ID
-     * @param  string|null  $mcpClientId  MCP客户端ID
      * @return self 新创建的搜索记录实例
      *
      * @see self::recordSuccess() 记录成功的搜索
@@ -216,8 +207,7 @@ class SearchLog extends Model
         int $responseTimeMs,
         ?array $filters = null,
         ?string $clientIp = null,
-        ?string $apiKeyId = null,
-        ?string $mcpClientId = null
+        ?string $apiKeyId = null
     ): self {
         return static::create([
             'query' => $query,
@@ -231,7 +221,6 @@ class SearchLog extends Model
             'filters' => $filters,
             'client_ip' => $clientIp,
             'api_key_id' => $apiKeyId,
-            'mcp_client_id' => $mcpClientId,
             'searched_at' => now(),
         ]);
     }

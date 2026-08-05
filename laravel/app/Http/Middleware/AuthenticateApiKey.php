@@ -12,23 +12,11 @@ class AuthenticateApiKey
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
         $apiKey = $this->extractApiKey($request);
-
-        // 调试日志：记录 MCP 请求认证信息
-        if ($request->is('mcp/*')) {
-            \Log::debug('MCP Request Auth', [
-                'path' => $request->path(),
-                'has_api_key' => ! empty($apiKey),
-                'authorization_header' => $request->header('Authorization'),
-                'x_api_key_header' => $request->header('X-API-Key'),
-                'query_api_key' => $request->query('api_key'),
-                'all_headers' => $request->headers->all(),
-            ]);
-        }
 
         if (! $apiKey) {
             return response()->json([

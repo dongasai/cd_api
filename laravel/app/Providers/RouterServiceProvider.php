@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Services\Channel\ChannelService;
 use App\Services\ChannelAffinity\ChannelAffinityService;
+use App\Services\ChannelInheritance\ChannelInheritanceResolver;
 use App\Services\CodingStatus\ChannelCodingStatusService;
 use App\Services\CodingStatus\ChannelErrorHandlingService;
 use App\Services\Protocol\ProtocolConverter;
@@ -15,6 +17,18 @@ class RouterServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton(ChannelInheritanceResolver::class, function ($app) {
+            return new ChannelInheritanceResolver(
+                config('channel.inheritance.max_depth', 5)
+            );
+        });
+
+        $this->app->singleton(ChannelService::class, function ($app) {
+            return new ChannelService(
+                $app->make(ChannelInheritanceResolver::class)
+            );
+        });
+
         $this->app->singleton(ChannelRouterService::class, function ($app) {
             return new ChannelRouterService([
                 'cache_ttl' => config('router.cache_ttl', 60),

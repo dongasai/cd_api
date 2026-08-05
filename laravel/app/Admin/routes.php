@@ -94,12 +94,6 @@ Route::group([
     // 渠道统计
     $router->get('channel-stats', 'ChannelStatsController@index')->name('channel-stats');
 
-    // MCP 客户端管理
-    $router->resource('mcp-clients', 'McpClientController');
-    $router->post('mcp-clients/{id}/test', 'McpClientController@testConnectionApi')->name('mcp-clients.test');
-    $router->get('mcp-clients/{id}/tools', 'McpClientController@listToolsApi')->name('mcp-clients.tools');
-    $router->post('mcp-clients/{id}/call', 'McpClientController@callToolApi')->name('mcp-clients.call');
-
     // 搜索驱动配置管理
     $router->resource('search-drivers', 'SearchDriverController');
 

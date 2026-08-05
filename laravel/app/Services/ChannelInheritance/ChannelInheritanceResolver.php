@@ -155,7 +155,7 @@ class ChannelInheritanceResolver
         $chainLength = count($chain);
         for ($i = 1; $i < $chainLength; $i++) {
             $currentChannel = $chain[$i];
-            $mode = InheritMode::tryFrom($currentChannel->inherit_mode) ?? InheritMode::MERGE;
+            $mode = $currentChannel->inherit_mode ?? InheritMode::MERGE;
 
             // 获取当前渠道原始配置
             $currentConfig = $this->extractRawConfig($currentChannel);
@@ -272,7 +272,7 @@ class ChannelInheritanceResolver
         $chainLength = count($chain);
         for ($i = 1; $i < $chainLength; $i++) {
             $currentChannel = $chain[$i];
-            $mode = InheritMode::tryFrom($currentChannel->inherit_mode) ?? InheritMode::MERGE;
+            $mode = $currentChannel->inherit_mode ?? InheritMode::MERGE;
             $currentValue = $currentChannel->{$field} ?? [];
 
             if ($mode->isOverride()) {
@@ -318,7 +318,7 @@ class ChannelInheritanceResolver
         $chainLength = count($chain);
         for ($i = 1; $i < $chainLength; $i++) {
             $currentChannel = $chain[$i];
-            $mode = InheritMode::tryFrom($currentChannel->inherit_mode) ?? InheritMode::MERGE;
+            $mode = $currentChannel->inherit_mode ?? InheritMode::MERGE;
             $currentModels = $this->extractChannelModels($currentChannel);
 
             if ($mode->isOverride()) {
@@ -331,6 +331,38 @@ class ChannelInheritanceResolver
         }
 
         return $result;
+    }
+
+    /**
+     * 解析生效的默认模型
+     *
+     * 子渠道无默认模型时，从继承链解析的模型列表中查找。
+     *
+     * @param  Channel  $channel  起始渠道
+     * @return array{model_name: string, mapped_model: string}|null 默认模型信息，无则 null
+     */
+    public function resolveDefaultModel(Channel $channel): ?array
+    {
+        // 自身有默认模型，直接返回
+        $defaultModel = $channel->defaultModel();
+        if ($defaultModel) {
+            return [
+                'model_name' => $defaultModel->model_name,
+                'mapped_model' => $defaultModel->getMappedModel(),
+            ];
+        }
+
+        // 自身无默认模型，从继承解析的模型列表中查找
+        foreach ($this->resolveChannelModels($channel) as $effectiveModel) {
+            if (! empty($effectiveModel['is_default']) && ! empty($effectiveModel['is_enabled'])) {
+                return [
+                    'model_name' => $effectiveModel['model_name'],
+                    'mapped_model' => $effectiveModel['mapped_model'] ?? $effectiveModel['model_name'],
+                ];
+            }
+        }
+
+        return null;
     }
 
     /**

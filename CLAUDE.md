@@ -36,7 +36,6 @@ CdApi 是一个 AI 大模型 API 网关工具，基于 Laravel 12 + Dcat Admin v
 - **关键依赖**:
   - `anthropic-ai/sdk`: Anthropic PHP SDK
   - `openai-php/laravel`: OpenAI Laravel 集成
-  - `laravel/mcp`: Laravel MCP 支持
   - `opis/json-schema`: JSON Schema 验证
 
 ## 目录结构
@@ -194,9 +193,6 @@ php artisan cdapi:backup:table --tables=request_logs,audit_logs --path=/backup
 ```bash
 # 测试所有渠道
 php artisan cdapi:channel:test --all
-
-# 测试 MCP 客户端连接
-php artisan cdapi:mcp:test
 
 # 测试 OpenAI SDK 连接
 php artisan cdapi:openai:test

@@ -39,11 +39,11 @@ return new class extends Migration
             // 测试配置
             ['group' => 'test', 'key' => 'default_test_api_key', 'value' => '', 'type' => 'string', 'label' => '默认测试API Key', 'description' => '系统API测试使用的默认API Key', 'is_public' => 0, 'sort_order' => 1, 'created_at' => $now, 'updated_at' => $now],
 
-            // MCP 服务配置
-            ['group' => 'mcp', 'key' => 'webparser_base_url', 'value' => 'http://127.0.0.1/api/openai/v1', 'type' => 'string', 'label' => 'WebParser API地址', 'description' => 'AI服务API地址，默认指向本系统内部地址', 'is_public' => 0, 'sort_order' => 1, 'created_at' => $now, 'updated_at' => $now],
-            ['group' => 'mcp', 'key' => 'webparser_api_key', 'value' => '', 'type' => 'string', 'label' => 'WebParser API Key', 'description' => '用于AI处理的API Key（必填）', 'is_public' => 0, 'sort_order' => 2, 'created_at' => $now, 'updated_at' => $now],
-            ['group' => 'mcp', 'key' => 'webparser_model', 'value' => 'gpt-4o', 'type' => 'string', 'label' => 'WebParser模型', 'description' => '用于AI处理的模型名称', 'is_public' => 0, 'sort_order' => 3, 'created_at' => $now, 'updated_at' => $now],
-            ['group' => 'mcp', 'key' => 'webparser_temperature', 'value' => '0.3', 'type' => 'float', 'label' => 'WebParser温度', 'description' => 'AI生成温度参数，0-1之间', 'is_public' => 0, 'sort_order' => 4, 'created_at' => $now, 'updated_at' => $now],
+            // WebParser 服务配置
+            ['group' => 'webparser', 'key' => 'base_url', 'value' => 'http://127.0.0.1/api/openai/v1', 'type' => 'string', 'label' => 'WebParser API地址', 'description' => 'AI服务API地址，默认指向本系统内部地址', 'is_public' => 0, 'sort_order' => 1, 'created_at' => $now, 'updated_at' => $now],
+            ['group' => 'webparser', 'key' => 'api_key', 'value' => '', 'type' => 'string', 'label' => 'WebParser API Key', 'description' => '用于AI处理的API Key（必填）', 'is_public' => 0, 'sort_order' => 2, 'created_at' => $now, 'updated_at' => $now],
+            ['group' => 'webparser', 'key' => 'model', 'value' => 'gpt-4o', 'type' => 'string', 'label' => 'WebParser模型', 'description' => '用于AI处理的模型名称', 'is_public' => 0, 'sort_order' => 3, 'created_at' => $now, 'updated_at' => $now],
+            ['group' => 'webparser', 'key' => 'temperature', 'value' => '0.3', 'type' => 'float', 'label' => 'WebParser温度', 'description' => 'AI生成温度参数，0-1之间', 'is_public' => 0, 'sort_order' => 4, 'created_at' => $now, 'updated_at' => $now],
         ];
 
         foreach ($settings as $setting) {
@@ -57,7 +57,7 @@ return new class extends Migration
     public function down(): void
     {
         DB::table('system_settings')
-            ->whereIn('group', ['system', 'security', 'features', 'channel_affinity', 'test', 'mcp'])
+            ->whereIn('group', ['system', 'security', 'features', 'channel_affinity', 'test', 'webparser'])
             ->delete();
     }
 };

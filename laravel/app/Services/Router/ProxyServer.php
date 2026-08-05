@@ -7,6 +7,7 @@ use App\Models\ApiKey;
 use App\Models\Channel;
 use App\Models\ChannelRequestLog;
 use App\Models\RequestLog;
+use App\Services\Channel\ChannelService;
 use App\Services\ChannelAffinity\ChannelAffinityService;
 use App\Services\CodingStatus\ChannelCodingStatusService;
 use App\Services\CodingStatus\ChannelErrorHandlingService;
@@ -83,6 +84,8 @@ class ProxyServer
 
     protected ?Channel $lastSuccessfulChannel = null;  // 保存最后一次成功选择的渠道（用于错误记录）
 
+    protected ChannelService $channelService;
+
     /**
      * 构造函数
      */
@@ -92,7 +95,8 @@ class ProxyServer
         ChannelRouterService $channelRouter,
         ChannelCodingStatusService $codingStatusService,
         ChannelErrorHandlingService $errorHandlingService,
-        ChannelAffinityService $affinityService
+        ChannelAffinityService $affinityService,
+        ChannelService $channelService
     ) {
         $this->protocolConverter = $protocolConverter;
         $this->providerManager = $providerManager;
@@ -100,6 +104,7 @@ class ProxyServer
         $this->codingStatusService = $codingStatusService;
         $this->errorHandlingService = $errorHandlingService;
         $this->affinityService = $affinityService;
+        $this->channelService = $channelService;
 
         // 初始化辅助服务
         $this->requestLogger = new RequestLogger;
@@ -227,7 +232,7 @@ class ProxyServer
                 $actualModel = $this->channelRouter->resolveModel($modelName, $this->selectedChannel);
 
                 // 获取渠道协议
-                $channelProtocol = $this->getChannelProtocol($this->selectedChannel);
+                $channelProtocol = $this->channelService->getChannelProtocol($this->selectedChannel);
 
                 // 获取参与匹配的模型列表（别名扩展结果）
                 $matchedModels = $this->channelRouter->getModelNamesWithAliases($modelName);
@@ -256,7 +261,7 @@ class ProxyServer
                 }
 
                 // 检查是否开启 body_passthrough（透传模式）
-                if ($this->selectedChannel->shouldPassthroughBody()) {
+                if ($this->channelService->getConfigValue($this->selectedChannel, 'passthrough_body', false)) {
                     // 透传模式：直接使用原始请求体，跳过协议转换和过滤
                     // 修复 JSON Schema 中空数组问题（PHP json_decode 将 {} 转为 []）
                     $rawBodyString = $this->fixToolSchemaInRawBody($rawBodyString);
@@ -282,7 +287,7 @@ class ProxyServer
                     }
 
                     // 应用渠道配置：过滤请求中的 thinking 内容块
-                    if ($this->selectedChannel->shouldFilterRequestThinking()) {
+                    if ($this->channelService->getConfigValue($this->selectedChannel, 'filter_request_thinking', false)) {
                         if (method_exists($protocolRequest, 'filterRequestThinking')) {
                             $protocolRequest->filterRequestThinking(true);
                         }

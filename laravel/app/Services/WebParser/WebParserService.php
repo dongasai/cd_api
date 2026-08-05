@@ -3,6 +3,8 @@
 namespace App\Services\WebParser;
 
 use App\Services\SettingService;
+use Facebook\WebDriver\Exception\TimeoutException;
+use Facebook\WebDriver\Exception\WebDriverException;
 use OpenAI;
 use Symfony\Component\Panther\Client;
 
@@ -114,9 +116,9 @@ class WebParserService
 
             // 获取页面内容
             return $crawler->html();
-        } catch (\Facebook\WebDriver\Exception\TimeoutException $e) {
+        } catch (TimeoutException $e) {
             throw new \RuntimeException('页面加载超时: '.$url);
-        } catch (\Facebook\WebDriver\Exception\WebDriverException $e) {
+        } catch (WebDriverException $e) {
             throw new \RuntimeException('页面加载失败: '.$e->getMessage());
         } finally {
             // 确保关闭浏览器
@@ -139,14 +141,14 @@ class WebParserService
     protected function processWithAI(string $content, string $prompt, ?string $title): string
     {
         // 从配置读取 AI 参数
-        $baseUrl = $this->settingService->get('mcp.webparser_base_url', 'http://127.0.0.1/api/openai/v1');
-        $apiKey = $this->settingService->get('mcp.webparser_api_key');
-        $model = $this->settingService->get('mcp.webparser_model', 'gpt-4o');
-        $temperature = (float) $this->settingService->get('mcp.webparser_temperature', '0.3');
+        $baseUrl = $this->settingService->get('webparser.base_url', 'http://127.0.0.1/api/openai/v1');
+        $apiKey = $this->settingService->get('webparser.api_key');
+        $model = $this->settingService->get('webparser.model', 'gpt-4o');
+        $temperature = (float) $this->settingService->get('webparser.temperature', '0.3');
 
         // 验证必填配置
         if (empty($apiKey)) {
-            throw new \RuntimeException('未配置 WebParser API Key，请在系统设置中配置 mcp.webparser_api_key');
+            throw new \RuntimeException('未配置 WebParser API Key，请在系统设置中配置 webparser.api_key');
         }
 
         // 创建 OpenAI 客户端

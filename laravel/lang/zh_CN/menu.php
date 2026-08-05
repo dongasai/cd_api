@@ -12,7 +12,6 @@ return [
         'model_management' => '模型管理',
         'logs' => '日志管理',
         'app_settings' => '应用设置',
-        'mcp_config' => 'MCP配置',
         'system' => '系统管理',
 
         // 渠道管理子菜单
@@ -42,8 +41,6 @@ return [
         'user_agents' => 'User Agents',
         'preset_prompts' => '预设提示词',
 
-        // MCP配置子菜单
-        'mcp_clients' => 'MCP 客户端',
         'search_drivers' => '搜索引擎',
 
         // 系统管理子菜单
